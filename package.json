@@ -25,6 +25,7 @@
   "scripts": {
     "dev": "tsx watch --env-file=.env ./src",
     "build": "tsdown",
+    "postbuild": "node scripts/copy-language-assets.mjs",
     "start": "node dist/index.js",
     "lint": "biome check ./src",
     "lint:fix": "biome check --write ./src",

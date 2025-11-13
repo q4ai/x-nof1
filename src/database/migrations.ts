@@ -31,3 +31,29 @@ export async function ensureAgentDecisionExecutionColumn(client: Client): Promis
     logger.error("检查/添加 execution_started_at 列失败:", error as any);
   }
 }
+
+export async function ensureContractMultipliersTable(client: Client): Promise<void> {
+  try {
+    // 检查表是否存在
+    const result = await client.execute(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name='contract_multipliers'"
+    );
+    
+    if (result.rows.length === 0) {
+      logger.info("创建 contract_multipliers 表...");
+      await client.execute(`
+        CREATE TABLE IF NOT EXISTS contract_multipliers (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          symbol TEXT NOT NULL UNIQUE,
+          multiplier REAL NOT NULL,
+          contract_value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      logger.info("contract_multipliers 表已创建");
+    }
+  } catch (error) {
+    logger.error("检查/创建 contract_multipliers 表失败:", error as any);
+  }
+}
+

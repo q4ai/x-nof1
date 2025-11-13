@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Q4AI 后台登录</title>
+  <title data-i18n="login.pageTitle">Q4AI Admin Login</title>
   <style>
     * {
       box-sizing: border-box;
@@ -112,27 +112,177 @@
 </head>
 <body>
   <div class="login-card">
-    <h1>Q4AI 后台登录</h1>
-    <p class="subtitle">请输入后台账号与密码，登录后方可修改系统配置</p>
-    <p class="admin-path">当前后台入口：<code>{{ADMIN_PATH}}</code></p>
+    <h1 data-i18n="login.title">Q4AI Admin Login</h1>
+    <p class="subtitle" data-i18n="login.subtitle">Sign in with your admin credentials to manage the system</p>
+    <p class="admin-path" data-admin-path="{{ADMIN_PATH}}" data-i18n="login.adminPath">Admin entry point: {{ADMIN_PATH}}</p>
     <form id="login-form">
       <div class="form-group">
-        <label for="username">账号</label>
-        <input type="text" id="username" name="username" placeholder="admin" required autocomplete="username" />
+        <label for="username" data-i18n="login.usernameLabel">Username</label>
+        <input type="text" id="username" name="username" placeholder="Enter username" data-i18n-placeholder="login.usernamePlaceholder" required autocomplete="username" />
       </div>
       <div class="form-group">
-        <label for="password">密码</label>
-        <input type="password" id="password" name="password" placeholder="请输入密码" required autocomplete="current-password" />
+        <label for="password" data-i18n="login.passwordLabel">Password</label>
+        <input type="password" id="password" name="password" placeholder="Enter password" data-i18n-placeholder="login.passwordPlaceholder" required autocomplete="current-password" />
       </div>
-      <button type="submit">登录</button>
+      <button type="submit" data-i18n="login.submit">Sign In</button>
     </form>
-    <p class="message info" id="message">首次运行时，请在控制台或 ./.q4ai 文件查收凭证</p>
+    <p class="message info" id="message" data-i18n="login.initialMessage">On first launch, check the console or ./.q4ai file for credentials.</p>
   </div>
   <script src="csrf.js"></script>
   <script>
-    async function checkStatus() {
+  const SUPPORTED_LANGUAGES = ["en", "zh", "ja"];
+    const DEFAULT_LANGUAGE = "en";
+    const LANGUAGE_STORAGE_KEY = "nof1_ui_language";
+    const LANGUAGE_ENDPOINT = "/language";
+
+    let defaultLanguagePack = {};
+    let activeLanguagePack = {};
+    let activeLanguage = DEFAULT_LANGUAGE;
+
+    function getCurrentLanguage() {
+      const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      if (stored && SUPPORTED_LANGUAGES.includes(stored)) {
+        return stored;
+      }
+      return DEFAULT_LANGUAGE;
+    }
+
+    function resolveValue(pack, key) {
+      const segments = key.split('.');
+      let current = pack;
+      for (const segment of segments) {
+        if (current && typeof current === 'object' && segment in current) {
+          current = current[segment];
+        } else {
+          return undefined;
+        }
+      }
+      return current;
+    }
+
+    function formatValue(value, replacements) {
+      if (typeof value !== 'string' || !replacements) {
+        return value;
+      }
+      return value.replace(/\{\{(\w+)\}\}/g, (match, token) => {
+        if (Object.prototype.hasOwnProperty.call(replacements, token)) {
+          return String(replacements[token]);
+        }
+        return match;
+      });
+    }
+
+    function t(key, replacements) {
+      let value = resolveValue(activeLanguagePack, key);
+      if (value === undefined) {
+        value = resolveValue(defaultLanguagePack, key);
+      }
+      if (value === undefined) {
+        return key;
+      }
+      if (typeof value === 'string') {
+        return formatValue(value, replacements);
+      }
+      return value;
+    }
+
+    async function fetchLanguagePack(lang) {
+      const response = await fetch(`${LANGUAGE_ENDPOINT}/${lang}`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to load language pack ${lang} (${response.status})`);
+      }
+      return response.json();
+    }
+
+    function applyLoginTranslations() {
+      const lang = activeLanguage;
+      if (lang === 'zh') {
+        document.documentElement.lang = 'zh-CN';
+      } else if (lang === 'ja') {
+        document.documentElement.lang = 'ja-JP';
+      } else {
+        document.documentElement.lang = lang;
+      }
+
+      const pageTitle = t('login.pageTitle');
+      if (pageTitle && typeof pageTitle === 'string') {
+        document.title = pageTitle;
+        const titleEl = document.querySelector('title[data-i18n]');
+        if (titleEl) {
+          titleEl.textContent = pageTitle;
+        }
+      }
+
+      document.querySelectorAll('[data-i18n]').forEach((element) => {
+        const key = element.getAttribute('data-i18n');
+        if (!key || key === 'login.adminPath') {
+          return;
+        }
+        element.textContent = t(key);
+      });
+
+      const adminPathEl = document.querySelector('[data-i18n="login.adminPath"]');
+      if (adminPathEl) {
+        const path = adminPathEl.getAttribute('data-admin-path') || '';
+        adminPathEl.innerHTML = '';
+        const template = t('login.adminPath');
+        const pathCode = document.createElement('code');
+        pathCode.textContent = path;
+
+        const parts = String(template).split('{{path}}');
+        if (parts.length === 2) {
+          adminPathEl.append(parts[0]);
+          adminPathEl.append(pathCode);
+          adminPathEl.append(parts[1]);
+        } else {
+          adminPathEl.textContent = String(template).replace('{{path}}', path);
+        }
+      }
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
+        const key = element.getAttribute('data-i18n-placeholder');
+        if (!key) {
+          return;
+        }
+        element.setAttribute('placeholder', t(key));
+      });
+
+      const messageEl = document.getElementById('message');
+      if (messageEl && messageEl.getAttribute('data-i18n') === 'login.initialMessage') {
+        messageEl.textContent = t('login.initialMessage');
+      }
+    }
+
+    async function initLanguage() {
+      activeLanguage = getCurrentLanguage();
       try {
-  const response = await fetch('/api/auth/status', { cache: 'no-store', credentials: 'same-origin' });
+        defaultLanguagePack = await fetchLanguagePack(DEFAULT_LANGUAGE);
+      } catch (error) {
+        console.error('Failed to load default language pack', error);
+        defaultLanguagePack = {};
+      }
+
+      if (activeLanguage !== DEFAULT_LANGUAGE) {
+        try {
+          activeLanguagePack = await fetchLanguagePack(activeLanguage);
+        } catch (error) {
+          console.warn(`Failed to load language pack ${activeLanguage}, falling back to default`, error);
+          activeLanguagePack = defaultLanguagePack;
+          activeLanguage = DEFAULT_LANGUAGE;
+        }
+      } else {
+        activeLanguagePack = defaultLanguagePack;
+      }
+
+      applyLoginTranslations();
+    }
+
+    const languageReady = initLanguage();
+
+    async function checkStatus() {
+      await languageReady;
+      try {
+        const response = await fetch('/api/auth/status', { cache: 'no-store', credentials: 'same-origin' });
         if (response.ok) {
           const data = await response.json();
           if (data && data.authenticated) {
@@ -140,7 +290,7 @@
           }
         }
       } catch (error) {
-        console.warn('查询登录状态失败', error);
+        console.warn(t('login.messages.statusError'), error);
       }
     }
 
@@ -151,7 +301,8 @@
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
-      messageEl.textContent = '正在验证账号...';
+      await languageReady;
+      messageEl.textContent = t('login.messages.verifying');
       messageEl.className = 'message info';
 
       const formData = new FormData(form);
@@ -171,7 +322,7 @@
           if (result.csrfToken && window.csrfManager) {
             window.csrfManager.setToken(result.csrfToken);
           }
-          messageEl.textContent = '登录成功，正在跳转...';
+          messageEl.textContent = t('login.messages.success');
           messageEl.className = 'message success';
           setTimeout(() => {
             window.location.href = '/';
@@ -179,11 +330,11 @@
           return;
         }
 
-        messageEl.textContent = (result && result.error) || '登录失败，请检查账号密码';
+        messageEl.textContent = (result && result.error) || t('login.messages.failure');
         messageEl.className = 'message error';
       } catch (error) {
         console.error('登录请求异常', error);
-        messageEl.textContent = '网络异常，请稍后再试';
+        messageEl.textContent = t('login.messages.networkError');
         messageEl.className = 'message error';
       }
     });

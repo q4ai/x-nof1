@@ -1,0 +1,51 @@
+[Trading Cycle #{{ITERATION}}] {{CURRENT_TIME}}
+Runtime {{MINUTES_ELAPSED}} minutes, scheduled interval {{TRADING_INTERVAL_MINUTES}} minutes
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Current Strategy: {{STRATEGY_NAME}}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[System Risk Parameters]
+- Single-trade loss threshold: {{EXTREME_STOP_LOSS_PERCENT}}%
+- Holding time limit: {{MAX_HOLDING_HOURS}} hours (approx. {{MAX_HOLDING_CYCLES}} cycles)
+- Maximum concurrent positions: {{MAX_POSITIONS}}
+- Account stop loss: {{ACCOUNT_STOP_LOSS_USDT}} USDT
+- Account take profit: {{ACCOUNT_TAKE_PROFIT_USDT}} USDT
+- Drawdown alerts: {{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}% / {{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}% / {{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}%
+- Tradable instruments: {{SYMBOL_LIST}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Execution Framework]
+{{ENTRY_PROMPT}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Exit & Risk Control]
+{{EXIT_PROMPT}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Variable Guidance & Actions]
+{{VAR_PROMPT}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[Data Notes]
+This prompt already includes all required information:
+• Market data and indicators for every symbol (multi-timeframe)
+• Account information (equity, return, Sharpe ratio)
+• Current position state (PnL, holding time, leverage)
+• Historical trades (last 10 entries)
+
+[Your Tasks]
+Act directly on the data above, no need to re-fetch:
+1. Manage existing positions → call closePosition / calculateRisk as needed
+2. Identify new trade opportunities → call openPosition to execute
+3. Evaluate risk and sizing → call getAccountBalance / getPositions to confirm
+
+Critical: You must execute via tools. Do not stop at analysis.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+All prices and signals are ordered chronologically: oldest → newest
+
+Unless otherwise noted, intraday sequences use 3-minute spacing. Any symbol-specific interval differences are explicitly stated in each section.
+
+Current market snapshot for all symbols

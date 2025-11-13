@@ -24,10 +24,11 @@ import { startTradingLoop, initTradingSystem } from "./scheduler/tradingLoop";
 import { startAccountRecorder } from "./scheduler/accountRecorder";
 import { startTrailingStopMonitor, stopTrailingStopMonitor } from "./scheduler/trailingStopMonitor";
 import { startStopLossMonitor, stopStopLossMonitor } from "./scheduler/stopLossMonitor";
+import { startContractMultiplierSync, stopContractMultiplierSync } from "./scheduler/contractMultiplierSync";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams.new";
 import { getAccountRiskConfig, getTradingStrategy } from "./agents/tradingAgent";
-import { TRADING_STRATEGY_LABELS } from "./config/strategyTypes";
+import { getStrategyLabel } from "./config/strategyTypes";
 import { SWING_TREND_TRAILING_STOP_CONFIG, SWING_TREND_STOP_LOSS_CONFIG } from "./config/strategyControls";
 import { initializeTerminalEncoding } from "./utils/encodingUtils";
 import { initializeAdminAuth } from "./utils/adminAuth";
@@ -48,6 +49,7 @@ const logger = createLogger({
 
 // 全局服务器实例
 let server: any = null;
+let contractMultiplierSyncTimer: NodeJS.Timeout | null = null;
 
 /**
  * 主函数
@@ -109,8 +111,12 @@ async function main() {
   logger.info("启动止损监控器...");
   startStopLossMonitor();
   
+  // 11. 启动合约乘数同步定时任务（每1小时执行一次）
+  logger.info("启动合约乘数同步定时任务...");
+  contractMultiplierSyncTimer = startContractMultiplierSync(1);
+  
   const strategy = getTradingStrategy();
-  const strategyLabel = TRADING_STRATEGY_LABELS[strategy] ?? strategy;
+  const strategyLabel = getStrategyLabel(strategy);
   const isCodeLevelEnabled = strategy === "swing-trend";
   const accountRisk = await getAccountRiskConfig();
 
@@ -158,6 +164,13 @@ async function gracefulShutdown(signal: string) {
   logger.info(`\n\n收到 ${signal} 信号，正在关闭系统...`);
   
   try {
+    // 停止合约乘数同步定时任务
+    if (contractMultiplierSyncTimer) {
+      logger.info("正在停止合约乘数同步定时任务...");
+      stopContractMultiplierSync(contractMultiplierSyncTimer);
+      logger.info("合约乘数同步定时任务已停止");
+    }
+    
     // 停止移动止盈监控器
     logger.info("正在停止移动止盈监控器...");
     stopTrailingStopMonitor();

@@ -56,6 +56,12 @@ const dbClient = createClient({
 
 type DbRow = Record<string, unknown>;
 
+const AVAILABLE_LANGUAGE_CODES = new Set(["en", "zh", "ja"]);
+const LANGUAGE_DIR_CANDIDATES = [
+  new URL("../language/", import.meta.url),
+  new URL("../../src/language/", import.meta.url),
+];
+
 const CSRF_HEADER = "x-csrf-token";
 
 const DISALLOWED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
@@ -78,6 +84,7 @@ const CONFIG_BOOLEAN_KEYS = new Set(["OKX_USE_PAPER"]);
 
 const CONFIG_ENUM_VALUES: Record<string, string[]> = {
   TRADING_STRATEGY: ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"],
+  PROMPT_LANGUAGE: ["zh", "en", "ja"],
 };
 
 const CONFIG_ALLOWED_KEYS = new Set([
@@ -105,6 +112,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   "PROMPT_SECTION_ENTRY",
   "PROMPT_SECTION_EXIT",
   "PROMPT_SECTION_VARIABLES",
+  "PROMPT_LANGUAGE",
 ]);
 
 function isPrivateIpv4(hostname: string): boolean {
@@ -306,6 +314,28 @@ function toStringSafe(value: unknown, fallback = ""): string {
   return fallback;
 }
 
+async function loadLanguageResource(lang: string): Promise<Record<string, unknown>> {
+  const fileName = `${lang}.json`;
+
+  for (const directory of LANGUAGE_DIR_CANDIDATES) {
+    try {
+      const fileUrl = new URL(fileName, directory);
+      const fileContent = await readFile(fileUrl, "utf-8");
+      return JSON.parse(fileContent) as Record<string, unknown>;
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code === "ENOENT") {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  const notFoundError = new Error(`Language file not found for code: ${lang}`);
+  (notFoundError as NodeJS.ErrnoException).code = "ENOENT";
+  throw notFoundError;
+}
+
 export function createApiRoutes(adminAuth: AdminAuthConfig) {
   const app = new Hono();
   type SessionRecord = {
@@ -463,6 +493,25 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
       return c.json({ error: message }, 500);
+    }
+  });
+
+  app.get("/language/:lang", async (c) => {
+    const lang = c.req.param("lang").toLowerCase();
+    if (!AVAILABLE_LANGUAGE_CODES.has(lang)) {
+      return c.json({ error: "Language not supported" }, 404);
+    }
+
+    try {
+      const payload = await loadLanguageResource(lang);
+      return c.json(payload);
+    } catch (error) {
+      const err = error as NodeJS.ErrnoException;
+      if (err?.code === "ENOENT") {
+        return c.json({ error: "Language pack not found" }, 404);
+      }
+      logger.error("加载语言包失败", { lang, error: err });
+      return c.json({ error: "Failed to load language pack" }, 500);
     }
   });
 
@@ -1172,6 +1221,11 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         ? (requestedStrategy as TradingStrategy)
         : fallbackStrategy;
 
+      // Get language parameter (defaults to 'en') and validate
+      const { normalizeStrategyLanguage } = await import("../config/strategyTypes");
+      const rawLanguage = c.req.query("language")?.trim().toLowerCase();
+      const requestedLanguage = normalizeStrategyLanguage(rawLanguage);
+      
       const intervalParam = c.req.query("interval")?.trim().toLowerCase();
       const intervalMinutes = (() => {
         if (!intervalParam) {
@@ -1185,11 +1239,12 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         return parsed;
       })();
 
-      const sections = await getStrategyPromptDefaultSections(strategy, intervalMinutes);
+      const sections = await getStrategyPromptDefaultSections(strategy, intervalMinutes, requestedLanguage);
 
       return c.json({
         strategy,
         intervalMinutes,
+        language: requestedLanguage,
         sections,
       });
     } catch (error: unknown) {
@@ -1211,6 +1266,94 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
       logger.error("获取公开模型配置失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取交易循环的公开状态（不需要登录）
+   */
+  app.get("/api/public/trading-loop-status", async (c) => {
+    try {
+      const { getTradingLoopState } = await import("../scheduler/tradingLoop");
+      const state = getTradingLoopState();
+      
+      // 只返回是否启用和调度状态，不返回敏感信息
+      return c.json({
+        enabled: state.enabled,
+        scheduled: state.scheduled,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取公开交易循环状态失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取合约乘数（公开接口，无需登录）
+   */
+  app.get("/api/public/contract-multipliers", async (c) => {
+    try {
+      const { getContractMultipliersFromDb } = await import("../scheduler/contractMultiplierSync");
+      const multipliers = await getContractMultipliersFromDb();
+      
+      // 转换为前端需要的格式
+      const result: Record<string, number> = {};
+      for (const item of multipliers) {
+        result[item.symbol] = item.multiplier;
+      }
+      
+      return c.json({
+        multipliers: result,
+        lastUpdated: multipliers.length > 0 ? multipliers[0].updated_at : null,
+        count: multipliers.length,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取合约乘数失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取用户语言偏好
+   */
+  app.get("/api/user/language", requireAuth, async (c) => {
+    try {
+      const { getConfigValue } = await import("../database/init-config");
+      const language = await getConfigValue("UI_LANGUAGE");
+      
+      return c.json({ language: language || "en" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Failed to get user language preference:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 设置用户语言偏好
+   */
+  app.post("/api/user/language", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json<{ language?: string }>();
+      const { normalizeStrategyLanguage } = await import("../config/strategyTypes");
+      
+      if (!body.language) {
+        return c.json({ error: "Language parameter is required" }, 400);
+      }
+      
+      const validatedLanguage = normalizeStrategyLanguage(body.language);
+      const { setConfigValue } = await import("../database/init-config");
+      
+      await setConfigValue("UI_LANGUAGE", validatedLanguage);
+      logger.info(`User language preference updated to: ${validatedLanguage}`);
+      
+      return c.json({ success: true, language: validatedLanguage });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Failed to set user language preference:", error);
       return c.json({ error: message }, 500);
     }
   });

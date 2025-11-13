@@ -1,0 +1,452 @@
+{
+  "pageTitle": "Q4AI - AI暗号資産トレーディングモニター",
+  "tagline": "AIトレーディングプラットフォーム",
+  "loadingGlobal": "読み込み中...",
+  "github": "GitHub",
+  "docs": "ドキュメント",
+  "login": {
+    "pageTitle": "Q4AI 管理ログイン",
+    "title": "Q4AI 管理ログイン",
+    "subtitle": "管理者アカウントでサインインしてシステムを管理します",
+    "adminPath": "管理画面入口: {{path}}",
+    "usernameLabel": "ユーザー名",
+    "usernamePlaceholder": "ユーザー名を入力",
+    "passwordLabel": "パスワード",
+    "passwordPlaceholder": "パスワードを入力",
+    "submit": "ログイン",
+    "initialMessage": "初回起動時はコンソールまたは ./.q4ai にある認証情報を確認してください。",
+    "messages": {
+      "verifying": "認証情報を確認しています...",
+      "success": "ログインに成功しました。リダイレクト中...",
+      "failure": "ログインに失敗しました。ユーザー名とパスワードを確認してください。",
+      "networkError": "ネットワークエラーです。しばらくしてから再試行してください。",
+      "statusError": "ログイン状態を確認できません。"
+    }
+  },
+  "navigation": {
+    "account": "アカウント",
+    "strategy": "ストラテジー",
+    "settings": "設定",
+    "logout": "ログアウト",
+    "language": "言語",
+    "languageTooltip": "言語: {{language}}"
+  },
+  "tradingSymbols": "シンボル",
+  "loading": "読み込み中...",
+  "interval": {
+    "1m": "1分",
+    "5m": "5分",
+    "15m": "15分",
+    "1h": "1時間",
+    "4h": "4時間",
+    "1D": "1日"
+  },
+  "accountStats": "口座統計",
+  "statsDetail": "詳細",
+  "totalEquity": "総資産",
+  "availableBalance": "利用可能残高",
+  "unrealizedPnL": "未実現損益",
+  "totalReturn": "累計リターン",
+  "winRate": "勝率",
+  "maxDrawdown": "最大ドローダウン",
+  "sharpeRatio": "シャープレシオ",
+  "positions": "ポジション",
+  "noPositions": "建玉はありません",
+  "long": "ロング",
+  "short": "ショート",
+  "pnl": "損益",
+  "leverage": "レバレッジ",
+  "holdingTime": "保有時間",
+  "hours": "時間",
+  "aiStatus": "AI 状態",
+  "aiIdle": "待機中",
+  "aiRunning": "稼働中",
+  "aiAnalyzing": "分析中",
+  "aiDecisionMaking": "意思決定中",
+  "tabs": {
+    "positions": "ポジション",
+    "trades": "取引履歴",
+    "logs": "取引ログ"
+  },
+  "decision": {
+    "title": "AI 判断",
+    "empty": "AI の判断はまだありません"
+  },
+  "modals": {
+    "decision": {
+      "title": "判断の詳細"
+    },
+    "log": {
+      "title": "ログの詳細"
+    },
+    "statistics": {
+      "title": "取引統計",
+      "equityCurve": "エクイティカーブ"
+    },
+    "records": {
+      "title": "全レコード"
+    },
+    "account": {
+      "title": "アカウント設定"
+    },
+    "strategy": {
+      "title": "ストラテジー設定"
+    },
+    "settings": {
+      "title": "システム設定"
+    }
+  },
+  "tables": {
+    "common": {
+      "quantityWithSymbol": "{{value}} {{symbol}}",
+      "contractsWithUnit": "{{value}} 枚",
+      "contracts": "枚",
+      "total": "合計",
+      "noContent": "表示できる内容がありません",
+      "viewAll": "すべて表示"
+    },
+    "positions": {
+      "empty": "建玉はありません",
+      "headers": {
+        "contract": "銘柄",
+        "side": "方向",
+        "quantity": "数量",
+        "entryPrice": "建値",
+        "markPrice": "マーク価格",
+        "unrealizedPnl": "未実現損益",
+        "openedAt": "建玉作成時刻"
+      }
+    },
+    "trades": {
+      "empty": "取引履歴はありません",
+      "headers": {
+        "contract": "銘柄",
+        "type": "種別",
+        "side": "方向",
+        "price": "価格",
+        "quantity": "数量",
+        "pnl": "損益",
+        "time": "時間",
+        "fee": "手数料"
+      },
+      "types": {
+        "open": "新規",
+        "close": "決済"
+      }
+    },
+    "logs": {
+      "empty": "取引ログはありません",
+      "headers": {
+        "time": "時間",
+        "contract": "銘柄",
+        "action": "アクション",
+        "status": "状態",
+        "summary": "サマリー"
+      },
+      "status": {
+        "success": "成功",
+        "error": "エラー",
+        "failed": "失敗",
+        "warning": "警告",
+        "pending": "処理中",
+        "skipped": "スキップ",
+        "unknown": "不明"
+      }
+    },
+    "decisions": {
+      "headers": {
+        "time": "時間",
+        "iteration": "イテレーション",
+        "summary": "サマリー",
+        "positions": "ポジション数",
+        "accountValue": "口座資産"
+      },
+      "defaultSummary": "様子見",
+      "actions": {
+        "long": "ロング",
+        "short": "ショート",
+        "close": "決済",
+        "watching": "様子見"
+      }
+    }
+  },
+  "stats": {
+    "winRate": "勝率",
+    "totalProfit": "総利益",
+    "totalLoss": "総損失",
+    "netPnl": "純損益",
+    "return": "リターン",
+    "maxDrawdown": "最大ドローダウン",
+    "profitFactor": "プロフィットファクター",
+    "totalTrades": "総取引数",
+    "winTrades": "勝ちトレード",
+    "lossTrades": "負けトレード",
+    "avgWin": "平均利益",
+    "avgLoss": "平均損失",
+    "maxWin": "最大利益",
+    "maxLoss": "最大損失",
+    "sharpe": "シャープレシオ",
+    "sortino": "ソルティノレシオ"
+  },
+  "pagination": {
+    "prev": "前へ",
+    "next": "次へ",
+    "page": "{{total}} ページ中 {{current}} ページ (全 {{count}} 件)",
+    "empty": "レコードはありません",
+    "loading": "読み込み中..."
+  },
+  "common": {
+    "confirm": "確認",
+    "cancel": "キャンセル",
+    "save": "保存",
+    "delete": "削除",
+    "edit": "編集",
+    "close": "閉じる"
+  },
+  "account": {
+    "saveAndRestart": "保存して再起動",
+    "okx": {
+      "sectionTitle": "🔑 OKX API 設定",
+      "registerLink": "OKX リベートアカウント登録 ↗",
+      "apiKeyLabel": "API Key <span class=\"required\">*</span>",
+      "apiKeyPlaceholder": "OKX API Key を入力",
+      "apiSecretLabel": "API Secret <span class=\"required\">*</span>",
+      "apiSecretPlaceholder": "OKX API Secret を入力",
+      "apiPassphraseLabel": "API Passphrase <span class=\"required\">*</span>",
+      "apiPassphrasePlaceholder": "OKX Passphrase を入力",
+      "usePaper": "ペーパートレード (Sandbox) を使用",
+      "testButton": "🔍 API 接続をテスト",
+      "testMessages": {
+        "fillRequired": "先に OKX API 情報をすべて入力してください。",
+        "testing": "OKX API 接続をテスト中...",
+        "success": "接続に成功しました",
+        "balanceLabel": " (資産: {{balance}})",
+        "failure": "テストに失敗しました: {{detail}}",
+        "networkError": "リクエストに失敗しました。ネットワークまたはプロキシ設定を確認してください。"
+      }
+    },
+    "parameters": {
+      "sectionTitle": "💰 口座パラメータ",
+      "initialBalance": "初期資産 (USDT)",
+      "initialBalancePlaceholder": "初期資産を入力",
+      "stopLoss": "口座ストップロス (USDT)",
+      "stopLossPlaceholder": "ストップロスを入力",
+      "takeProfit": "口座テイクプロフィット (USDT)",
+      "takeProfitPlaceholder": "テイクプロフィットを入力"
+    }
+  },
+  "strategy": {
+    "saveAndRestart": "保存して再起動",
+    "tabs": {
+      "basic": "基本設定",
+      "entry": "エントリー",
+      "exit": "エグジット",
+      "variables": "変数メモ",
+      "preview": "プレビュー"
+    },
+    "basic": {
+      "tradeSection": "💼 取引設定",
+      "tradingSymbols": "取引シンボル (カンマ区切り)",
+      "tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB",
+      "interval": "トレード間隔 (分)",
+      "intervalPlaceholder": "分数を入力",
+      "riskSection": "⚠️ リスクパラメータ",
+      "maxLeverage": "最大レバレッジ",
+      "maxLeveragePlaceholder": "レバレッジを入力",
+      "maxPositions": "最大ポジション数",
+      "maxPositionsPlaceholder": "ポジション数を入力",
+      "maxHoldingHours": "最大保有時間 (時間)",
+      "maxHoldingHoursPlaceholder": "時間を入力",
+      "extremeStopLoss": "エクストリームストップ (％)",
+      "extremeStopLossPlaceholder": "％を入力",
+      "drawdownSection": "📉 ドローダウン制御",
+      "drawdownWarning": "警戒レベル (％)",
+      "drawdownWarningPlaceholder": "％を入力",
+      "drawdownNoNew": "新規建玉禁止レベル (％)",
+      "drawdownNoNewPlaceholder": "％を入力",
+      "drawdownForceClose": "強制決済レベル (％)",
+      "drawdownForceClosePlaceholder": "％を入力"
+    },
+    "entry": {
+      "promptLabel": "エントリープロンプト",
+      "promptPlaceholder": "{{VARIABLE}} を使ってエントリー条件を記述",
+      "promptHint": "ヒント: エントリー条件と {{VARIABLE}} プレースホルダーを定義すると、システムが自動で検証ロジックを補完します。"
+    },
+    "exit": {
+      "promptLabel": "エグジットプロンプト",
+      "promptPlaceholder": "損切り、分割利確、トレーリングを定義",
+      "promptHint": "ヒント: 損切り/利確ルールとドローダウン要求を記述すると、システムが検証を補助します。"
+    },
+    "variables": {
+      "promptLabel": "変数メモ / 追加文",
+      "promptPlaceholder": "必要に応じて変数の説明を追加",
+      "promptHint": "システムが自動生成した変数リストに追記・上書きできます。",
+      "placeholdersTitle": "利用可能なプレースホルダー",
+      "placeholder": {
+        "strategyName": "<code>{{STRATEGY_NAME}}</code> ストラテジー名",
+        "strategyId": "<code>{{STRATEGY_ID}}</code> ストラテジーID",
+        "entryPrompt": "<code>{{ENTRY_PROMPT}}</code> 既定エントリー文",
+        "exitPrompt": "<code>{{EXIT_PROMPT}}</code> 既定エグジット文",
+        "varPrompt": "<code>{{VAR_PROMPT}}</code> 既定変数メモ",
+        "interval": "<code>{{TRADING_INTERVAL_MINUTES}}</code> トレード間隔(分)",
+        "maxHoldingHours": "<code>{{MAX_HOLDING_HOURS}}</code> 最大保有時間",
+        "maxHoldingCycles": "<code>{{MAX_HOLDING_CYCLES}}</code> 最大サイクル数",
+        "maxPositions": "<code>{{MAX_POSITIONS}}</code> 最大ポジション数",
+        "extremeStopLoss": "<code>{{EXTREME_STOP_LOSS_PERCENT}}</code> システム極端ストップ (％)",
+        "accountStopLoss": "<code>{{ACCOUNT_STOP_LOSS_USDT}}</code> 口座ストップロス (USDT)",
+        "accountTakeProfit": "<code>{{ACCOUNT_TAKE_PROFIT_USDT}}</code> 口座テイクプロフィット (USDT)",
+        "drawdownWarning": "<code>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</code> ドローダウン警戒レベル (％)",
+        "drawdownNoNew": "<code>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</code> 新規禁止レベル (％)",
+        "drawdownForceClose": "<code>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</code> 強制決済レベル (％)",
+        "symbolList": "<code>{{SYMBOL_LIST}}</code> 取引シンボル一覧"
+      },
+      "placeholderHint": "保存時に {{VARIABLE}} が実際のパラメータに置き換えられます。"
+    },
+    "quickInsert": {
+      "label": "クイックテンプレート:"
+    },
+    "fieldNames": {
+      "entry": "エントリー",
+      "exit": "エグジット",
+      "variables": "変数メモ",
+      "default": "テンプレート"
+    },
+    "preview": {
+      "title": "📝 ストラテジープレビュー",
+      "subtitle": "保存後にエージェントへ渡される内容を確認できます。",
+      "empty": "コンテンツがありません"
+    },
+    "labels": {
+      "ultraShort": "超短期",
+      "swingTrend": "スイングトレンド",
+      "conservative": "資本保全",
+      "balanced": "バランス拡張",
+      "aggressive": "ブレイクアウトモメンタム",
+      "unknown": "不明なストラテジー"
+    },
+    "labelMap": {
+      "ultra-short": "超短期",
+      "swing-trend": "スイングトレンド",
+      "conservative": "資本保全",
+      "balanced": "バランス拡張",
+      "aggressive": "ブレイクアウトモメンタム"
+    }
+  },
+  "settings": {
+    "saveAndRestart": "保存して再起動",
+    "ai": {
+      "sectionTitle": "🤖 AI モデル設定",
+      "apiKeyLabel": "OpenAI API Key <span class=\"required\">*</span>",
+      "apiKeyPlaceholder": "sk-...",
+      "baseUrl": "API ベースURL",
+      "baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+      "modelName": "AI モデル名",
+      "modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
+      "testButton": "🔍 AI 接続をテスト",
+      "testMessages": {
+        "fillRequired": "AI API 設定をすべて入力してください。",
+        "testing": "AI API 接続をテスト中...",
+        "success": "接続に成功しました",
+        "responseTime": " (応答時間 {{time}})",
+        "failure": "テストに失敗しました: {{detail}}",
+        "networkError": "リクエストに失敗しました。ネットワーク設定を確認してください。"
+      }
+    },
+    "network": {
+      "sectionTitle": "🌐 ネットワーク設定",
+      "httpProxy": "HTTP プロキシ (任意)",
+      "httpProxyPlaceholder": "http://127.0.0.1:7890"
+    },
+    "reset": {
+      "sectionTitle": "⚠️ 実運用データをリセット",
+      "hint": "この操作は取引データとストラテジー設定を初期化します (API・プロキシ設定は維持)。実運用を停止したうえで実行してください。",
+      "trigger": "実運用データをリセット",
+      "confirmHint": "続行するには <code>RESET</code> と入力してください。",
+      "confirmPlaceholder": "RESET と入力",
+      "confirm": "リセットを実行"
+    }
+  },
+  "chart": {
+    "aiToggleStart": "AI スケジューラを開始",
+    "aiToggleStop": "AI スケジューラを停止",
+    "tooltipStart": "クリックでAIトレードを開始",
+    "tooltipStop": "クリックでAIトレードを停止",
+    "manualTrigger": "クリックでAI判断を即時実行",
+    "loginRequired": "先にログインしてください",
+    "modelBadge": "AIモデル搭載",
+    "modelIconAlt": "AIモデルアイコン",
+    "markers": {
+      "trade": "取引",
+      "close": "決済",
+      "closeWithPnl": "決済 {{pnl}}",
+      "closeWithPnlPercent": "決済 {{pnl}} ({{percent}}%)"
+    }
+  },
+  "notifications": {
+    "loadFailedTitle": "読み込みに失敗しました",
+    "loadFailedDefault": "戦略テンプレートを取得できませんでした。しばらくしてから再試行してください。",
+    "templateInsertedTitle": "テンプレートを挿入しました",
+    "templateInsertedMessage": "「{{strategy}}」戦略の{{field}}テンプレートを読み込みました。",
+    "noChangesTitle": "保存不要",
+    "noChangesMessage": "設定の変更は検出されませんでした。",
+    "saveFailedTitle": "保存に失敗しました",
+    "saveFailedDefault": "設定を保存できませんでした。しばらくしてから再試行してください。",
+    "reloadFailedTitle": "リロードに失敗しました",
+    "reloadFailedMessage": "設定は保存されましたが、リロードに失敗しました: {{error}}",
+    "accountSaveTitle": "アカウント設定を更新しました",
+    "accountSaveMessage": "変更を保存し、リロードを実行しました。自動再起動しない場合は手動で再起動してください。",
+    "strategySaveTitle": "ストラテジー設定を更新しました",
+    "strategySaveMessage": "変更を保存し、リロードを実行しました。自動再起動しない場合は手動で再起動してください。",
+    "settingsSaveTitle": "システム設定を更新しました",
+    "settingsSaveMessage": "変更を保存し、リロードを実行しました。自動再起動しない場合は手動で再起動してください。",
+    "saveExceptionTitle": "保存エラー",
+    "saveExceptionMessage": "保存処理中に例外が発生しました。コンソールログを確認してください。",
+    "fieldMissingTitle": "必須項目が不足しています",
+    "tradingSymbolsRequired": "取引シンボルは空にできません。",
+    "networkRequestFailed": "リクエストに失敗しました。ネットワーク接続を確認してください。"
+  },
+  "aiManual": {
+    "loginRequiredTitle": "ログインが必要です",
+    "loginRequiredMessage": "AI 判断を手動で実行するには、先に管理画面へログインしてください。",
+    "executingTitle": "実行中",
+    "executingMessage": "AI 判断を実行中です。しばらくお待ちください...",
+    "triggerFailedTitle": "トリガーに失敗しました",
+    "triggerFailedMessage": "AI 判断を実行できませんでした。ネットワーク接続を確認してください。"
+  },
+  "aiOverlay": {
+    "status": {
+      "idle": "待機中",
+      "preparing": "準備中...",
+      "collecting_data": "データ収集中...",
+      "analyzing": "相場を分析中...",
+      "ai_deciding": "AI 判断中...",
+      "executing_trades": "取引を実行中...",
+      "completed": "完了 ✓",
+      "error": "失敗 ✗"
+    },
+    "statusFallback": "AI モデル搭載"
+  },
+  "logDetail": {
+    "time": "時間",
+    "symbol": "銘柄",
+    "action": "操作",
+    "status": "状態",
+    "statusUnknown": "不明",
+    "summaryTitle": "実行サマリー",
+    "noDetails": "詳細情報はありません",
+    "rawRequest": "生リクエスト",
+    "rawResponse": "生レスポンス",
+    "rawMessage": "生メッセージ"
+  },
+  "loadingData": "データを読み込み中...",
+  "saveSuccess": "保存しました",
+  "saveError": "保存に失敗しました",
+  "networkError": "ネットワークエラー",
+  "strategyLabels": {
+    "ultra-short": "超短期",
+    "swing-trend": "スイングトレンド",
+    "conservative": "資本保全",
+    "balanced": "バランス拡張",
+    "aggressive": "ブレイクアウトモメンタム"
+  }
+}

@@ -180,6 +180,13 @@ async function initDatabase() {
     }
 
     logger.info("\n✅ 数据库初始化完成");
+    
+    // 执行数据库迁移
+    logger.info("检查数据库迁移...");
+    const { ensureAgentDecisionExecutionColumn, ensureContractMultipliersTable } = await import("./migrations");
+    await ensureAgentDecisionExecutionColumn(client);
+    await ensureContractMultipliersTable(client);
+    logger.info("数据库迁移检查完成");
   } catch (error: unknown) {
     if (error instanceof Error) {
       logger.error("❌ 数据库初始化失败:", error.message);

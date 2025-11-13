@@ -1,17 +1,17 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Q4AI - AI 加密货币交易监控</title>
+  <title data-i18n="pageTitle">Q4AI - AI Crypto Trading Monitor</title>
   <link rel="stylesheet" href="monitor-styles.css">
 </head>
 <body>
   <!-- 全局加载遮罩 -->
   <div class="global-loading" id="global-loading">
     <div class="loading-spinner">
-      <div class="spinner"></div>
-      <p class="loading-text">正在加载数据...</p>
+  <div class="spinner"></div>
+  <p class="loading-text" data-i18n="loadingGlobal">Loading data...</p>
     </div>
   </div>
 
@@ -20,20 +20,35 @@
     <header class="top-bar">
       <div class="logo-section">
         <h1 class="logo">Q4</h1>
-        <span class="tagline">AI Trading Platform</span>
+  <span class="tagline" data-i18n="tagline">AI Trading Platform</span>
       </div>
       <nav class="nav-links">
         <a href="https://github.com/q4ai/x-nof1" target="_blank" rel="noopener noreferrer">
           <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
             <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
           </svg>
-          GitHub
+          <span data-i18n="github">GitHub</span>
         </a>
-        <a href="https://github.com/q4ai/x-nof1/blob/main/README.md" target="_blank" rel="noopener noreferrer">文档</a>
-        <a href="#" class="nav-action nav-account hidden" id="account-btn" title="账户配置">账户</a>
-        <a href="#" class="nav-action nav-strategy hidden" id="strategy-btn" title="策略配置">策略</a>
-        <a href="#" class="nav-action nav-settings hidden" id="settings-btn" title="系统设置">设置</a>
-        <a href="#" class="nav-action nav-logout hidden" id="logout-btn" title="退出登录">退出</a>
+  <a href="https://github.com/q4ai/x-nof1/blob/main/README.md" target="_blank" rel="noopener noreferrer" data-i18n="docs">Docs</a>
+        <div class="language-selector hidden" id="language-selector">
+          <button type="button" class="language-toggle" id="language-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Language">
+            <span class="language-label">English</span>
+            <span class="language-caret" aria-hidden="true">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" role="presentation">
+                <path d="M2.146 4.646a.5.5 0 0 1 .708 0L6 7.793l3.146-3.147a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 0 1 0-.708z" />
+              </svg>
+            </span>
+          </button>
+          <div class="language-menu" id="language-menu" role="menu">
+            <button type="button" class="language-option" data-lang="en" role="menuitem">English</button>
+            <button type="button" class="language-option" data-lang="zh" role="menuitem">中文</button>
+            <button type="button" class="language-option" data-lang="ja" role="menuitem">日本語</button>
+          </div>
+        </div>
+  <a href="#" class="nav-action nav-account hidden" id="account-btn" data-i18n="navigation.account" data-i18n-title="navigation.account">Account</a>
+  <a href="#" class="nav-action nav-strategy hidden" id="strategy-btn" data-i18n="navigation.strategy" data-i18n-title="navigation.strategy">Strategy</a>
+  <a href="#" class="nav-action nav-settings hidden" id="settings-btn" data-i18n="navigation.settings" data-i18n-title="navigation.settings">Settings</a>
+  <a href="#" class="nav-action nav-logout hidden" id="logout-btn" data-i18n="navigation.logout" data-i18n-title="navigation.logout">Logout</a>
       </nav>
     </header>
 
@@ -42,11 +57,11 @@
       <!-- 左侧：币种列表 -->
       <aside class="symbol-sidebar">
         <div class="sidebar-header">
-          <h3>交易币种</h3>
+          <h3 data-i18n="tradingSymbols">Trading Symbols</h3>
           <span class="update-time" id="prices-updated">--</span>
         </div>
         <div class="symbol-list" id="symbol-list">
-          <p class="loading">加载中...</p>
+          <p class="loading" data-i18n="loading">Loading...</p>
         </div>
       </aside>
 
@@ -72,8 +87,10 @@
               href="#"
               class="trading-loop-toggle hidden is-paused"
               id="trading-loop-toggle"
-              title="启动 AI 定时任务"
-              aria-label="启动 AI 定时任务"
+              title="Start AI Scheduler"
+              aria-label="Start AI Scheduler"
+              data-i18n-title="chart.aiToggleStart"
+              data-i18n-aria="chart.aiToggleStart"
             >
               <span class="cron-icon cron-icon-running" aria-hidden="true">
                 <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -96,32 +113,32 @@
         <!-- 资产曲线 -->
         <div class="equity-section">
           <div class="section-header">
-            <h4>账户统计</h4>
-            <a href="#" class="stats-detail-link" id="stats-detail-btn">统计详情</a>
+            <h4 data-i18n="accountStats">Account Stats</h4>
+            <a href="#" class="stats-detail-link" id="stats-detail-btn" data-i18n="statsDetail">Details</a>
           </div>
           <div class="equity-metrics">
             <div class="metric-item">
-              <span class="label">总资产</span>
+              <span class="label" data-i18n="totalEquity">Total Equity</span>
               <span class="value" id="metric-total">--</span>
             </div>
             <div class="metric-item">
-              <span class="label">可用</span>
+              <span class="label" data-i18n="availableBalance">Available</span>
               <span class="value" id="metric-available">--</span>
             </div>
             <div class="metric-item">
-              <span class="label">未实现</span>
+              <span class="label" data-i18n="unrealizedPnL">Unrealized</span>
               <span class="value" id="metric-unrealised">--</span>
             </div>
             <div class="metric-item">
-              <span class="label">收益率</span>
+              <span class="label" data-i18n="totalReturn">Return</span>
               <span class="value" id="metric-return">--</span>
             </div>
             <div class="metric-item">
-              <span class="label">胜率</span>
+              <span class="label" data-i18n="winRate">Win Rate</span>
               <span class="value" id="metric-winrate">--</span>
             </div>
             <div class="metric-item">
-              <span class="label">最大回撤</span>
+              <span class="label" data-i18n="maxDrawdown">Max Drawdown</span>
               <span class="value" id="metric-maxdrawdown">--</span>
             </div>
           </div>
@@ -133,11 +150,11 @@
         <!-- AI 决策列表 -->
         <div class="decision-section">
           <div class="section-header">
-            <h4>AI 决策</h4>
+            <h4 data-i18n="decision.title">AI Decisions</h4>
             <span class="update-time" id="decision-updated">--</span>
           </div>
           <div class="decision-list" id="decision-list">
-            <p class="loading">加载中...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </div>
       </aside>
@@ -146,24 +163,24 @@
     <!-- 底部：当前持仓 / 交易历史 / 交易日志 -->
     <footer class="bottom-tabs">
       <nav class="tab-nav" id="tab-nav">
-        <button class="tab-btn active" data-tab="positions">当前持仓</button>
-        <button class="tab-btn" data-tab="trades">交易历史</button>
-        <button class="tab-btn" data-tab="logs">交易日志</button>
+  <button class="tab-btn active" data-tab="positions" data-i18n="tabs.positions">Positions</button>
+  <button class="tab-btn" data-tab="trades" data-i18n="tabs.trades">Trade History</button>
+  <button class="tab-btn" data-tab="logs" data-i18n="tabs.logs">Trade Logs</button>
       </nav>
       <div class="tab-content">
         <div class="tab-panel active" id="tab-positions">
           <div class="table-container" id="positions-container">
-            <p class="loading">加载中...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </div>
         <div class="tab-panel" id="tab-trades">
           <div class="table-container" id="trades-container">
-            <p class="loading">加载中...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </div>
         <div class="tab-panel" id="tab-logs">
           <div class="table-container" id="logs-container">
-            <p class="loading">加载中...</p>
+            <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </div>
       </div>
@@ -175,7 +192,7 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3>决策详情</h3>
+  <h3 data-i18n="modals.decision.title">Decision Details</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body" id="decision-detail">
@@ -189,7 +206,7 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3>日志详情</h3>
+  <h3 data-i18n="modals.log.title">Log Details</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body" id="log-detail">
@@ -203,13 +220,13 @@
     <div class="modal-overlay"></div>
     <div class="modal-content modal-large">
       <div class="modal-header">
-        <h3>交易统计详情</h3>
+  <h3 data-i18n="modals.statistics.title">Trading Statistics</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
         <!-- PNL 曲线图 -->
         <div class="stats-chart-section">
-          <h4>账户权益曲线</h4>
+          <h4 data-i18n="modals.statistics.equityCurve">Equity Curve</h4>
           <div class="stats-chart-container">
             <canvas id="stats-pnl-chart"></canvas>
           </div>
@@ -218,67 +235,67 @@
         <!-- 统计数据网格 -->
         <div class="stats-grid">
           <div class="stats-card">
-            <div class="stats-label">胜率</div>
+            <div class="stats-label" data-i18n="stats.winRate">Win Rate</div>
             <div class="stats-value" id="stats-winrate">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">总盈利</div>
+            <div class="stats-label" data-i18n="stats.totalProfit">Total Profit</div>
             <div class="stats-value positive" id="stats-total-profit">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">总亏损</div>
+            <div class="stats-label" data-i18n="stats.totalLoss">Total Loss</div>
             <div class="stats-value negative" id="stats-total-loss">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">净盈亏</div>
+            <div class="stats-label" data-i18n="stats.netPnl">Net PnL</div>
             <div class="stats-value" id="stats-net-pnl">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">收益率</div>
+            <div class="stats-label" data-i18n="stats.return">Return</div>
             <div class="stats-value" id="stats-return">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">最大回撤</div>
+            <div class="stats-label" data-i18n="stats.maxDrawdown">Max Drawdown</div>
             <div class="stats-value negative" id="stats-maxdd">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">盈亏比</div>
+            <div class="stats-label" data-i18n="stats.profitFactor">Profit Factor</div>
             <div class="stats-value" id="stats-profit-factor">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">交易笔数</div>
+            <div class="stats-label" data-i18n="stats.totalTrades">Total Trades</div>
             <div class="stats-value" id="stats-total-trades">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">盈利笔数</div>
+            <div class="stats-label" data-i18n="stats.winTrades">Winning Trades</div>
             <div class="stats-value positive" id="stats-win-trades">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">亏损笔数</div>
+            <div class="stats-label" data-i18n="stats.lossTrades">Losing Trades</div>
             <div class="stats-value negative" id="stats-loss-trades">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">平均盈利</div>
+            <div class="stats-label" data-i18n="stats.avgWin">Average Win</div>
             <div class="stats-value" id="stats-avg-win">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">平均亏损</div>
+            <div class="stats-label" data-i18n="stats.avgLoss">Average Loss</div>
             <div class="stats-value" id="stats-avg-loss">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">最大盈利</div>
+            <div class="stats-label" data-i18n="stats.maxWin">Maximum Win</div>
             <div class="stats-value positive" id="stats-max-win">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">最大亏损</div>
+            <div class="stats-label" data-i18n="stats.maxLoss">Maximum Loss</div>
             <div class="stats-value negative" id="stats-max-loss">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">夏普比率</div>
+            <div class="stats-label" data-i18n="stats.sharpe">Sharpe Ratio</div>
             <div class="stats-value" id="stats-sharpe">--</div>
           </div>
           <div class="stats-card">
-            <div class="stats-label">Sortino比率</div>
+            <div class="stats-label" data-i18n="stats.sortino">Sortino Ratio</div>
             <div class="stats-value" id="stats-sortino">--</div>
           </div>
         </div>
@@ -291,17 +308,17 @@
     <div class="modal-overlay"></div>
     <div class="modal-content modal-large">
       <div class="modal-header">
-        <h3 id="records-modal-title">全部记录</h3>
+  <h3 id="records-modal-title" data-i18n="modals.records.title">All Records</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body">
         <div class="table-container" id="records-table-container">
-          <p class="loading">加载中...</p>
+          <p class="loading" data-i18n="loading">Loading...</p>
         </div>
         <div class="pagination" id="records-pagination">
-          <button type="button" class="pagination-btn" data-direction="prev">上一页</button>
-          <span class="pagination-info" id="records-page-info">第 1 页</span>
-          <button type="button" class="pagination-btn" data-direction="next">下一页</button>
+          <button type="button" class="pagination-btn" data-direction="prev" data-i18n="pagination.prev">Previous</button>
+          <span class="pagination-info" id="records-page-info" data-i18n="pagination.page">Page 1</span>
+          <button type="button" class="pagination-btn" data-direction="next" data-i18n="pagination.next">Next</button>
         </div>
       </div>
     </div>
@@ -312,7 +329,7 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3>账户配置</h3>
+  <h3 data-i18n="modals.account.title">Account Settings</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body" id="account-body">
@@ -321,27 +338,27 @@
           <!-- OKX API 配置 -->
           <div class="settings-section">
             <div class="section-header">
-              <h4>🔑 OKX API 配置</h4>
-              <a href="https://www.afibbjgrubxx.com/join/Q4AIX" target="_blank" class="register-link">注册OKX返佣账户 ↗</a>
+              <h4 data-i18n-html="account.okx.sectionTitle">🔑 OKX API Setup</h4>
+              <a href="https://www.afibbjgrubxx.com/join/Q4AIX" target="_blank" class="register-link" data-i18n="account.okx.registerLink">Register OKX Rebate Account ↗</a>
             </div>
             <div class="form-group">
-              <label>API Key <span class="required">*</span></label>
+              <label data-i18n-html="account.okx.apiKeyLabel">API Key <span class="required">*</span></label>
               <div class="password-input">
-                <input type="password" name="OKX_API_KEY" placeholder="输入 OKX API Key" autocomplete="off" />
+                <input type="password" name="OKX_API_KEY" placeholder="Enter OKX API Key" data-i18n-placeholder="account.okx.apiKeyPlaceholder" autocomplete="off" />
                 <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
               </div>
             </div>
             <div class="form-group">
-              <label>API Secret <span class="required">*</span></label>
+              <label data-i18n-html="account.okx.apiSecretLabel">API Secret <span class="required">*</span></label>
               <div class="password-input">
-                <input type="password" name="OKX_API_SECRET" placeholder="输入 OKX API Secret" autocomplete="off" />
+                <input type="password" name="OKX_API_SECRET" placeholder="Enter OKX API Secret" data-i18n-placeholder="account.okx.apiSecretPlaceholder" autocomplete="off" />
                 <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
               </div>
             </div>
             <div class="form-group">
-              <label>API Passphrase <span class="required">*</span></label>
+              <label data-i18n-html="account.okx.apiPassphraseLabel">API Passphrase <span class="required">*</span></label>
               <div class="password-input">
-                <input type="password" name="OKX_API_PASSPHRASE" placeholder="输入 OKX Passphrase" autocomplete="off" />
+                <input type="password" name="OKX_API_PASSPHRASE" placeholder="Enter OKX Passphrase" data-i18n-placeholder="account.okx.apiPassphrasePlaceholder" autocomplete="off" />
                 <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
               </div>
             </div>
@@ -349,11 +366,11 @@
               <div class="form-group" style="flex: 0 0 auto;">
                 <label class="checkbox-label">
                   <input type="checkbox" name="OKX_USE_PAPER" />
-                  <span>使用模拟盘（测试环境）</span>
+                  <span data-i18n="account.okx.usePaper">Use Paper Trading (Sandbox)</span>
                 </label>
               </div>
               <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
-                <button type="button" class="btn-test" id="test-okx-api">🔍 测试 API 连接</button>
+                <button type="button" class="btn-test" id="test-okx-api" data-i18n-html="account.okx.testButton">🔍 Test API Connection</button>
               </div>
             </div>
             <div id="api-test-result" class="api-test-result" style="display: none;"></div>
@@ -361,26 +378,26 @@
 
           <!-- 账户参数 -->
           <div class="settings-section">
-            <h4>💰 账户参数</h4>
+            <h4 data-i18n-html="account.parameters.sectionTitle">💰 Account Parameters</h4>
             <div class="form-row">
               <div class="form-group">
-                <label>初始资金（USDT）</label>
-                <input type="number" name="INITIAL_BALANCE" min="10" step="0.01" />
+                <label data-i18n="account.parameters.initialBalance">Initial Balance (USDT)</label>
+                <input type="number" name="INITIAL_BALANCE" min="10" step="0.01" data-i18n-placeholder="account.parameters.initialBalancePlaceholder" placeholder="Enter initial balance" />
               </div>
               <div class="form-group">
-                <label>止损线（USDT）</label>
-                <input type="number" name="ACCOUNT_STOP_LOSS_USDT" min="0" step="0.01" />
+                <label data-i18n="account.parameters.stopLoss">Stop Loss (USDT)</label>
+                <input type="number" name="ACCOUNT_STOP_LOSS_USDT" min="0" step="0.01" data-i18n-placeholder="account.parameters.stopLossPlaceholder" placeholder="Enter stop loss" />
               </div>
               <div class="form-group">
-                <label>止盈线（USDT）</label>
-                <input type="number" name="ACCOUNT_TAKE_PROFIT_USDT" min="0" step="0.01" />
+                <label data-i18n="account.parameters.takeProfit">Take Profit (USDT)</label>
+                <input type="number" name="ACCOUNT_TAKE_PROFIT_USDT" min="0" step="0.01" data-i18n-placeholder="account.parameters.takeProfitPlaceholder" placeholder="Enter take profit" />
               </div>
             </div>
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn-secondary" id="account-cancel">取消</button>
-            <button type="submit" class="btn-primary">保存并重启</button>
+            <button type="button" class="btn-secondary" id="account-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="account.saveAndRestart">Save & Restart</button>
           </div>
         </form>
       </div>
@@ -392,75 +409,75 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3>策略配置</h3>
+  <h3 data-i18n="modals.strategy.title">Strategy Settings</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body" id="strategy-body">
         <form id="strategy-form" class="settings-form">
 
           <div class="settings-tabs" id="strategy-tabs">
-            <button type="button" class="settings-tab-btn active" data-strategy-tab="basic">基础参数</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="entry">入场逻辑</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="exit">出场逻辑</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="variables">提示词变量</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="preview">策略预览</button>
+            <button type="button" class="settings-tab-btn active" data-strategy-tab="basic" data-i18n="strategy.tabs.basic">Basic Parameters</button>
+            <button type="button" class="settings-tab-btn" data-strategy-tab="entry" data-i18n="strategy.tabs.entry">Entry Logic</button>
+            <button type="button" class="settings-tab-btn" data-strategy-tab="exit" data-i18n="strategy.tabs.exit">Exit Logic</button>
+            <button type="button" class="settings-tab-btn" data-strategy-tab="variables" data-i18n="strategy.tabs.variables">Prompt Variables</button>
+            <button type="button" class="settings-tab-btn" data-strategy-tab="preview" data-i18n="strategy.tabs.preview">Preview</button>
           </div>
 
           <div class="settings-tab-panels">
             <div class="settings-tab-panel active" data-strategy-panel="basic">
               <!-- 交易配置 -->
               <div class="settings-section">
-                <h4>💼 交易配置</h4>
+                <h4 data-i18n-html="strategy.basic.tradeSection">💼 Trading Configuration</h4>
                 <div class="form-group">
-                  <label>交易币种（逗号分隔）</label>
-                  <input type="text" name="TRADING_SYMBOLS" placeholder="BTC,ETH,SOL,XRP,BNB" />
+                  <label data-i18n="strategy.basic.tradingSymbols">Trading Symbols (comma separated)</label>
+                  <input type="text" name="TRADING_SYMBOLS" placeholder="BTC,ETH,SOL,XRP,BNB" data-i18n-placeholder="strategy.basic.tradingSymbolsPlaceholder" />
                 </div>
                 <div class="form-row">
                   <div class="form-group">
-                    <label>交易间隔（分钟）</label>
-                    <input type="number" name="TRADING_INTERVAL_MINUTES" min="1" max="1440" />
+                    <label data-i18n="strategy.basic.interval">Trading Interval (minutes)</label>
+                    <input type="number" name="TRADING_INTERVAL_MINUTES" min="1" max="1440" data-i18n-placeholder="strategy.basic.intervalPlaceholder" placeholder="Enter minutes" />
                   </div>
                 </div>
               </div>
 
               <!-- 风险参数 -->
               <div class="settings-section">
-                <h4>⚠️ 风险参数</h4>
+                <h4 data-i18n-html="strategy.basic.riskSection">⚠️ Risk Parameters</h4>
                 <div class="form-row">
                   <div class="form-group">
-                    <label>最大杠杆倍数</label>
-                    <input type="number" name="MAX_LEVERAGE" min="1" max="125" />
+                    <label data-i18n="strategy.basic.maxLeverage">Max Leverage</label>
+                    <input type="number" name="MAX_LEVERAGE" min="1" max="125" data-i18n-placeholder="strategy.basic.maxLeveragePlaceholder" placeholder="Enter max leverage" />
                   </div>
                   <div class="form-group">
-                    <label>最大持仓数</label>
-                    <input type="number" name="MAX_POSITIONS" min="1" max="20" />
+                    <label data-i18n="strategy.basic.maxPositions">Max Positions</label>
+                    <input type="number" name="MAX_POSITIONS" min="1" max="20" data-i18n-placeholder="strategy.basic.maxPositionsPlaceholder" placeholder="Enter max positions" />
                   </div>
                   <div class="form-group">
-                    <label>最大持仓时间（小时）</label>
-                    <input type="number" name="MAX_HOLDING_HOURS" min="1" max="168" />
+                    <label data-i18n="strategy.basic.maxHoldingHours">Max Holding Time (hours)</label>
+                    <input type="number" name="MAX_HOLDING_HOURS" min="1" max="168" data-i18n-placeholder="strategy.basic.maxHoldingHoursPlaceholder" placeholder="Enter hours" />
                   </div>
                 </div>
-                <div class="form-group">
-                  <label>极端止损百分比</label>
-                  <input type="number" name="EXTREME_STOP_LOSS_PERCENT" min="-100" max="0" />
+                <div class="form-group form-group-compact">
+                  <label data-i18n="strategy.basic.extremeStopLoss">Extreme Stop Loss (%)</label>
+                  <input type="number" name="EXTREME_STOP_LOSS_PERCENT" min="-100" max="0" data-i18n-placeholder="strategy.basic.extremeStopLossPlaceholder" placeholder="Enter percentage" />
                 </div>
               </div>
 
               <!-- 回撤风控 -->
               <div class="settings-section">
-                <h4>📉 回撤风控</h4>
+                <h4 data-i18n-html="strategy.basic.drawdownSection">📉 Drawdown Controls</h4>
                 <div class="form-row">
                   <div class="form-group">
-                    <label>警告阈值（%）</label>
-                    <input type="number" name="ACCOUNT_DRAWDOWN_WARNING_PERCENT" min="0" max="100" />
+                    <label data-i18n="strategy.basic.drawdownWarning">Warning Threshold (%)</label>
+                    <input type="number" name="ACCOUNT_DRAWDOWN_WARNING_PERCENT" min="0" max="100" data-i18n-placeholder="strategy.basic.drawdownWarningPlaceholder" placeholder="Enter percentage" />
                   </div>
                   <div class="form-group">
-                    <label>禁止开仓阈值（%）</label>
-                    <input type="number" name="ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT" min="0" max="100" />
+                    <label data-i18n="strategy.basic.drawdownNoNew">No New Position Threshold (%)</label>
+                    <input type="number" name="ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT" min="0" max="100" data-i18n-placeholder="strategy.basic.drawdownNoNewPlaceholder" placeholder="Enter percentage" />
                   </div>
                   <div class="form-group">
-                    <label>强制平仓阈值（%）</label>
-                    <input type="number" name="ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT" min="0" max="100" />
+                    <label data-i18n="strategy.basic.drawdownForceClose">Force Close Threshold (%)</label>
+                    <input type="number" name="ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT" min="0" max="100" data-i18n-placeholder="strategy.basic.drawdownForceClosePlaceholder" placeholder="Enter percentage" />
                   </div>
                 </div>
               </div>
@@ -469,17 +486,17 @@
             <div class="settings-tab-panel" data-strategy-panel="entry">
               <div class="prompt-section">
                 <div class="form-group">
-                  <label>入场逻辑提示词</label>
-                  <textarea name="PROMPT_SECTION_ENTRY" rows="12" placeholder="使用 {{VARIABLE}} 占位符描述入场逻辑"></textarea>
-                  <p class="field-hint">提示：描述入场判断条件，支持使用 {{变量}} 占位符。工具校验（禁止对冲、加仓规则等）已在系统固定提示中，无需重复配置。</p>
+                  <label data-i18n="strategy.entry.promptLabel">Entry Prompt</label>
+                  <textarea name="PROMPT_SECTION_ENTRY" rows="12" placeholder="Describe entry logic with {{VARIABLE}} placeholders" data-i18n-placeholder="strategy.entry.promptPlaceholder"></textarea>
+                  <p class="field-hint" data-i18n="strategy.entry.promptHint">Tip: Describe entry conditions and use {{VARIABLE}} placeholders. Built-in validations (no hedging, scaling rules, etc.) are injected automatically.</p>
                   <div class="quick-insert-row" data-quick-insert="entry">
-                    <span class="quick-insert-label">快速插入策略：</span>
+                    <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
                     <div class="quick-insert-buttons">
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_ENTRY">超短线</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_ENTRY">波段趋势</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_ENTRY">稳健</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_ENTRY">平衡</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_ENTRY">激进</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.conservative">Conservative</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.balanced">Balanced</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.aggressive">Aggressive</button>
                     </div>
                   </div>
                 </div>
@@ -489,17 +506,17 @@
             <div class="settings-tab-panel" data-strategy-panel="exit">
               <div class="prompt-section">
                 <div class="form-group">
-                  <label>出场逻辑提示词</label>
-                  <textarea name="PROMPT_SECTION_EXIT" rows="12" placeholder="定义平仓、分批止盈与移动止盈策略"></textarea>
-                  <p class="field-hint">提示：列出止损/止盈规则、峰值回撤要求等出场逻辑。工具校验（禁止对冲、加仓规则等）已在系统固定提示中，无需重复配置。</p>
+                  <label data-i18n="strategy.exit.promptLabel">Exit Prompt</label>
+                  <textarea name="PROMPT_SECTION_EXIT" rows="12" placeholder="Define exit, partial take-profit, and trailing strategies" data-i18n-placeholder="strategy.exit.promptPlaceholder"></textarea>
+                  <p class="field-hint" data-i18n="strategy.exit.promptHint">Tip: List stop-loss/take-profit rules and drawdown requirements. Built-in validations (no hedging, scaling rules, etc.) are injected automatically.</p>
                   <div class="quick-insert-row" data-quick-insert="exit">
-                    <span class="quick-insert-label">快速插入策略：</span>
+                    <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
                     <div class="quick-insert-buttons">
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_EXIT">超短线</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_EXIT">波段趋势</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_EXIT">稳健</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_EXIT">平衡</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_EXIT">激进</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.conservative">Conservative</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.balanced">Balanced</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.aggressive">Aggressive</button>
                     </div>
                   </div>
                 </div>
@@ -509,41 +526,41 @@
             <div class="settings-tab-panel" data-strategy-panel="variables">
               <div class="prompt-section">
                 <div class="form-group">
-                  <label>变量说明 / 附加文本</label>
-                  <textarea name="PROMPT_SECTION_VARIABLES" rows="10" placeholder="可选：为 Agent 提供变量说明或补充备注"></textarea>
-                  <p class="field-hint">默认会展示系统自动生成的变量列表，可自定义补充说明或覆盖。</p>
+                  <label data-i18n="strategy.variables.promptLabel">Variable Notes / Extra Text</label>
+                  <textarea name="PROMPT_SECTION_VARIABLES" rows="10" placeholder="Optional: Provide variable descriptions or additional notes" data-i18n-placeholder="strategy.variables.promptPlaceholder"></textarea>
+                  <p class="field-hint" data-i18n="strategy.variables.promptHint">The system shows auto-generated variable lists; you can extend or override them.</p>
                   <div class="quick-insert-row" data-quick-insert="variables">
-                    <span class="quick-insert-label">快速插入策略：</span>
+                    <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
                     <div class="quick-insert-buttons">
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_VARIABLES">超短线</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_VARIABLES">波段趋势</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_VARIABLES">稳健</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_VARIABLES">平衡</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_VARIABLES">激进</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.conservative">Conservative</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.balanced">Balanced</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.aggressive">Aggressive</button>
                     </div>
                   </div>
                 </div>
                 <div class="placeholder-docs">
-                  <h4>可用占位符</h4>
+                  <h4 data-i18n="strategy.variables.placeholdersTitle">Available Placeholders</h4>
                   <ul class="placeholder-list">
-                    <li><code>{{STRATEGY_NAME}}</code> 当前策略名称</li>
-                    <li><code>{{STRATEGY_ID}}</code> 策略唯一标识</li>
-                    <li><code>{{ENTRY_PROMPT}}</code> 默认入场逻辑片段</li>
-                    <li><code>{{EXIT_PROMPT}}</code> 默认出场/风控片段</li>
-                    <li><code>{{VAR_PROMPT}}</code> 默认变量说明与执行提示</li>
-                    <li><code>{{TRADING_INTERVAL_MINUTES}}</code> 交易循环间隔（分钟）</li>
-                    <li><code>{{MAX_HOLDING_HOURS}}</code> 系统允许的最大持仓小时数</li>
-                    <li><code>{{MAX_HOLDING_CYCLES}}</code> 系统允许的最大持仓周期数</li>
-                    <li><code>{{MAX_POSITIONS}}</code> 允许的最大持仓数量</li>
-                    <li><code>{{EXTREME_STOP_LOSS_PERCENT}}</code> 系统强制止损百分比</li>
-                    <li><code>{{ACCOUNT_STOP_LOSS_USDT}}</code> 账户止损线（USDT）</li>
-                    <li><code>{{ACCOUNT_TAKE_PROFIT_USDT}}</code> 账户止盈目标（USDT）</li>
-                    <li><code>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</code> 回撤警告阈值（%）</li>
-                    <li><code>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</code> 回撤禁止开仓阈值（%）</li>
-                    <li><code>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</code> 回撤强制平仓阈值（%）</li>
-                    <li><code>{{SYMBOL_LIST}}</code> 交易币种列表（已用顿号分隔）</li>
+                    <li data-i18n-html="strategy.variables.placeholder.strategyName"><code>{{STRATEGY_NAME}}</code> Strategy name</li>
+                    <li data-i18n-html="strategy.variables.placeholder.strategyId"><code>{{STRATEGY_ID}}</code> Strategy identifier</li>
+                    <li data-i18n-html="strategy.variables.placeholder.entryPrompt"><code>{{ENTRY_PROMPT}}</code> Default entry prompt fragment</li>
+                    <li data-i18n-html="strategy.variables.placeholder.exitPrompt"><code>{{EXIT_PROMPT}}</code> Default exit / risk prompt fragment</li>
+                    <li data-i18n-html="strategy.variables.placeholder.varPrompt"><code>{{VAR_PROMPT}}</code> Default variable notes</li>
+                    <li data-i18n-html="strategy.variables.placeholder.interval"><code>{{TRADING_INTERVAL_MINUTES}}</code> Trading loop interval (minutes)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.maxHoldingHours"><code>{{MAX_HOLDING_HOURS}}</code> Maximum holding hours</li>
+                    <li data-i18n-html="strategy.variables.placeholder.maxHoldingCycles"><code>{{MAX_HOLDING_CYCLES}}</code> Maximum holding cycles</li>
+                    <li data-i18n-html="strategy.variables.placeholder.maxPositions"><code>{{MAX_POSITIONS}}</code> Maximum open positions</li>
+                    <li data-i18n-html="strategy.variables.placeholder.extremeStopLoss"><code>{{EXTREME_STOP_LOSS_PERCENT}}</code> System extreme stop loss (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.accountStopLoss"><code>{{ACCOUNT_STOP_LOSS_USDT}}</code> Account stop loss (USDT)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.accountTakeProfit"><code>{{ACCOUNT_TAKE_PROFIT_USDT}}</code> Account take profit (USDT)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.drawdownWarning"><code>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</code> Drawdown warning threshold (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.drawdownNoNew"><code>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</code> Drawdown no-new-position threshold (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.drawdownForceClose"><code>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</code> Drawdown force-close threshold (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.symbolList"><code>{{SYMBOL_LIST}}</code> Trading symbols list (delimited)</li>
                   </ul>
-                  <p class="field-hint">保存后，系统会用实时参数替换 {{变量}}，并注入到交易提示词。</p>
+                  <p class="field-hint" data-i18n="strategy.variables.placeholderHint">On save, the system replaces {{VARIABLE}} tokens with live parameters and injects them into prompts.</p>
                 </div>
               </div>
             </div>
@@ -551,17 +568,17 @@
             <div class="settings-tab-panel" data-strategy-panel="preview">
               <div class="strategy-preview-section">
                 <div class="preview-header">
-                  <h4>📝 策略预览</h4>
-                  <span class="preview-subtitle">组合后的策略片段预览，保存后将直接供 Agent 使用</span>
+                  <h4 data-i18n-html="strategy.preview.title">📝 Strategy Preview</h4>
+                  <span class="preview-subtitle" data-i18n="strategy.preview.subtitle">Preview of combined strategy sections that the agent will use after saving.</span>
                 </div>
-                <pre id="strategy-preview" class="strategy-preview">尚无内容</pre>
+                <pre id="strategy-preview" class="strategy-preview" data-i18n="strategy.preview.empty">No content yet</pre>
               </div>
             </div>
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn-secondary" id="strategy-cancel">取消</button>
-            <button type="submit" class="btn-primary">保存并重启</button>
+            <button type="button" class="btn-secondary" id="strategy-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="strategy.saveAndRestart">Save & Restart</button>
           </div>
         </form>
       </div>
@@ -573,7 +590,7 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3>系统设置</h3>
+  <h3 data-i18n="modals.settings.title">System Settings</h3>
         <button class="modal-close">&times;</button>
       </div>
       <div class="modal-body" id="settings-body">
@@ -581,26 +598,26 @@
           
           <!-- AI API 配置 -->
           <div class="settings-section">
-            <h4>🤖 AI 模型配置</h4>
+            <h4 data-i18n-html="settings.ai.sectionTitle">🤖 AI Model Configuration</h4>
             <div class="form-group">
-              <label>OpenAI API Key <span class="required">*</span></label>
+              <label data-i18n-html="settings.ai.apiKeyLabel">OpenAI API Key <span class="required">*</span></label>
               <div class="password-input">
-                <input type="password" name="OPENAI_API_KEY" placeholder="sk-..." autocomplete="off" />
+                <input type="password" name="OPENAI_API_KEY" placeholder="sk-..." autocomplete="off" data-i18n-placeholder="settings.ai.apiKeyPlaceholder" />
                 <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
               </div>
             </div>
             <div class="form-group">
-              <label>API 基础地址</label>
-              <input type="text" name="OPENAI_BASE_URL" placeholder="https://openrouter.ai/api/v1" />
+              <label data-i18n="settings.ai.baseUrl">API Base URL</label>
+              <input type="text" name="OPENAI_BASE_URL" placeholder="https://openrouter.ai/api/v1" data-i18n-placeholder="settings.ai.baseUrlPlaceholder" />
             </div>
             <div class="form-group">
-              <label>AI 模型名称</label>
-              <input type="text" name="AI_MODEL_NAME" placeholder="deepseek/deepseek-v3.2-exp" />
+              <label data-i18n="settings.ai.modelName">AI Model Name</label>
+              <input type="text" name="AI_MODEL_NAME" placeholder="deepseek/deepseek-v3.2-exp" data-i18n-placeholder="settings.ai.modelNamePlaceholder" />
             </div>
             <div class="form-row" style="align-items: center; margin-top: 12px;">
               <div class="form-group" style="flex: 1;"></div>
               <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
-                <button type="button" class="btn-test" id="test-ai-api">🔍 测试 AI 连接</button>
+                <button type="button" class="btn-test" id="test-ai-api" data-i18n-html="settings.ai.testButton">🔍 Test AI Connection</button>
               </div>
             </div>
             <div id="ai-test-result" class="api-test-result" style="display: none;"></div>
@@ -608,28 +625,28 @@
 
           <!-- 网络配置 -->
           <div class="settings-section">
-            <h4>🌐 网络配置</h4>
+            <h4 data-i18n-html="settings.network.sectionTitle">🌐 Network Configuration</h4>
             <div class="form-group">
-              <label>HTTP 代理（可选）</label>
-              <input type="text" name="HTTP_PROXY_URL" placeholder="http://127.0.0.1:7890" />
+              <label data-i18n="settings.network.httpProxy">HTTP Proxy (optional)</label>
+              <input type="text" name="HTTP_PROXY_URL" placeholder="http://127.0.0.1:7890" data-i18n-placeholder="settings.network.httpProxyPlaceholder" />
             </div>
           </div>
 
           <div class="form-actions">
-            <button type="button" class="btn-secondary" id="settings-cancel">取消</button>
-            <button type="submit" class="btn-primary">保存并重启</button>
+            <button type="button" class="btn-secondary" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="settings.saveAndRestart">Save & Restart</button>
           </div>
 
           <div class="settings-danger-zone">
-            <h4>⚠️ 重置实盘环境</h4>
-            <p class="danger-hint">此操作会清除所有交易数据与策略配置，保留 API 与代理设置。执行前请确认已停止实盘任务。</p>
-            <button type="button" class="btn-danger" id="reset-live-data-btn">重置所有实盘数据</button>
+            <h4 data-i18n-html="settings.reset.sectionTitle">⚠️ Reset Live Environment</h4>
+            <p class="danger-hint" data-i18n="settings.reset.hint">This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.</p>
+            <button type="button" class="btn-danger" id="reset-live-data-btn" data-i18n="settings.reset.trigger">Reset Live Data</button>
             <div class="reset-confirm hidden" id="reset-live-data-confirm">
-              <p class="confirm-hint">请输入 <code>RESET</code> 后点击确认。</p>
-              <input type="text" id="reset-live-data-input" placeholder="输入 RESET 以继续" autocomplete="off" />
+              <p class="confirm-hint" data-i18n-html="settings.reset.confirmHint">Type <code>RESET</code> to confirm.</p>
+              <input type="text" id="reset-live-data-input" placeholder="Enter RESET to continue" data-i18n-placeholder="settings.reset.confirmPlaceholder" autocomplete="off" />
               <div class="reset-confirm-actions">
-                <button type="button" class="btn-secondary" id="reset-live-data-cancel">取消</button>
-                <button type="button" class="btn-danger" id="reset-live-data-confirm-btn">确认重置</button>
+                <button type="button" class="btn-secondary" id="reset-live-data-cancel" data-i18n="common.cancel">Cancel</button>
+                <button type="button" class="btn-danger" id="reset-live-data-confirm-btn" data-i18n="settings.reset.confirm">Confirm Reset</button>
               </div>
             </div>
           </div>

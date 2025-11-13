@@ -1,0 +1,452 @@
+{
+  "pageTitle": "Q4AI - AI Crypto Trading Monitor",
+  "tagline": "AI Trading Platform",
+  "loadingGlobal": "Loading...",
+  "github": "GitHub",
+  "docs": "Docs",
+  "login": {
+    "pageTitle": "Q4AI Admin Login",
+    "title": "Q4AI Admin Login",
+    "subtitle": "Sign in with your admin credentials to manage the system",
+    "adminPath": "Admin entry point: {{path}}",
+    "usernameLabel": "Username",
+    "usernamePlaceholder": "Enter username",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Enter password",
+    "submit": "Sign In",
+    "initialMessage": "On first launch, check the console or ./.q4ai file for credentials.",
+    "messages": {
+      "verifying": "Verifying credentials...",
+      "success": "Login successful, redirecting...",
+      "failure": "Login failed. Please verify username and password.",
+      "networkError": "Network error. Please try again later.",
+      "statusError": "Unable to check login status."
+    }
+  },
+  "navigation": {
+    "account": "Account",
+    "strategy": "Strategy",
+    "settings": "Settings",
+    "logout": "Logout",
+    "language": "Language",
+    "languageTooltip": "Language: {{language}}"
+  },
+  "tradingSymbols": "Symbols",
+  "loading": "Loading...",
+  "interval": {
+    "1m": "1m",
+    "5m": "5m",
+    "15m": "15m",
+    "1h": "1H",
+    "4h": "4H",
+    "1D": "1D"
+  },
+  "accountStats": "Account Stats",
+  "statsDetail": "Details",
+  "totalEquity": "Total Equity",
+  "availableBalance": "Available",
+  "unrealizedPnL": "Unrealized PnL",
+  "totalReturn": "Total Return",
+  "winRate": "Win Rate",
+  "maxDrawdown": "Max Drawdown",
+  "sharpeRatio": "Sharpe Ratio",
+  "positions": "Positions",
+  "noPositions": "No open positions",
+  "long": "Long",
+  "short": "Short",
+  "pnl": "PnL",
+  "leverage": "Leverage",
+  "holdingTime": "Holding Time",
+  "hours": "h",
+  "aiStatus": "AI Status",
+  "aiIdle": "Idle",
+  "aiRunning": "Running",
+  "aiAnalyzing": "Analyzing",
+  "aiDecisionMaking": "Decision Making",
+  "tabs": {
+    "positions": "Positions",
+    "trades": "Trade History",
+    "logs": "Trade Logs"
+  },
+  "decision": {
+    "title": "AI Decisions",
+    "empty": "No AI decisions available"
+  },
+  "modals": {
+    "decision": {
+      "title": "Decision Details"
+    },
+    "log": {
+      "title": "Log Details"
+    },
+    "statistics": {
+      "title": "Trading Statistics",
+      "equityCurve": "Equity Curve"
+    },
+    "records": {
+      "title": "All Records"
+    },
+    "account": {
+      "title": "Account Settings"
+    },
+    "strategy": {
+      "title": "Strategy Settings"
+    },
+    "settings": {
+      "title": "System Settings"
+    }
+  },
+  "tables": {
+    "common": {
+      "quantityWithSymbol": "{{value}} {{symbol}}",
+      "contractsWithUnit": "{{value}} contracts",
+      "contracts": "contracts",
+      "total": "Total",
+      "noContent": "No content available",
+      "viewAll": "View All"
+    },
+    "positions": {
+      "empty": "No open positions",
+      "headers": {
+        "contract": "Contract",
+        "side": "Side",
+        "quantity": "Quantity",
+        "entryPrice": "Entry Price",
+        "markPrice": "Mark Price",
+        "unrealizedPnl": "Unrealized PnL",
+        "openedAt": "Opened At"
+      }
+    },
+    "trades": {
+      "empty": "No trade history",
+      "headers": {
+        "contract": "Contract",
+        "type": "Type",
+        "side": "Side",
+        "price": "Price",
+        "quantity": "Quantity",
+        "pnl": "PnL",
+        "time": "Time",
+        "fee": "Fee"
+      },
+      "types": {
+        "open": "Open",
+        "close": "Close"
+      }
+    },
+    "logs": {
+      "empty": "No trade logs",
+      "headers": {
+        "time": "Time",
+        "contract": "Contract",
+        "action": "Action",
+        "status": "Status",
+        "summary": "Summary"
+      },
+      "status": {
+        "success": "Success",
+        "error": "Error",
+        "failed": "Failed",
+        "warning": "Warning",
+        "pending": "Pending",
+        "skipped": "Skipped",
+        "unknown": "Unknown"
+      }
+    },
+    "decisions": {
+      "headers": {
+        "time": "Time",
+        "iteration": "Iteration",
+        "summary": "Summary",
+        "positions": "Positions",
+        "accountValue": "Account Equity"
+      },
+      "defaultSummary": "Watching",
+      "actions": {
+        "long": "Long",
+        "short": "Short",
+        "close": "Close",
+        "watching": "Watching"
+      }
+    }
+  },
+  "stats": {
+    "winRate": "Win Rate",
+    "totalProfit": "Total Profit",
+    "totalLoss": "Total Loss",
+    "netPnl": "Net PnL",
+    "return": "Return",
+    "maxDrawdown": "Max Drawdown",
+    "profitFactor": "Profit Factor",
+    "totalTrades": "Total Trades",
+    "winTrades": "Winning Trades",
+    "lossTrades": "Losing Trades",
+    "avgWin": "Average Win",
+    "avgLoss": "Average Loss",
+    "maxWin": "Maximum Win",
+    "maxLoss": "Maximum Loss",
+    "sharpe": "Sharpe Ratio",
+    "sortino": "Sortino Ratio"
+  },
+  "pagination": {
+    "prev": "Previous",
+    "next": "Next",
+    "page": "Page {{current}} / {{total}} ({{count}} items)",
+    "empty": "No records available",
+    "loading": "Loading..."
+  },
+  "common": {
+    "confirm": "Confirm",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close"
+  },
+  "account": {
+    "saveAndRestart": "Save & Restart",
+    "okx": {
+      "sectionTitle": "🔑 OKX API Setup",
+      "registerLink": "Register OKX Rebate Account ↗",
+      "apiKeyLabel": "API Key <span class=\"required\">*</span>",
+      "apiKeyPlaceholder": "Enter OKX API Key",
+      "apiSecretLabel": "API Secret <span class=\"required\">*</span>",
+      "apiSecretPlaceholder": "Enter OKX API Secret",
+      "apiPassphraseLabel": "API Passphrase <span class=\"required\">*</span>",
+      "apiPassphrasePlaceholder": "Enter OKX Passphrase",
+      "usePaper": "Use Paper Trading (Sandbox)",
+      "testButton": "🔍 Test API Connection",
+      "testMessages": {
+        "fillRequired": "Please complete the OKX API credentials first.",
+        "testing": "Testing OKX API connection...",
+        "success": "Connection successful",
+        "balanceLabel": " (Equity: {{balance}})",
+        "failure": "Test failed: {{detail}}",
+        "networkError": "Request failed. Please check your network or proxy settings."
+      }
+    },
+    "parameters": {
+      "sectionTitle": "💰 Account Parameters",
+      "initialBalance": "Initial Balance (USDT)",
+      "initialBalancePlaceholder": "Enter initial balance",
+      "stopLoss": "Stop Loss (USDT)",
+      "stopLossPlaceholder": "Enter stop loss",
+      "takeProfit": "Take Profit (USDT)",
+      "takeProfitPlaceholder": "Enter take profit"
+    }
+  },
+  "strategy": {
+    "saveAndRestart": "Save & Restart",
+    "tabs": {
+      "basic": "Basic Parameters",
+      "entry": "Entry Logic",
+      "exit": "Exit Logic",
+      "variables": "Prompt Variables",
+      "preview": "Preview"
+    },
+    "basic": {
+      "tradeSection": "💼 Trading Configuration",
+      "tradingSymbols": "Trading Symbols (comma separated)",
+      "tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB",
+      "interval": "Trading Interval (minutes)",
+      "intervalPlaceholder": "Enter minutes",
+      "riskSection": "⚠️ Risk Parameters",
+      "maxLeverage": "Max Leverage",
+      "maxLeveragePlaceholder": "Enter max leverage",
+      "maxPositions": "Max Positions",
+      "maxPositionsPlaceholder": "Enter max positions",
+      "maxHoldingHours": "Max Holding Time (hours)",
+      "maxHoldingHoursPlaceholder": "Enter hours",
+      "extremeStopLoss": "Extreme Stop Loss (%)",
+      "extremeStopLossPlaceholder": "Enter percentage",
+      "drawdownSection": "📉 Drawdown Controls",
+      "drawdownWarning": "Warning Threshold (%)",
+      "drawdownWarningPlaceholder": "Enter percentage",
+      "drawdownNoNew": "No New Position Threshold (%)",
+      "drawdownNoNewPlaceholder": "Enter percentage",
+      "drawdownForceClose": "Force Close Threshold (%)",
+      "drawdownForceClosePlaceholder": "Enter percentage"
+    },
+    "entry": {
+      "promptLabel": "Entry Prompt",
+      "promptPlaceholder": "Describe entry logic with {{VARIABLE}} placeholders",
+      "promptHint": "Tip: Describe entry conditions and use {{VARIABLE}} placeholders. Built-in validations are injected automatically."
+    },
+    "exit": {
+      "promptLabel": "Exit Prompt",
+      "promptPlaceholder": "Define exit, partial take-profit, and trailing strategies",
+      "promptHint": "Tip: List stop-loss/take-profit rules and drawdown requirements. Built-in validations are injected automatically."
+    },
+    "variables": {
+      "promptLabel": "Variable Notes / Extra Text",
+      "promptPlaceholder": "Optional: Provide variable descriptions or additional notes",
+      "promptHint": "The system shows auto-generated variable lists; you can extend or override them.",
+      "placeholdersTitle": "Available Placeholders",
+      "placeholder": {
+        "strategyName": "<code>{{STRATEGY_NAME}}</code> Strategy name",
+        "strategyId": "<code>{{STRATEGY_ID}}</code> Strategy identifier",
+        "entryPrompt": "<code>{{ENTRY_PROMPT}}</code> Default entry prompt fragment",
+        "exitPrompt": "<code>{{EXIT_PROMPT}}</code> Default exit / risk prompt fragment",
+        "varPrompt": "<code>{{VAR_PROMPT}}</code> Default variable notes",
+        "interval": "<code>{{TRADING_INTERVAL_MINUTES}}</code> Trading loop interval (minutes)",
+        "maxHoldingHours": "<code>{{MAX_HOLDING_HOURS}}</code> Maximum holding hours",
+        "maxHoldingCycles": "<code>{{MAX_HOLDING_CYCLES}}</code> Maximum holding cycles",
+        "maxPositions": "<code>{{MAX_POSITIONS}}</code> Maximum open positions",
+        "extremeStopLoss": "<code>{{EXTREME_STOP_LOSS_PERCENT}}</code> System extreme stop loss (%)",
+        "accountStopLoss": "<code>{{ACCOUNT_STOP_LOSS_USDT}}</code> Account stop loss (USDT)",
+        "accountTakeProfit": "<code>{{ACCOUNT_TAKE_PROFIT_USDT}}</code> Account take profit (USDT)",
+        "drawdownWarning": "<code>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</code> Drawdown warning threshold (%)",
+        "drawdownNoNew": "<code>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</code> Drawdown no-new-position threshold (%)",
+        "drawdownForceClose": "<code>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</code> Drawdown force-close threshold (%)",
+        "symbolList": "<code>{{SYMBOL_LIST}}</code> Trading symbols list (delimited)"
+      },
+      "placeholderHint": "On save, the system replaces {{VARIABLE}} tokens with live parameters and injects them into prompts."
+    },
+    "quickInsert": {
+      "label": "Quick insert strategies:"
+    },
+    "fieldNames": {
+      "entry": "Entry Prompt",
+      "exit": "Exit Prompt",
+      "variables": "Prompt Variables",
+      "default": "Template"
+    },
+    "preview": {
+      "title": "📝 Strategy Preview",
+      "subtitle": "Preview of combined strategy sections that the agent will use after saving.",
+      "empty": "No content yet"
+    },
+    "labels": {
+      "ultraShort": "Ultra-Short",
+      "swingTrend": "Swing Trend",
+      "conservative": "Conservative",
+      "balanced": "Balanced",
+      "aggressive": "Aggressive",
+      "unknown": "Unknown strategy"
+    },
+    "labelMap": {
+      "ultra-short": "Ultra-Short",
+      "swing-trend": "Swing Trend",
+      "conservative": "Conservative",
+      "balanced": "Balanced",
+      "aggressive": "Aggressive"
+    }
+  },
+  "settings": {
+    "saveAndRestart": "Save & Restart",
+    "ai": {
+      "sectionTitle": "🤖 AI Model Configuration",
+      "apiKeyLabel": "OpenAI API Key <span class=\"required\">*</span>",
+      "apiKeyPlaceholder": "sk-...",
+      "baseUrl": "API Base URL",
+      "baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+      "modelName": "AI Model Name",
+      "modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
+      "testButton": "🔍 Test AI Connection",
+      "testMessages": {
+        "fillRequired": "Please complete the AI API configuration first.",
+        "testing": "Testing AI API connection...",
+        "success": "Connection successful",
+        "responseTime": " (Latency {{time}})",
+        "failure": "Test failed: {{detail}}",
+        "networkError": "Request failed. Please check your network or proxy settings."
+      }
+    },
+    "network": {
+      "sectionTitle": "🌐 Network Configuration",
+      "httpProxy": "HTTP Proxy (optional)",
+      "httpProxyPlaceholder": "http://127.0.0.1:7890"
+    },
+    "reset": {
+      "sectionTitle": "⚠️ Reset Live Environment",
+      "hint": "This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.",
+      "trigger": "Reset Live Data",
+      "confirmHint": "Type <code>RESET</code> to confirm.",
+      "confirmPlaceholder": "Enter RESET to continue",
+      "confirm": "Confirm Reset"
+    }
+  },
+  "chart": {
+    "aiToggleStart": "Start AI Scheduler",
+    "aiToggleStop": "Stop AI Scheduler",
+    "tooltipStart": "Click to start AI smart trading",
+    "tooltipStop": "Click to stop AI smart trading",
+    "manualTrigger": "Click to trigger AI decision manually",
+    "loginRequired": "Please log in to access this feature",
+    "modelBadge": "AI Model Powered",
+    "modelIconAlt": "AI model icon",
+    "markers": {
+      "trade": "Trade",
+      "close": "Close",
+      "closeWithPnl": "Close {{pnl}}",
+      "closeWithPnlPercent": "Close {{pnl}} ({{percent}}%)"
+    }
+  },
+  "notifications": {
+    "loadFailedTitle": "Load failed",
+    "loadFailedDefault": "Unable to fetch strategy template. Please try again later.",
+    "templateInsertedTitle": "Template inserted",
+    "templateInsertedMessage": "Loaded the \"{{strategy}}\" template for the {{field}} section.",
+    "noChangesTitle": "No changes",
+    "noChangesMessage": "No configuration updates detected.",
+    "saveFailedTitle": "Save failed",
+    "saveFailedDefault": "Unable to save configuration. Please try again later.",
+    "reloadFailedTitle": "Reload failed",
+    "reloadFailedMessage": "Configuration saved, but reload failed: {{error}}",
+    "accountSaveTitle": "Account settings updated",
+    "accountSaveMessage": "Changes saved and reload triggered. Restart the process if it does not restart automatically.",
+    "strategySaveTitle": "Strategy settings updated",
+    "strategySaveMessage": "Changes saved and reload triggered. Restart the process if it does not restart automatically.",
+    "settingsSaveTitle": "System settings updated",
+    "settingsSaveMessage": "Changes saved and reload triggered. Restart the process if it does not restart automatically.",
+    "saveExceptionTitle": "Save error",
+    "saveExceptionMessage": "An exception occurred while saving. Check console logs.",
+    "fieldMissingTitle": "Missing field",
+    "tradingSymbolsRequired": "Trading symbols cannot be empty.",
+    "networkRequestFailed": "Request failed. Please check your network connection."
+  },
+  "aiManual": {
+    "loginRequiredTitle": "Login required",
+    "loginRequiredMessage": "Please sign in to trigger AI decisions manually.",
+    "executingTitle": "Processing",
+    "executingMessage": "An AI decision is already running. Please wait...",
+    "triggerFailedTitle": "Trigger failed",
+    "triggerFailedMessage": "Unable to trigger AI decision. Please check your network connection."
+  },
+  "aiOverlay": {
+    "status": {
+      "idle": "Idle",
+      "preparing": "Preparing...",
+      "collecting_data": "Gathering data...",
+      "analyzing": "Analyzing market...",
+      "ai_deciding": "AI deciding...",
+      "executing_trades": "Executing trades...",
+      "completed": "Completed ✓",
+      "error": "Failed ✗"
+    },
+    "statusFallback": "AI Model Powered"
+  },
+  "logDetail": {
+    "time": "Time",
+    "symbol": "Contract",
+    "action": "Action",
+    "status": "Status",
+    "statusUnknown": "Unknown",
+    "summaryTitle": "Execution Summary",
+    "noDetails": "No details available",
+    "rawRequest": "Raw Request",
+    "rawResponse": "Raw Response",
+    "rawMessage": "Raw Message"
+  },
+  "loadingData": "Loading data...",
+  "saveSuccess": "Saved successfully",
+  "saveError": "Save failed",
+  "networkError": "Network error",
+  "strategyLabels": {
+    "ultra-short": "Ultra-Short",
+    "swing-trend": "Swing Trend",
+    "conservative": "Conservative",
+    "balanced": "Balanced",
+    "aggressive": "Aggressive"
+  }
+}

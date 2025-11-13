@@ -1270,6 +1270,18 @@ a:hover {
   display: none !important;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .nav-links .nav-action {
   color: var(--text-secondary);
   text-decoration: none;
@@ -1282,6 +1294,118 @@ a:hover {
 
 .nav-links .nav-action.hidden {
   display: none !important;
+}
+
+/* 语言选择器样式 */
+.language-selector {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin: 0;
+}
+
+.language-selector.hidden {
+  display: none !important;
+}
+
+.language-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+
+.language-toggle:hover {
+  color: var(--accent-cyan);
+}
+
+.language-toggle:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 3px;
+}
+
+.language-toggle .language-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.language-toggle .language-caret svg {
+  width: 10px;
+  height: 10px;
+  opacity: 0.85;
+  transition: transform 0.2s ease;
+}
+
+.language-selector.is-open .language-toggle {
+  color: var(--accent-cyan);
+}
+
+.language-selector.is-open .language-toggle .language-caret svg {
+  transform: rotate(180deg);
+}
+
+.language-selector.is-open .language-toggle {
+  background-color: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.24);
+  color: #ffffff;
+}
+
+.language-menu {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  min-width: 140px;
+  padding: 0.35rem 0;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+  z-index: 20;
+}
+
+.language-selector.is-open .language-menu {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.language-option {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  text-align: left;
+  font-size: 0.875rem;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.language-option:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.language-option:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: -2px;
+}
+
+.language-option.is-active {
+  color: var(--accent-cyan);
+  font-weight: 600;
+  background: rgba(6, 182, 212, 0.08);
 }
 
 .nav-links .nav-account {
@@ -1465,6 +1589,11 @@ a:hover {
   min-height: 200px;
   line-height: 1.5;
   font-family: "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+.form-group-compact {
+  max-width: 260px;
+  width: 100%;
 }
 
 .prompt-section {

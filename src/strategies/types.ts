@@ -1,4 +1,4 @@
-import type { TradingStrategy } from "../config/strategyTypes";
+import type { StrategyLanguage, TradingStrategy } from "../config/strategyTypes";
 
 export interface StrategyPrompts {
   entryPrompt: string;
@@ -9,5 +9,6 @@ export interface StrategyPrompts {
 export interface StrategyProfile {
   id: TradingStrategy;
   label: string;
+  language: StrategyLanguage;
   prompts: StrategyPrompts;
 }

@@ -21,6 +21,7 @@
  */
 
 import { getAllConfig } from "../database/init-config";
+import { DEFAULT_STRATEGY_LANGUAGE, normalizeStrategyLanguage, type StrategyLanguage } from "./strategyTypes";
 
 let cachedConfig: Record<string, string> | null = null;
 
@@ -136,6 +137,11 @@ export const RISK_PARAMS = {
   // 交易策略
   get TRADING_STRATEGY(): string {
     return getConfig("TRADING_STRATEGY", "balanced");
+  },
+
+  // 提示词语言
+  get PROMPT_LANGUAGE(): StrategyLanguage {
+    return normalizeStrategyLanguage(getConfig("PROMPT_LANGUAGE", DEFAULT_STRATEGY_LANGUAGE));
   },
   
   // 交易间隔（分钟）

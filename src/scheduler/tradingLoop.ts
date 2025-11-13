@@ -162,7 +162,7 @@ export async function setTradingLoopEnabled(enabled: boolean): Promise<TradingLo
     }
     tradingTaskStatus = "stopped";
     logger.warn("交易循环已被停用，定时任务已停止");
-    websocketService.pushTradingStatus("idle", "AI 定时任务已暂停", "manual");
+    websocketService.pushTradingStatus("idle", "AI scheduler paused", "manual");
     return buildTradingLoopState();
   }
 
@@ -1510,12 +1510,13 @@ async function checkAccountThresholds(accountInfo: any): Promise<boolean> {
 export async function executeTradingDecision(trigger: "manual" | "scheduled" = "scheduled") {
   // 检查执行锁
   if (isExecuting) {
-    const lockSource = executionTrigger === "manual" ? "手动触发" : "定时任务";
-    logger.warn(`交易决策正在执行中（${lockSource}），跳过本次${trigger === "manual" ? "手动" : "定时"}触发`);
+    const lockSource = executionTrigger === "manual" ? "manual" : "scheduled";
+    const triggerType = trigger === "manual" ? "manual" : "scheduled";
+    logger.warn(`交易决策正在执行中（${lockSource}），跳过本次${triggerType}触发`);
     if (trigger === "manual") {
       websocketService.pushTradingStatus(
         "error",
-        `执行中，请稍候（当前由${lockSource}触发）`,
+        `Execution in progress (triggered by ${lockSource}), please wait...`,
         trigger
       );
     }
@@ -1540,7 +1541,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
   logger.info(`${"=".repeat(80)}\n`);
 
   // 推送状态：准备执行 (等待2秒)
-  await pushStatusWithDelay("preparing", "准备执行交易决策...", trigger);
+  await pushStatusWithDelay("preparing", "Preparing to execute trading decision...", trigger);
 
   let marketData: any = {};
   let accountInfo: any = null;
@@ -1548,7 +1549,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
 
   try {
     // 1. 收集市场数据 (等待2秒)
-    await pushStatusWithDelay("collecting_data", "收集市场数据...", trigger);
+    await pushStatusWithDelay("collecting_data", "Collecting market data...", trigger);
     
     try {
       marketData = await collectMarketData();
@@ -1563,24 +1564,24 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       
       if (validSymbols.length === 0) {
         logger.error("市场数据获取失败，跳过本次循环");
-        websocketService.pushTradingStatus("error", "市场数据获取失败", trigger);
+        websocketService.pushTradingStatus("error", "Failed to fetch market data", trigger);
         return;
       }
     } catch (error) {
       logger.error("收集市场数据失败:", error as any);
-      websocketService.pushTradingStatus("error", "收集市场数据失败", trigger);
+      websocketService.pushTradingStatus("error", "Failed to collect market data", trigger);
       return;
     }
     
     // 2. 获取账户信息 (等待2秒)
-    await pushStatusWithDelay("collecting_data", "获取账户信息...", trigger);
+    await pushStatusWithDelay("collecting_data", "Fetching account info...", trigger);
     
     try {
       accountInfo = await getAccountInfo();
       
       if (!accountInfo || accountInfo.totalBalance === 0) {
         logger.error("账户数据异常，跳过本次循环");
-        websocketService.pushTradingStatus("error", "账户数据异常", trigger);
+        websocketService.pushTradingStatus("error", "Account data error", trigger);
         return;
       }
       
@@ -1596,7 +1597,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       
     } catch (error) {
       logger.error("获取账户信息失败:", error as any);
-      websocketService.pushTradingStatus("error", "获取账户信息失败", trigger);
+      websocketService.pushTradingStatus("error", "Failed to fetch account info", trigger);
       return;
     }
     
@@ -1938,13 +1939,13 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     logger.info("=".repeat(80) + "\n");
     
     // 推送状态：分析市场 (等待2秒)
-    await pushStatusWithDelay("analyzing", "分析市场数据...", trigger);
+    await pushStatusWithDelay("analyzing", "Analyzing market data...", trigger);
     
     const agent = await createTradingAgent(intervalMinutes);
     
     try {
       // 推送状态：AI 决策中 (等待2秒)
-      await pushStatusWithDelay("ai_deciding", "AI 决策中...", trigger);
+      await pushStatusWithDelay("ai_deciding", "AI decision in progress...", trigger);
       
       // 设置足够大的 maxOutputTokens 以避免输出被截断
       // DeepSeek API 限制: max_tokens 范围为 [1, 8192]
@@ -1955,7 +1956,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       });
       
       // 推送状态：执行交易 (不等待，因为AI决策已经等待过了)
-      websocketService.pushTradingStatus("executing_trades", "执行交易指令...", trigger);
+      websocketService.pushTradingStatus("executing_trades", "Executing trades...", trigger);
       
       // 从响应中提取AI的完整回复，不进行任何切分
       let decisionText = "";
@@ -2107,12 +2108,12 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       logger.info("=".repeat(80) + "\n");
       
       // 推送状态：执行完成
-      websocketService.pushTradingStatus("completed", "交易决策执行完成", trigger);
+      websocketService.pushTradingStatus("completed", "Trading decision completed", trigger);
       lastExecutionStatus = "success";
       
     } catch (agentError) {
       logger.error("Agent 执行失败:", agentError as any);
-      websocketService.pushTradingStatus("error", "AI 决策执行失败", trigger);
+      websocketService.pushTradingStatus("error", "AI decision execution failed", trigger);
       try {
         await syncPositionsFromOkx();
       } catch (syncError) {
@@ -2131,7 +2132,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     
   } catch (error) {
     logger.error("交易循环执行失败:", error as any);
-    websocketService.pushTradingStatus("error", "交易循环执行失败", trigger);
+    websocketService.pushTradingStatus("error", "Trading loop execution failed", trigger);
     lastExecutionStatus = "error";
     try {
       await syncPositionsFromOkx();
@@ -2147,7 +2148,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     // 恢复到空闲状态
     setTimeout(() => {
       if (!isExecuting) {
-        websocketService.pushTradingStatus("idle", "等待下次执行");
+        websocketService.pushTradingStatus("idle", "Waiting for next execution");
       }
     }, 2000);
   }

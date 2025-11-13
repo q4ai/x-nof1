@@ -119,6 +119,14 @@ export interface SystemConfig {
   updated_at: string;
 }
 
+export interface ContractMultiplier {
+  id: number;
+  symbol: string;
+  multiplier: number;
+  contract_value: string;
+  updated_at: string;
+}
+
 /**
  * SQL 建表语句
  */
@@ -227,6 +235,15 @@ CREATE TABLE IF NOT EXISTS system_config (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   key TEXT NOT NULL UNIQUE,
   value TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- 合约乘数表
+CREATE TABLE IF NOT EXISTS contract_multipliers (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  symbol TEXT NOT NULL UNIQUE,
+  multiplier REAL NOT NULL,
+  contract_value TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
 

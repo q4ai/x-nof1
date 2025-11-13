@@ -8,6 +8,7 @@ import {
   DEFAULT_PROMPT_EXIT,
   DEFAULT_PROMPT_VARIABLES,
 } from "../config/promptDefaults";
+import { DEFAULT_STRATEGY_LANGUAGE } from "../config/strategyTypes";
 
 const logger = createLogger({ name: "init-config", level: "info" });
 
@@ -56,6 +57,9 @@ const DEFAULT_CONFIG = {
   PROMPT_SECTION_ENTRY: DEFAULT_PROMPT_ENTRY,
   PROMPT_SECTION_EXIT: DEFAULT_PROMPT_EXIT,
   PROMPT_SECTION_VARIABLES: DEFAULT_PROMPT_VARIABLES,
+
+  // 语言设置
+  PROMPT_LANGUAGE: process.env.PROMPT_LANGUAGE || DEFAULT_STRATEGY_LANGUAGE,
 };
 
 export function getDefaultConfigSnapshot(): Record<string, string> {

@@ -1,3 +1,244 @@
+// ========== Language & i18n Configuration ==========
+const SUPPORTED_LANGUAGES = ["en", "zh", "ja"];
+const DEFAULT_LANGUAGE = "en";
+const LANGUAGE_STORAGE_KEY = "nof1_ui_language";
+const LANGUAGE_ENDPOINT = "/language";
+const LANGUAGE_LABELS = {
+  en: "English",
+  zh: "中文",
+  ja: "日本語",
+};
+
+// ========== Contract Multipliers (OKX) ==========
+// 1张合约 = 多少个币
+// 默认值（作为备用）- 这些值会从 API 自动更新
+const DEFAULT_CONTRACT_MULTIPLIERS = {
+  'BTC': 0.01,
+  'ETH': 0.1,
+  'SOL': 1,
+  'XRP': 10,
+  'BNB': 0.1,
+  'BCH': 0.1,
+  'ADA': 100,
+  'DOGE': 10,
+  'LTC': 1,
+  'POL': 1,
+};
+
+// 从 API 加载的乘数数据（会自动更新）
+let CONTRACT_MULTIPLIERS = { ...DEFAULT_CONTRACT_MULTIPLIERS };
+let contractMultipliersLastUpdated = null;
+
+const DEFAULT_STRATEGY_LABELS = {
+  "ultra-short": "Ultra-Short",
+  "swing-trend": "Swing Trend",
+  conservative: "Conservative",
+  balanced: "Balanced",
+  aggressive: "Aggressive",
+};
+
+const i18n = {};
+let languageLoadPromise = null;
+
+async function loadLanguagePack(lang) {
+  if (!SUPPORTED_LANGUAGES.includes(lang)) {
+    console.warn(`[i18n] Attempted to load unsupported language: ${lang}`);
+    return null;
+  }
+
+  if (i18n[lang]) {
+    return i18n[lang];
+  }
+
+  try {
+    const response = await fetch(`${LANGUAGE_ENDPOINT}/${lang}`);
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+    i18n[lang] = data ?? {};
+    return i18n[lang];
+  } catch (error) {
+    console.error(`[i18n] Failed to load language pack "${lang}"`, error);
+    if (!i18n[lang]) {
+      i18n[lang] = {};
+    }
+    return i18n[lang];
+  }
+}
+
+async function ensureLanguageResources() {
+  if (!languageLoadPromise) {
+    languageLoadPromise = Promise.all(
+      SUPPORTED_LANGUAGES.map((lang) => loadLanguagePack(lang))
+    ).then(() => undefined);
+  }
+  return languageLoadPromise;
+}
+
+function getCurrentLanguage() {
+  const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+  if (stored && SUPPORTED_LANGUAGES.includes(stored)) {
+    return stored;
+  }
+  return DEFAULT_LANGUAGE;
+}
+
+// Set language and persist to localStorage
+function setLanguage(lang) {
+  if (!SUPPORTED_LANGUAGES.includes(lang)) {
+    console.warn(`Unsupported language: ${lang}, falling back to ${DEFAULT_LANGUAGE}`);
+    lang = DEFAULT_LANGUAGE;
+  }
+  localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+  return lang;
+}
+
+function getLanguageLabel(lang) {
+  if (lang && Object.prototype.hasOwnProperty.call(LANGUAGE_LABELS, lang)) {
+    return LANGUAGE_LABELS[lang];
+  }
+  if (typeof lang === "string" && lang.length) {
+    return lang.toUpperCase();
+  }
+  return lang;
+}
+
+function updateLanguageSelectorUI() {
+  const selector = document.getElementById("language-selector");
+  if (!selector) {
+    return;
+  }
+  const currentLang = getCurrentLanguage();
+  const toggle = document.getElementById("language-toggle");
+  const labelEl = toggle ? toggle.querySelector(".language-label") : null;
+  const languageLabel = getLanguageLabel(currentLang) ?? "";
+  if (labelEl) {
+    labelEl.textContent = languageLabel;
+  }
+  if (toggle) {
+    toggle.setAttribute("data-current-lang", currentLang);
+    const isOpen = selector.classList.contains("is-open");
+    toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    const tooltipText = t("navigation.languageTooltip", { language: languageLabel });
+    toggle.setAttribute("title", tooltipText);
+    toggle.setAttribute("aria-label", tooltipText);
+  }
+  selector.querySelectorAll(".language-option").forEach((option) => {
+    const optionLang = option.getAttribute("data-lang");
+    option.classList.toggle("is-active", optionLang === currentLang);
+  });
+}
+
+// Get translated text
+function t(key, replacements = undefined) {
+  const lang = getCurrentLanguage();
+  const segments = key.split('.');
+
+  const resolveValue = (source) => {
+    let current = source;
+    for (const segment of segments) {
+      if (current && typeof current === 'object' && segment in current) {
+        current = current[segment];
+      } else {
+        return undefined;
+      }
+    }
+    return current;
+  };
+
+  let value = resolveValue(i18n[lang]);
+  if (value === undefined && lang !== DEFAULT_LANGUAGE) {
+    value = resolveValue(i18n[DEFAULT_LANGUAGE]);
+  }
+  if (value === undefined) {
+    return key;
+  }
+
+  if (typeof value === "string" && replacements && typeof replacements === "object") {
+    return value.replace(/\{\{(\w+)\}\}/g, (match, token) => {
+      if (Object.prototype.hasOwnProperty.call(replacements, token)) {
+        return String(replacements[token]);
+      }
+      return match;
+    });
+  }
+
+  return value;
+}
+
+// Apply i18n translations to DOM elements
+function applyI18nToDOM() {
+  // Update all elements with data-i18n attribute
+  document.querySelectorAll('[data-i18n]').forEach(element => {
+    const key = element.getAttribute('data-i18n');
+    if (key) {
+      element.textContent = t(key);
+    }
+  });
+  
+  // Update all elements with data-i18n-placeholder attribute
+  document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
+    const key = element.getAttribute('data-i18n-placeholder');
+    if (key) {
+      element.placeholder = t(key);
+    }
+  });
+  
+  // Update all elements with data-i18n-html attribute
+  document.querySelectorAll('[data-i18n-html]').forEach(element => {
+    const key = element.getAttribute('data-i18n-html');
+    if (key) {
+      element.innerHTML = t(key);
+    }
+  });
+  
+  // Update all elements with data-i18n-title attribute
+  document.querySelectorAll('[data-i18n-title]').forEach(element => {
+    const key = element.getAttribute('data-i18n-title');
+    if (key) {
+      element.title = t(key);
+    }
+  });
+  
+  document.querySelectorAll('[data-i18n-aria]').forEach(element => {
+    const key = element.getAttribute('data-i18n-aria');
+    if (key) {
+      element.setAttribute('aria-label', t(key));
+    }
+  });
+  
+  // Update strategy labels dynamically
+  updateStrategyLabels();
+  updateLanguageSelectorUI();
+}
+
+// Update strategy labels based on current language
+function updateStrategyLabels() {
+  const lang = getCurrentLanguage();
+  const langPack = i18n[lang];
+  const defaultPack = i18n[DEFAULT_LANGUAGE];
+  const fallbackLabels =
+    defaultPack?.strategy?.labelMap ||
+    defaultPack?.strategyLabels ||
+    DEFAULT_STRATEGY_LABELS;
+
+  const labels =
+    langPack?.strategy?.labelMap ||
+    langPack?.strategyLabels ||
+    fallbackLabels;
+
+  if (labels) {
+    STRATEGY_LABELS = {
+      ...DEFAULT_STRATEGY_LABELS,
+      ...labels,
+    };
+  }
+}
+
+// ========== End of Language & i18n ==========
+
 const DEFAULT_SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"];
 const REFRESH_INTERVAL = 20000;
 const PRICE_REFRESH_INTERVAL = 10000;
@@ -28,13 +269,8 @@ const STRATEGY_CONFIG_KEYS = [
   "PROMPT_SECTION_VARIABLES",
 ];
 
-const STRATEGY_LABELS = {
-  "ultra-short": "超短线",
-  "swing-trend": "波段趋势",
-  conservative: "稳健",
-  balanced: "平衡",
-  aggressive: "激进",
-};
+// Strategy labels - will be updated by i18n
+let STRATEGY_LABELS = { ...DEFAULT_STRATEGY_LABELS };
 
 const SETTINGS_CONFIG_KEYS = [
   "OPENAI_API_KEY",
@@ -77,13 +313,14 @@ class TradingMonitor {
   constructor() {
     this.activeSymbol = DEFAULT_SYMBOLS[0];
     this.activeInterval = DEFAULT_INTERVAL;
-  this.availableSymbols = new Set(DEFAULT_SYMBOLS);
-  this.symbolOrder = [...DEFAULT_SYMBOLS];
+    this.availableSymbols = new Set(DEFAULT_SYMBOLS);
+    this.symbolOrder = [...DEFAULT_SYMBOLS];
     this.prices = new Map();
     this.priceDeltas = new Map();
     this.priceChanges = new Map();
     this.chart = null;
     this.candleSeries = null;
+    this.pendingCandleSymbol = this.activeSymbol;
     this.equityChart = null;
     this.resizeHandler = null;
     this.dataTimer = null;
@@ -224,6 +461,11 @@ class TradingMonitor {
       void this.loadTrades();
       void this.loadTradeLogs();
       void this.loadDecisions();
+      
+      // 未登录用户也需要定期刷新交易循环状态
+      if (!this.isAuthenticated) {
+        void this.fetchPublicTradingLoopStatus();
+      }
     }, REFRESH_INTERVAL);
 
     if (this.priceTimer) {
@@ -411,19 +653,22 @@ class TradingMonitor {
     if (strategy && STRATEGY_LABELS[strategy]) {
       return STRATEGY_LABELS[strategy];
     }
-    return strategy || "未知策略";
+    if (strategy) {
+      return strategy;
+    }
+    return t("strategy.labels.unknown");
   }
 
   resolveFieldLabel(fieldName) {
     switch (fieldName) {
       case "PROMPT_SECTION_ENTRY":
-        return "入场逻辑";
+        return t("strategy.fieldNames.entry");
       case "PROMPT_SECTION_EXIT":
-        return "出场逻辑";
+        return t("strategy.fieldNames.exit");
       case "PROMPT_SECTION_VARIABLES":
-        return "提示词变量";
+        return t("strategy.fieldNames.variables");
       default:
-        return "模板";
+        return t("strategy.fieldNames.default");
     }
   }
 
@@ -433,13 +678,15 @@ class TradingMonitor {
   }
 
   async fetchStrategySections(strategy, interval) {
-    const cacheKey = this.getStrategyPromptCacheKey(strategy, interval || "");
+    const currentLang = getCurrentLanguage();
+    const cacheKey = `${this.getStrategyPromptCacheKey(strategy, interval || "")}_${currentLang}`;
     if (this.strategyPromptCache.has(cacheKey)) {
       return this.strategyPromptCache.get(cacheKey);
     }
 
     const params = new URLSearchParams();
     params.set("strategy", strategy);
+    params.set("language", currentLang);
     if (interval && interval.trim() !== "") {
       params.set("interval", interval.trim());
     }
@@ -471,16 +718,20 @@ class TradingMonitor {
     const intervalInput = this.strategyForm.querySelector('[name="TRADING_INTERVAL_MINUTES"]');
     const intervalValue = intervalInput && typeof intervalInput.value === "string" ? intervalInput.value.trim() : "";
 
-    const originalText = button.dataset.originalLabel || button.textContent || "模板";
+    const originalText = button.dataset.originalLabel || button.textContent || t("strategy.fieldNames.default");
     button.dataset.originalLabel = originalText;
     button.disabled = true;
     button.classList.add("loading");
-    button.textContent = "加载中...";
+    button.textContent = t("loading");
 
     try {
       const sections = await this.fetchStrategySections(strategy, intervalValue);
       if (!sections) {
-        this.showToast("error", "加载失败", "无法获取策略模板，请稍后重试。");
+        this.showToast(
+          "error",
+          t("notifications.loadFailedTitle"),
+          t("notifications.loadFailedDefault"),
+        );
         return;
       }
 
@@ -502,11 +753,16 @@ class TradingMonitor {
 
       const strategyLabel = this.resolveStrategyLabel(strategy);
       const fieldLabel = this.resolveFieldLabel(targetField);
-      this.showToast("success", "模板已插入", `已载入「${strategyLabel}」策略的${fieldLabel}模板。`);
+      this.showToast(
+        "success",
+        t("notifications.templateInsertedTitle"),
+        t("notifications.templateInsertedMessage", { strategy: strategyLabel, field: fieldLabel }),
+      );
     } catch (error) {
       console.error("[quick-insert] 获取策略模板失败:", error);
-      const message = error instanceof Error ? error.message : "无法获取策略模板，请稍后再试。";
-      this.showToast("error", "加载失败", message);
+      const fallbackMessage = t("notifications.loadFailedDefault");
+      const message = error instanceof Error ? error.message : fallbackMessage;
+      this.showToast("error", t("notifications.loadFailedTitle"), message);
     } finally {
       button.disabled = false;
       button.classList.remove("loading");
@@ -564,7 +820,7 @@ class TradingMonitor {
     const link = document.createElement("a");
     link.href = "#";
     link.className = "table-view-all";
-    link.textContent = "查看所有";
+    link.textContent = t("tables.common.viewAll");
     link.addEventListener("click", (event) => {
       event.preventDefault();
       this.openRecordsModal(type);
@@ -634,20 +890,21 @@ class TradingMonitor {
       total: 0,
     };
     if (this.recordsTitleEl) {
-      let title = "全部记录";
+      const baseTitle = t("modals.records.title");
+      let typeLabel = "";
       if (type === "trades") {
-        title = "全部交易记录";
+        typeLabel = t("tabs.trades");
       } else if (type === "logs") {
-        title = "全部交易日志";
+        typeLabel = t("tabs.logs");
       } else if (type === "decisions") {
-        title = "全部 AI 决策";
+        typeLabel = t("decision.title");
       }
-      this.recordsTitleEl.textContent = title;
+      this.recordsTitleEl.textContent = typeLabel ? `${baseTitle} - ${typeLabel}` : baseTitle;
     }
     this.recordsCurrentItems = [];
-    this.recordsTableContainer.innerHTML = '<p class="loading">加载中...</p>';
+    this.recordsTableContainer.innerHTML = `<p class="loading">${t("loading")}</p>`;
     if (this.recordsPageInfoEl) {
-      this.recordsPageInfoEl.textContent = "加载中...";
+      this.recordsPageInfoEl.textContent = t("loading");
     }
     if (this.recordsPrevBtn) {
       this.recordsPrevBtn.disabled = true;
@@ -681,7 +938,7 @@ class TradingMonitor {
     const data = await this.fetchJson(`${endpoint}?page=${page}&limit=${pageSize}`);
     if (!data) {
       if (this.recordsTableContainer) {
-        this.recordsTableContainer.innerHTML = '<p class="empty-state">加载失败</p>';
+        this.recordsTableContainer.innerHTML = `<p class="empty-state">${t("notifications.loadFailedTitle")}</p>`;
       }
       if (this.recordsState) {
         this.recordsState.total = 0;
@@ -733,7 +990,7 @@ class TradingMonitor {
   renderRecordsTrades(trades) {
     if (!this.recordsTableContainer) return;
     if (!trades.length) {
-      this.recordsTableContainer.innerHTML = '<p class="empty-state">暂无交易记录</p>';
+      this.recordsTableContainer.innerHTML = `<p class="empty-state">${t("tables.trades.empty")}</p>`;
       return;
     }
 
@@ -745,17 +1002,31 @@ class TradingMonitor {
           ? `<span class="symbol-name">${symbol}</span> <span class="leverage-label">${leverage}</span>` 
           : `<span class="symbol-name">${symbol}</span>`;
         const sideRaw = String(trade.side || "").toLowerCase();
-        const sideLabel = sideRaw === "long" ? "做多" : sideRaw === "short" ? "做空" : "--";
+        const sideLabel = sideRaw === "long"
+          ? t("long")
+          : sideRaw === "short"
+            ? t("short")
+            : "--";
         const sideClass = sideRaw === "long" ? "positive" : sideRaw === "short" ? "negative" : "";
-        const typeLabel = trade.type === "open" ? "开仓" : trade.type === "close" ? "平仓" : trade.type || "--";
+        const typeKey = typeof trade.type === "string" ? trade.type.toLowerCase() : "";
+        let typeLabel = typeKey ? t(`tables.trades.types.${typeKey}`) : "";
+        if (!typeLabel || typeLabel === `tables.trades.types.${typeKey}`) {
+          typeLabel = trade.type || "--";
+        }
         const price = this.formatPrice(trade.price);
         const quantityValue = Number(trade.quantity);
-        const quantityLabel = Number.isFinite(quantityValue) ? this.formatQuantity(quantityValue) : "--";
+        
+        // 将张数转换为币数量
+        const actualQuantity = this.convertContractsToQuantity(symbol, quantityValue);
+        const quantityLabel = Number.isFinite(actualQuantity) ? this.formatQuantity(actualQuantity) : "--";
+        
         const contractsValue = Number(trade.contracts);
         const contractsLabel = Number.isFinite(contractsValue) && contractsValue > 0
-          ? `${this.formatQuantity(contractsValue)} 张`
+          ? t("tables.common.contractsWithUnit", { value: this.formatQuantity(contractsValue) })
           : "";
-        const quantityCell = quantityLabel !== "--" ? `${quantityLabel} ${symbol}` : "--";
+        const quantityCell = quantityLabel !== "--"
+          ? t("tables.common.quantityWithSymbol", { value: quantityLabel, symbol })
+          : "--";
         const fee = typeof trade.fee === "number" ? this.formatCurrency(trade.fee, 4, true) : "--";
         const pnl = typeof trade.pnl === "number" ? trade.pnl : null;
         const pnlClass = pnl !== null ? (pnl >= 0 ? "positive" : "negative") : "";
@@ -781,14 +1052,14 @@ class TradingMonitor {
       <table class="data-table">
         <thead>
           <tr>
-            <th>合约</th>
-            <th>类型</th>
-            <th>方向</th>
-            <th>价格</th>
-            <th>数量</th>
-            <th>手续费</th>
-            <th>盈亏</th>
-            <th>时间</th>
+            <th>${t("tables.trades.headers.contract")}</th>
+            <th>${t("tables.trades.headers.type")}</th>
+            <th>${t("tables.trades.headers.side")}</th>
+            <th>${t("tables.trades.headers.price")}</th>
+            <th>${t("tables.trades.headers.quantity")}</th>
+            <th>${t("tables.trades.headers.fee")}</th>
+            <th>${t("tables.trades.headers.pnl")}</th>
+            <th>${t("tables.trades.headers.time")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -799,7 +1070,7 @@ class TradingMonitor {
   renderRecordsLogs(logs) {
     if (!this.recordsTableContainer) return;
     if (!logs.length) {
-      this.recordsTableContainer.innerHTML = '<p class="empty-state">暂无交易日志</p>';
+      this.recordsTableContainer.innerHTML = `<p class="empty-state">${t("tables.logs.empty")}</p>`;
       return;
     }
 
@@ -808,11 +1079,17 @@ class TradingMonitor {
         const timestamp = log.createdAt ? this.formatTime(log.createdAt) : "--";
         const symbol = log.symbol ? String(log.symbol).toUpperCase() : "--";
         const action = log.action || "--";
-        const status = log.status || "未知";
-        const statusLower = String(status).toLowerCase();
-        const statusClass = statusLower === "success" ? "positive" : ["error", "failed", "failure"].includes(statusLower)
-          ? "negative"
-          : "";
+        const statusRaw = typeof log.status === "string" ? log.status : "";
+        const statusLower = statusRaw.toLowerCase();
+        let statusLabel = statusLower ? t(`tables.logs.status.${statusLower}`) : "";
+        if (!statusLabel || statusLabel === `tables.logs.status.${statusLower}`) {
+          statusLabel = statusRaw || t("tables.logs.status.unknown");
+        }
+        const statusClass = statusLower === "success"
+          ? "positive"
+          : ["error", "failed", "failure"].includes(statusLower)
+            ? "negative"
+            : "";
         const message = log.message ? this.escapeHtml(String(log.message)) : "--";
 
         return `
@@ -820,7 +1097,7 @@ class TradingMonitor {
             <td>${timestamp}</td>
             <td class="text-primary">${symbol}</td>
             <td>${action}</td>
-            <td><span class="${statusClass}">${status}</span></td>
+            <td><span class="${statusClass}">${statusLabel}</span></td>
             <td class="log-message-cell">${message}</td>
           </tr>
         `;
@@ -831,11 +1108,11 @@ class TradingMonitor {
       <table class="data-table">
         <thead>
           <tr>
-            <th>时间</th>
-            <th>合约</th>
-            <th>操作</th>
-            <th>状态</th>
-            <th>摘要</th>
+            <th>${t("tables.logs.headers.time")}</th>
+            <th>${t("tables.logs.headers.contract")}</th>
+            <th>${t("tables.logs.headers.action")}</th>
+            <th>${t("tables.logs.headers.status")}</th>
+            <th>${t("tables.logs.headers.summary")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -858,7 +1135,7 @@ class TradingMonitor {
   renderRecordsDecisions(decisions) {
     if (!this.recordsTableContainer) return;
     if (!decisions.length) {
-      this.recordsTableContainer.innerHTML = '<p class="empty-state">暂无 AI 决策记录</p>';
+      this.recordsTableContainer.innerHTML = `<p class="empty-state">${t("decision.empty")}</p>`;
       return;
     }
 
@@ -875,7 +1152,7 @@ class TradingMonitor {
           : "--";
         const actionsData = this.parseActionsData(decision);
         const summaryRaw = this.generateDecisionSummary(actionsData);
-        const summary = this.escapeHtml(summaryRaw || "观望");
+        const summary = this.escapeHtml(summaryRaw || t("tables.decisions.defaultSummary"));
 
         return `
           <tr data-decision-index="${index}">
@@ -893,11 +1170,11 @@ class TradingMonitor {
       <table class="data-table">
         <thead>
           <tr>
-            <th>时间</th>
-            <th>迭代</th>
-            <th>决策摘要</th>
-            <th>持仓数</th>
-            <th>账户权益</th>
+            <th>${t("tables.decisions.headers.time")}</th>
+            <th>${t("tables.decisions.headers.iteration")}</th>
+            <th>${t("tables.decisions.headers.summary")}</th>
+            <th>${t("tables.decisions.headers.positions")}</th>
+            <th>${t("tables.decisions.headers.accountValue")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -924,9 +1201,13 @@ class TradingMonitor {
 
     if (this.recordsPageInfoEl) {
       if (!total) {
-        this.recordsPageInfoEl.textContent = "暂无记录";
+        this.recordsPageInfoEl.textContent = t("pagination.empty");
       } else {
-        this.recordsPageInfoEl.textContent = `第 ${this.recordsState.page} / ${totalPages} 页（共 ${total} 条）`;
+        this.recordsPageInfoEl.textContent = t("pagination.page", {
+          current: this.recordsState.page,
+          total: totalPages,
+          count: total,
+        });
       }
     }
 
@@ -1089,6 +1370,11 @@ class TradingMonitor {
 
     // 立即更新图表尺寸
     this.updateChartSize();
+    this.updateChartTitle();
+
+    if (this.chartIntervalEl) {
+      this.chartIntervalEl.textContent = this.activeInterval;
+    }
     
     // 监听窗口大小变化
     this.resizeHandler = () => this.updateChartSize();
@@ -1096,6 +1382,12 @@ class TradingMonitor {
     
     // 再次延迟更新，确保容器完全渲染
     setTimeout(() => this.updateChartSize(), 200);
+
+    if (this.pendingCandleSymbol) {
+      const symbolToLoad = this.pendingCandleSymbol;
+      this.pendingCandleSymbol = null;
+      void this.loadCandles(symbolToLoad);
+    }
   }
 
   updateChartSize() {
@@ -1248,7 +1540,7 @@ class TradingMonitor {
     });
 
     if (!positions.length) {
-      this.positionsContainerEl.innerHTML = '<p class="empty-state">暂无持仓</p>';
+      this.positionsContainerEl.innerHTML = `<p class="empty-state">${t("tables.positions.empty")}</p>`;
       this.updateTimestamp(this.positionsUpdatedEl, timestamp);
       if (newSymbolAdded) {
         this.schedulePriceSubscriptionUpdate();
@@ -1264,15 +1556,25 @@ class TradingMonitor {
           ? `<span class="symbol-name">${symbol}</span> <span class="leverage-label">${leverage}</span>` 
           : `<span class="symbol-name">${symbol}</span>`;
         const sideRaw = String(pos.side || "").toLowerCase();
-        const sideLabel = sideRaw === "long" ? "做多" : sideRaw === "short" ? "做空" : "--";
+        const sideLabel = sideRaw === "long"
+          ? t("long")
+          : sideRaw === "short"
+            ? t("short")
+            : "--";
         const sideClass = sideRaw === "long" ? "positive" : sideRaw === "short" ? "negative" : "";
         const quantityValue = Number(pos.quantity);
-        const quantityLabel = Number.isFinite(quantityValue) ? this.formatQuantity(quantityValue) : "--";
+        
+        // 将张数转换为币数量
+        const actualQuantity = this.convertContractsToQuantity(symbol, quantityValue);
+        const quantityLabel = Number.isFinite(actualQuantity) ? this.formatQuantity(actualQuantity) : "--";
+        
         const contractsValue = Number(pos.contracts);
         const contractsLabel = Number.isFinite(contractsValue) && contractsValue > 0
-          ? `${this.formatQuantity(contractsValue)} 张`
+          ? t("tables.common.contractsWithUnit", { value: this.formatQuantity(contractsValue) })
           : "";
-        const quantityCell = quantityLabel !== "--" ? `${quantityLabel} ${symbol}` : "--";
+        const quantityCell = quantityLabel !== "--"
+          ? t("tables.common.quantityWithSymbol", { value: quantityLabel, symbol })
+          : "--";
         const entryPrice = this.formatPrice(pos.entryPrice);
         const markPrice = this.formatPrice(pos.currentPrice ?? pos.markPrice);
         const pnl = Number(pos.unrealizedPnl ?? pos.unrealisedPnl ?? 0);
@@ -1298,13 +1600,13 @@ class TradingMonitor {
       <table class="data-table">
         <thead>
           <tr>
-            <th>合约</th>
-            <th>方向</th>
-            <th>数量</th>
-            <th>开仓价</th>
-            <th>标记价</th>
-            <th>未实现盈亏</th>
-            <th>持仓创建时间</th>
+            <th>${t("tables.positions.headers.contract")}</th>
+            <th>${t("tables.positions.headers.side")}</th>
+            <th>${t("tables.positions.headers.quantity")}</th>
+            <th>${t("tables.positions.headers.entryPrice")}</th>
+            <th>${t("tables.positions.headers.markPrice")}</th>
+            <th>${t("tables.positions.headers.unrealizedPnl")}</th>
+            <th>${t("tables.positions.headers.openedAt")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1339,7 +1641,7 @@ class TradingMonitor {
     }
 
     if (!trades.length) {
-      this.tradesContainerEl.innerHTML = '<p class="empty-state">暂无交易记录</p>';
+      this.tradesContainerEl.innerHTML = `<p class="empty-state">${t("tables.trades.empty")}</p>`;
       this.removeViewAllLink(this.tradesViewAllLink);
       return;
     }
@@ -1352,30 +1654,42 @@ class TradingMonitor {
           ? `<span class="symbol-name">${symbol}</span> <span class="leverage-label">${leverage}</span>` 
           : `<span class="symbol-name">${symbol}</span>`;
         const sideRaw = String(trade.side || "").toLowerCase();
-        const sideLabel = sideRaw === "long" ? "做多" : sideRaw === "short" ? "做空" : "--";
+        const sideLabel = sideRaw === "long"
+          ? t("long")
+          : sideRaw === "short"
+            ? t("short")
+            : "--";
         const sideClass = sideRaw === "long" ? "positive" : sideRaw === "short" ? "negative" : "";
-        const typeLabel = trade.type === "open" ? "开仓" : "平仓";
+        const typeKey = typeof trade.type === "string" ? trade.type.toLowerCase() : "";
+        let typeLabel = typeKey ? t(`tables.trades.types.${typeKey}`) : "";
+        if (!typeLabel || typeLabel === `tables.trades.types.${typeKey}`) {
+          typeLabel = trade.type || "--";
+        }
         const pnl = typeof trade.pnl === "number" ? trade.pnl : null;
         const pnlClass = pnl !== null ? (pnl >= 0 ? "positive" : "negative") : "";
         const pnlLabel = pnl !== null ? this.formatCurrency(pnl, 2, true) : "--";
         const price = this.formatPrice(trade.price);
         const timestamp = this.formatTime(trade.timestamp);
         const quantityValue = Number(trade.quantity);
+        
+        // 将张数转换为币数量
+        const actualQuantity = this.convertContractsToQuantity(symbol, quantityValue);
+        
         const contractsValue = Number(trade.contracts);
-        const hasQuantity = Number.isFinite(quantityValue) && quantityValue !== 0;
+        const hasQuantity = Number.isFinite(actualQuantity) && actualQuantity !== 0;
         const hasContracts = Number.isFinite(contractsValue) && contractsValue > 0;
-        const quantityFormatted = hasQuantity ? this.formatQuantity(quantityValue) : null;
+        const quantityFormatted = hasQuantity ? this.formatQuantity(actualQuantity) : null;
         const contractsFormatted = hasContracts ? this.formatQuantity(contractsValue) : null;
         let quantityCell = "--";
         let quantityTitle = "";
 
         if (quantityFormatted) {
-          quantityCell = `${quantityFormatted} ${symbol}`;
+          quantityCell = t("tables.common.quantityWithSymbol", { value: quantityFormatted, symbol });
           quantityTitle = quantityCell;
         }
 
         if (contractsFormatted) {
-          const contractText = `${contractsFormatted} 张`;
+          const contractText = t("tables.common.contractsWithUnit", { value: contractsFormatted });
           if (quantityCell === "--") {
             quantityCell = contractText;
             quantityTitle = contractText;
@@ -1402,13 +1716,13 @@ class TradingMonitor {
       <table class="data-table">
         <thead>
           <tr>
-            <th>合约</th>
-            <th>类型</th>
-            <th>方向</th>
-            <th>价格</th>
-            <th>数量</th>
-            <th>盈亏</th>
-            <th>时间</th>
+            <th>${t("tables.trades.headers.contract")}</th>
+            <th>${t("tables.trades.headers.type")}</th>
+            <th>${t("tables.trades.headers.side")}</th>
+            <th>${t("tables.trades.headers.price")}</th>
+            <th>${t("tables.trades.headers.quantity")}</th>
+            <th>${t("tables.trades.headers.pnl")}</th>
+            <th>${t("tables.trades.headers.time")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1425,7 +1739,7 @@ class TradingMonitor {
     const { logs = [] } = data;
 
     if (!logs.length) {
-      this.logsContainerEl.innerHTML = '<p class="empty-state">暂无交易日志</p>';
+      this.logsContainerEl.innerHTML = `<p class="empty-state">${t("tables.logs.empty")}</p>`;
       this.removeViewAllLink(this.logsViewAllLink);
       return;
     }
@@ -1434,8 +1748,13 @@ class TradingMonitor {
       .map((log, index) => {
         const action = log.action || "--";
         const symbol = log.symbol ? String(log.symbol).toUpperCase() : "--";
-        const status = log.status || "未知";
-        const statusClass = log.status === "success" ? "" : "negative";
+        const statusRaw = typeof log.status === "string" ? log.status : "";
+        const statusKey = statusRaw.toLowerCase();
+        let statusLabel = statusKey ? t(`tables.logs.status.${statusKey}`) : "";
+        if (!statusLabel || statusLabel === `tables.logs.status.${statusKey}`) {
+          statusLabel = statusRaw || t("tables.logs.status.unknown");
+        }
+        const statusClass = statusKey === "success" ? "" : "negative";
         const timestamp = log.createdAt ? this.formatTime(log.createdAt) : "--";
 
         return `
@@ -1443,7 +1762,7 @@ class TradingMonitor {
             <td>${timestamp}</td>
             <td class="text-primary">${symbol}</td>
             <td>${action}</td>
-            <td><span class="${statusClass}">${status}</span></td>
+            <td><span class="${statusClass}">${statusLabel}</span></td>
           </tr>
         `;
       })
@@ -1453,10 +1772,10 @@ class TradingMonitor {
       <table class="data-table">
         <thead>
           <tr>
-            <th>时间</th>
-            <th>合约</th>
-            <th>操作</th>
-            <th>状态</th>
+            <th>${t("tables.logs.headers.time")}</th>
+            <th>${t("tables.logs.headers.contract")}</th>
+            <th>${t("tables.logs.headers.action")}</th>
+            <th>${t("tables.logs.headers.status")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1487,7 +1806,7 @@ class TradingMonitor {
     }
 
     if (!logs.length) {
-      this.decisionListEl.innerHTML = '<p class="empty-state">暂无 AI 决策记录</p>';
+      this.decisionListEl.innerHTML = `<p class="empty-state">${t("decision.empty")}</p>`;
       this.setText(this.decisionUpdatedEl, "--");
       this.removeViewAllLink(this.decisionsViewAllLink);
       return;
@@ -1557,14 +1876,10 @@ class TradingMonitor {
       return normalized;
     }
 
-    if (log.decision) {
-      const decision = log.decision;
-      const symbol = this.extractSymbol(decision);
-      const side = this.extractSide(decision);
-      if (symbol && side) {
-        const fallback = this.normalizeTradeAction({ symbol, side, action: side === "close" ? "close" : "open" });
-        return fallback ? [fallback] : [];
-      }
+    if (log.actionsTaken) {
+      console.log("[parseActionsData] actions_taken 字段存在但未解析到有效交易动作", log.actionsTaken);
+    } else {
+      console.log("[parseActionsData] 本周期未写入 actions_taken，视为无实际交易");
     }
 
     return [];
@@ -1852,7 +2167,7 @@ class TradingMonitor {
     const { rich = false, stats: providedStats } = options;
 
     if (!actions || actions.length === 0) {
-      return "观望";
+      return t("tables.decisions.actions.watching");
     }
 
     const stats = providedStats ?? this.computeActionStats(actions);
@@ -1865,7 +2180,9 @@ class TradingMonitor {
         const symbolLabel = safe(symbol);
         let detail = "";
         if (values.size > 0) {
-          detail = safe(`${this.formatQuantity(values.size)} 张`);
+          // 将合约张数转换为实际数量
+          const quantity = this.convertContractsToQuantity(symbol, values.size);
+          detail = safe(this.formatQuantity(quantity));
         } else if (values.amount > 0) {
           detail = safe(`${this.formatCurrency(values.amount, 0)} USDT`);
         }
@@ -1875,11 +2192,12 @@ class TradingMonitor {
       if (!parts.length && (bucket.totalSize > 0 || bucket.totalAmount > 0)) {
         let totalDetail = "";
         if (bucket.totalSize > 0) {
-          totalDetail = safe(`${this.formatQuantity(bucket.totalSize)} 张`);
+          // 总数无法精确转换（因为不知道是哪个币种），保留张数显示
+          totalDetail = safe(`${this.formatQuantity(bucket.totalSize)} ${t("tables.common.contracts")}`);
         } else if (bucket.totalAmount > 0) {
           totalDetail = safe(`${this.formatCurrency(bucket.totalAmount, 0)} USDT`);
         }
-        const totalLabel = safe("总计");
+        const totalLabel = safe(t("tables.common.total") || "总计");
         parts.push(totalDetail ? `${totalLabel} ${totalDetail}` : totalLabel);
       }
 
@@ -1891,23 +2209,23 @@ class TradingMonitor {
     const sections = [];
 
     if (stats.long.count > 0 && (longParts.length || stats.long.totalSize > 0 || stats.long.totalAmount > 0)) {
-      const label = rich ? '<span class="decision-tag-long">做多</span>' : "做多";
+      const label = rich ? `<span class="decision-tag-long">${t("tables.decisions.actions.long")}</span>` : t("tables.decisions.actions.long");
       sections.push(longParts.length ? `${label} ${longParts.join("，")}` : label);
     }
 
     if (stats.short.count > 0 && (shortParts.length || stats.short.totalSize > 0 || stats.short.totalAmount > 0)) {
-      const label = rich ? '<span class="decision-tag-short">做空</span>' : "做空";
+      const label = rich ? `<span class="decision-tag-short">${t("tables.decisions.actions.short")}</span>` : t("tables.decisions.actions.short");
       sections.push(shortParts.length ? `${label} ${shortParts.join("，")}` : label);
     }
 
     if (stats.close.count > 0) {
       const closeParts = buildParts(stats.close);
-      const label = rich ? '<span class="decision-tag-close">平仓</span>' : "平仓";
+      const label = rich ? `<span class="decision-tag-close">${t("tables.decisions.actions.close")}</span>` : t("tables.decisions.actions.close");
       sections.push(closeParts.length ? `${label} ${closeParts.join("，")}` : label);
     }
 
     if (!sections.length) {
-      return "观望";
+      return t("tables.decisions.actions.watching");
     }
 
     return sections.join("；");
@@ -2050,7 +2368,7 @@ class TradingMonitor {
     const detailEl = document.getElementById("decision-detail");
     if (!modal || !detailEl) return;
 
-    const rawContent = log.decision || log.actionsTaken || "暂无内容";
+  const rawContent = log.decision || log.actionsTaken || t("tables.common.noContent");
     const htmlContent = window.marked ? window.marked.parse(rawContent) : this.escapeHtml(rawContent).replace(/\n/g, "<br>");
 
     const timestamp = log.timestamp ? this.formatTime(log.timestamp) : "--";
@@ -2066,7 +2384,7 @@ class TradingMonitor {
           const timestampLabel = action.timestamp ? this.formatTime(action.timestamp) : "--";
           const symbolLabel = action.symbol ? String(action.symbol).toUpperCase() : "--";
           const sideRaw = action.side ? String(action.side).toLowerCase() : "";
-          const sideLabel = sideRaw === "long" ? "做多" : sideRaw === "short" ? "做空" : sideRaw === "close" ? "平仓" : (action.action || action.type || "");
+          const sideLabel = sideRaw === "long" ? t("tables.decisions.actions.long") : sideRaw === "short" ? t("tables.decisions.actions.short") : sideRaw === "close" ? t("tables.decisions.actions.close") : (action.action || action.type || "");
           const actionLabel = action.action ? String(action.action).toUpperCase() : "--";
           const leverageLabel = typeof action.leverage === "number" && Number.isFinite(action.leverage)
             ? `${action.leverage}x`
@@ -2074,16 +2392,25 @@ class TradingMonitor {
           const amountLabel = typeof action.amountUsdt === "number" && Number.isFinite(action.amountUsdt)
             ? this.formatCurrency(action.amountUsdt, 2)
             : "--";
-          const sizeLabel = typeof action.size === "number" && Number.isFinite(action.size)
-            ? Number(action.size).toFixed(4)
+          
+          // 将张数转换为币数量
+          const sizeValue = Number(action.size);
+          const actualSize = Number.isFinite(sizeValue) && action.symbol
+            ? this.convertContractsToQuantity(action.symbol, sizeValue)
+            : sizeValue;
+          const sizeLabel = Number.isFinite(actualSize)
+            ? this.formatQuantity(actualSize)
             : "--";
-          const statusRaw = action.status ? String(action.status) : "未知";
+          
+          const statusRaw = action.status ? String(action.status) : "unknown";
           const statusLower = statusRaw.toLowerCase();
           const statusClass = statusLower === "success" ? "" : ["error", "failed", "failure", "negative"].includes(statusLower) ? "negative" : "";
           const messageTextRaw = action.message ? String(action.message) : "";
           const messageText = messageTextRaw ? this.escapeHtml(messageTextRaw) : "";
           const statusTitleAttr = messageText ? ` title="${messageText}"` : "";
-          const statusLabel = this.escapeHtml(statusRaw);
+          const statusLabel = statusLower === "unknown"
+            ? "未记录"
+            : this.escapeHtml(statusRaw);
           const orderIdLabel = action.orderId ? this.escapeHtml(String(action.orderId)) : "--";
 
           return `
@@ -2127,6 +2454,13 @@ class TradingMonitor {
           </div>
         </div>
       `;
+    } else {
+      actionsSection = `
+        <div class="decision-actions" style="margin-bottom: 16px;">
+          <div class="log-detail-title" style="margin-bottom: 4px;">执行的交易动作</div>
+          <div style="font-size: 13px; color: var(--text-muted);">本周期未记录任何实际交易执行。</div>
+        </div>
+      `;
     }
 
     detailEl.innerHTML = `
@@ -2151,32 +2485,44 @@ class TradingMonitor {
     if (!modal || !detailEl) return;
 
     const timestamp = log.createdAt ? this.formatTime(log.createdAt) : "--";
-    const symbol = log.symbol ? String(log.symbol).toUpperCase() : "--";
-    const action = log.action || "--";
-    const status = log.status || "未知";
-    const statusLower = String(status).toLowerCase();
+    const symbolRaw = log.symbol ? String(log.symbol).toUpperCase() : "--";
+    const symbolLabel = symbolRaw !== "--" ? this.escapeHtml(symbolRaw) : symbolRaw;
+    const actionRaw = log.action ? String(log.action) : "--";
+    const actionLabel = actionRaw !== "--" ? this.escapeHtml(actionRaw) : actionRaw;
+    const statusRaw = typeof log.status === "string" && log.status.trim() !== "" ? log.status : "";
+    const statusLower = statusRaw.toLowerCase();
     const statusClass = statusLower === "success" ? "" : ["error", "failed", "failure"].includes(statusLower) ? "negative" : "";
-    const details = log.details || log.message || "无详细信息";
-    const detailText = this.formatStructuredText(details);
+    const statusTranslationKey = statusLower ? `tables.logs.status.${statusLower}` : "";
+    let statusLabel = statusTranslationKey ? t(statusTranslationKey) : "";
+    if (!statusLabel || statusLabel === statusTranslationKey) {
+      statusLabel = statusRaw || t("logDetail.statusUnknown");
+    }
 
-    const requestSection = this.buildLogRawSection("原始请求", log.rawRequest);
-    const responseSection = this.buildLogRawSection("原始响应", log.rawResponse);
-    const auxSection = this.buildLogRawSection("原始消息", log.rawMessage || log.messageRaw);
+    const details = log.details || log.message || t("logDetail.noDetails");
+    const detailText = this.formatStructuredText(details);
+    const summaryText = detailText && detailText !== "--" ? detailText : t("logDetail.noDetails");
+
+    const requestSection = this.buildLogRawSection(t("logDetail.rawRequest"), log.rawRequest);
+    const responseSection = this.buildLogRawSection(t("logDetail.rawResponse"), log.rawResponse);
+    const auxSection = this.buildLogRawSection(t("logDetail.rawMessage"), log.rawMessage || log.messageRaw);
     const rawSections = [requestSection, responseSection, auxSection].filter(Boolean).join("\n");
+
+    const summaryTitle = this.escapeHtml(t("logDetail.summaryTitle"));
+    const statusHtml = `<span class="${statusClass}">${this.escapeHtml(statusLabel)}</span>`;
 
     detailEl.innerHTML = `
       <div style="margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid var(--border-color);">
         <div style="display: flex; gap: 16px; font-size: 12px; color: var(--text-muted);">
-          <span>时间：${timestamp}</span>
-          <span>合约：${symbol}</span>
-          <span>操作：${action}</span>
-          <span>状态：<span class="${statusClass}">${status}</span></span>
+          <span>${t("logDetail.time")}: ${timestamp}</span>
+          <span>${t("logDetail.symbol")}: ${symbolLabel}</span>
+          <span>${t("logDetail.action")}: ${actionLabel}</span>
+          <span>${t("logDetail.status")}: ${statusHtml}</span>
         </div>
       </div>
       <div>
         <div class="log-detail-block">
-          <div class="log-detail-title">执行摘要</div>
-          <pre class="log-detail-text">${this.escapeHtml(detailText)}</pre>
+          <div class="log-detail-title">${summaryTitle}</div>
+          <pre class="log-detail-text">${this.escapeHtml(summaryText)}</pre>
         </div>
         ${rawSections ? `<div class="log-raw-wrapper">${rawSections}</div>` : ""}
       </div>
@@ -2303,12 +2649,16 @@ class TradingMonitor {
   }
 
   async loadCandles(symbol) {
+    const normalizedSymbol = typeof symbol === "string" ? symbol.toUpperCase() : this.activeSymbol;
+
     if (!this.candleSeries) {
       console.warn("K线序列未初始化");
+      if (normalizedSymbol) {
+        this.pendingCandleSymbol = normalizedSymbol;
+      }
       return;
     }
 
-    const normalizedSymbol = typeof symbol === "string" ? symbol.toUpperCase() : this.activeSymbol;
     if (!normalizedSymbol) {
       console.warn("K线加载缺少有效的币种标识");
       return;
@@ -2439,20 +2789,20 @@ class TradingMonitor {
       const quantityLabel = Number.isFinite(baseQuantity) ? this.formatQuantity(baseQuantity) : "--";
       const contractsLabel = Number.isFinite(contractsValue) && contractsValue > 0 ? this.formatQuantity(contractsValue) : null;
       const quantityDisplay = quantityLabel !== "--"
-        ? `${quantityLabel} ${symbolUpper}`
+        ? t("tables.common.quantityWithSymbol", { value: quantityLabel, symbol: symbolUpper })
         : contractsLabel
-          ? `${contractsLabel} 张`
+          ? t("tables.common.contractsWithUnit", { value: contractsLabel })
           : "";
       const leverageValue = Number.isFinite(Number(trade.leverage)) && Number(trade.leverage) > 0
         ? Number(trade.leverage)
         : 1;
       const priceLabel = Number.isFinite(Number(trade.price)) ? this.formatPrice(trade.price) : "--";
-      const sideLabel = side === "long" ? "做多" : side === "short" ? "做空" : "";
+      const sideLabel = side === "long" ? t("long") : side === "short" ? t("short") : "";
       const markerTextParts = [];
       if (sideLabel) markerTextParts.push(sideLabel);
       if (quantityDisplay) markerTextParts.push(quantityDisplay);
       if (priceLabel !== "--") markerTextParts.push(`@${priceLabel}`);
-  const markerText = markerTextParts.length ? markerTextParts.join(" ") : sideLabel || "交易";
+      const markerText = markerTextParts.length ? markerTextParts.join(" ") : sideLabel || t("chart.markers.trade");
       
       // 开仓标记（做多/做空）
       if (type === "open" || type === "entry") {
@@ -2521,13 +2871,15 @@ class TradingMonitor {
           
           // 构建显示文本
           const pnlSign = pnl > 0 ? "+" : "";
+          const pnlValue = `${pnlSign}${pnl.toFixed(2)}`;
           if (pnlPercent !== null && Number.isFinite(pnlPercent)) {
-            pnlText = `平仓 ${pnlSign}${pnl.toFixed(2)} (${pnlSign}${pnlPercent.toFixed(2)}%)`;
+            const pnlPercentValue = `${pnlSign}${pnlPercent.toFixed(2)}`;
+            pnlText = t("chart.markers.closeWithPnlPercent", { pnl: pnlValue, percent: pnlPercentValue });
           } else {
-            pnlText = `平仓 ${pnlSign}${pnl.toFixed(2)}`;
+            pnlText = t("chart.markers.closeWithPnl", { pnl: pnlValue });
           }
         } else {
-          pnlText = "平仓";
+          pnlText = t("chart.markers.close");
         }
         
         markers.push({
@@ -2661,6 +3013,21 @@ class TradingMonitor {
     });
   }
 
+  /**
+   * 将OKX的合约张数转换为实际数量
+   * @param {string} symbol - 币种符号，如 "BTC", "ETH"
+   * @param {number} contracts - 合约张数
+   * @returns {number} 实际数量
+   */
+  convertContractsToQuantity(symbol, contracts) {
+    if (!symbol || !Number.isFinite(contracts)) {
+      return contracts;
+    }
+    
+    const multiplier = CONTRACT_MULTIPLIERS[symbol.toUpperCase()] || 1;
+    return contracts * multiplier;
+  }
+
   formatStructuredText(value) {
     if (value === null || value === undefined) {
       return "--";
@@ -2709,10 +3076,11 @@ class TradingMonitor {
       return "";
     }
     const escaped = this.escapeHtml(text);
+    const summaryLabel = this.escapeHtml(title ?? "");
 
     return `
       <details class="log-raw">
-        <summary>${title}</summary>
+        <summary>${summaryLabel}</summary>
         <pre class="log-raw-text">${escaped}</pre>
       </details>
     `;
@@ -2838,7 +3206,7 @@ class TradingMonitor {
 
     const icon = document.createElement("img");
     icon.className = "ai-model-icon";
-    icon.setAttribute("alt", "AI 模型图标");
+    icon.setAttribute("alt", t("chart.modelIconAlt"));
     icon.decoding = "async";
     icon.loading = "lazy";
     icon.src = DEFAULT_AI_ICON;
@@ -2851,11 +3219,10 @@ class TradingMonitor {
 
     const text = document.createElement("span");
     text.className = "ai-model-text";
-    text.textContent = "AI 模型驱动";
+    text.textContent = t("chart.modelBadge");
 
-  overlay.append(icon, text);
-  overlay.classList.add("hidden");
-  container.appendChild(overlay);
+    overlay.append(icon, text);
+    container.appendChild(overlay);
 
     this.aiOverlay = overlay;
     this.aiOverlayText = text;
@@ -2864,17 +3231,8 @@ class TradingMonitor {
     // 添加点击事件处理器，支持手动触发 AI 决策（绑定到整个 overlay）
     overlay.addEventListener("click", () => this.handleManualAiExecution());
 
-    // 根据登录状态设置初始状态
-    if (!this.isAuthenticated) {
-      overlay.classList.add("disabled");
-      overlay.style.cursor = "not-allowed";
-      overlay.title = "请先登录后台";
-    } else {
-      overlay.title = "点击手动触发 AI 决策";
-    }
-
-    const isActive = Boolean(this.tradingLoopState?.enabled && this.tradingLoopState?.scheduled);
-    this.updateAiOverlayVisibility(isActive);
+    // 根据登录状态设置点击行为
+    this.updateAiOverlayClickable();
   }
 
   async fetchPublicModelInfo() {
@@ -2899,6 +3257,30 @@ class TradingMonitor {
       }
     } catch (error) {
       console.warn("[ai-overlay] 获取公开模型信息失败", error);
+    }
+    
+    // 同时获取交易循环状态以显示 AI overlay
+    await this.fetchPublicTradingLoopStatus();
+  }
+
+  async fetchPublicTradingLoopStatus() {
+    try {
+      const response = await fetch("/api/public/trading-loop-status", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const data = await response.json();
+      if (data && typeof data.enabled === "boolean") {
+        const isActive = Boolean(data.enabled && data.scheduled);
+        this.updateAiOverlayVisibility(isActive);
+      }
+    } catch (error) {
+      console.warn("[ai-overlay] 获取公开交易循环状态失败", error);
     }
   }
 
@@ -2951,23 +3333,21 @@ class TradingMonitor {
     toggle(this.settingsBtn);
     toggle(this.logoutBtn);
     toggle(this.tradingLoopToggle);
+    
+    // Show/hide language selector based on authentication
+    const languageSelector = document.getElementById('language-selector');
+    toggle(languageSelector);
+    if (!shouldShow && languageSelector) {
+      languageSelector.classList.remove("is-open");
+    }
+    updateLanguageSelectorUI();
 
     // 更新 AI 图标的可点击状态
-    if (this.aiOverlay) {
-      if (this.isAuthenticated) {
-        this.aiOverlay.classList.remove("disabled");
-        this.aiOverlay.style.cursor = "pointer";
-        this.aiOverlay.title = "点击手动触发 AI 决策";
-      } else {
-        this.aiOverlay.classList.add("disabled");
-        this.aiOverlay.style.cursor = "not-allowed";
-        this.aiOverlay.title = "请先登录后台";
-      }
-    }
+    this.updateAiOverlayClickable();
 
     if (!shouldShow) {
       this.updateTradingLoopToggle(null);
-      this.updateAiOverlayVisibility(false);
+      // 注意：不要隐藏 AI overlay，未登录用户也应该能看到状态更新
     }
   }
 
@@ -2997,9 +3377,10 @@ class TradingMonitor {
       toggleEl.dataset.active = "false";
       toggleEl.dataset.interval = "";
       toggleEl.dataset.status = "";
-      toggleEl.title = "启动 AI 定时任务";
-      toggleEl.setAttribute("aria-label", "启动 AI 定时任务");
-      toggleEl.dataset.tooltip = "点击启动AI智能交易";
+      const startTitle = t("chart.aiToggleStart");
+      toggleEl.title = startTitle;
+      toggleEl.setAttribute("aria-label", startTitle);
+      toggleEl.dataset.tooltip = t("chart.tooltipStart");
       this.tradingLoopState = null;
       this.updateAiOverlayVisibility(false);
       return;
@@ -3026,12 +3407,10 @@ class TradingMonitor {
     toggleEl.dataset.interval = normalized.intervalMinutes ? String(normalized.intervalMinutes) : "";
     toggleEl.dataset.status = normalized.lastExecutionStatus || "";
 
-    const startTooltip = "启动 AI 定时任务";
-    const stopTooltip = "停止AI决策且停止AI自动交易";
-    const tooltip = isActive ? stopTooltip : startTooltip;
-    toggleEl.title = tooltip;
-    toggleEl.setAttribute("aria-label", tooltip);
-    toggleEl.dataset.tooltip = isActive ? "点击停止AI智能交易" : "点击启动AI智能交易";
+    const tooltipTitle = isActive ? t("chart.aiToggleStop") : t("chart.aiToggleStart");
+    toggleEl.title = tooltipTitle;
+    toggleEl.setAttribute("aria-label", tooltipTitle);
+    toggleEl.dataset.tooltip = isActive ? t("chart.tooltipStop") : t("chart.tooltipStart");
 
     this.updateAiOverlayVisibility(isActive);
   }
@@ -3045,6 +3424,22 @@ class TradingMonitor {
       this.aiOverlay.classList.remove("hidden");
     } else {
       this.aiOverlay.classList.add("hidden");
+    }
+  }
+
+  updateAiOverlayClickable() {
+    if (!this.aiOverlay) {
+      return;
+    }
+
+    if (!this.isAuthenticated) {
+      this.aiOverlay.classList.add("disabled");
+      this.aiOverlay.style.cursor = "not-allowed";
+      this.aiOverlay.title = t("chart.loginRequired");
+    } else {
+      this.aiOverlay.classList.remove("disabled");
+      this.aiOverlay.style.cursor = "pointer";
+      this.aiOverlay.title = t("chart.manualTrigger");
     }
   }
 
@@ -3535,14 +3930,14 @@ class TradingMonitor {
 
     // 状态文本映射
     const statusTextMap = {
-      idle: "待机中",
-      preparing: "准备执行...",
-      collecting_data: "收集数据...",
-      analyzing: "分析市场...",
-      ai_deciding: "AI 决策中...",
-      executing_trades: "执行交易...",
-      completed: "执行完成 ✓",
-      error: "执行失败 ✗"
+      idle: t("aiOverlay.status.idle"),
+      preparing: t("aiOverlay.status.preparing"),
+      collecting_data: t("aiOverlay.status.collecting_data"),
+      analyzing: t("aiOverlay.status.analyzing"),
+      ai_deciding: t("aiOverlay.status.ai_deciding"),
+      executing_trades: t("aiOverlay.status.executing_trades"),
+      completed: t("aiOverlay.status.completed"),
+      error: t("aiOverlay.status.error"),
     };
 
     let displayText = normalizedStatusMessage || statusTextMap[status] || "";
@@ -3550,7 +3945,7 @@ class TradingMonitor {
       displayText = typeof status === "string" ? status : "";
     }
     if (!displayText) {
-      displayText = "AI 模型驱动";
+      displayText = t("aiOverlay.statusFallback") || t("chart.modelBadge");
     }
     this.aiOverlayText.textContent = displayText;
 
@@ -3589,13 +3984,21 @@ class TradingMonitor {
   async handleManualAiExecution() {
     // 检查登录状态
     if (!this.isAuthenticated) {
-      this.showToast("warning", "需要登录", "请先登录后台才能手动触发 AI 决策");
+      this.showToast(
+        "warning",
+        t("aiManual.loginRequiredTitle"),
+        t("aiManual.loginRequiredMessage"),
+      );
       return;
     }
 
     // 防止重复触发（通过检查 executing 类）
     if (this.aiOverlay?.classList.contains("executing")) {
-      this.showToast("info", "执行中", "AI 决策正在执行，请稍候...");
+      this.showToast(
+        "info",
+        t("aiManual.executingTitle"),
+        t("aiManual.executingMessage"),
+      );
       return;
     }
 
@@ -3623,8 +4026,8 @@ class TradingMonitor {
       console.error("[manual-ai] 手动执行 AI 决策失败:", error);
       this.showToast(
         "error",
-        "触发失败",
-        error.message || "触发 AI 决策失败，请检查网络连接"
+        t("aiManual.triggerFailedTitle"),
+        error.message || t("aiManual.triggerFailedMessage"),
       );
     }
   }
@@ -3772,9 +4175,19 @@ class TradingMonitor {
     const nextSet = new Set(uniqueSymbols);
     this.availableSymbols = nextSet;
 
-    if (!this.activeSymbol || !nextSet.has(this.activeSymbol)) {
+    const previousActive = this.activeSymbol;
+    let symbolChanged = false;
+    if (!previousActive || !nextSet.has(previousActive)) {
       this.activeSymbol = uniqueSymbols[0];
-      this.updateChartTitle();
+      symbolChanged = true;
+    }
+
+    this.updateChartTitle();
+
+    if (!this.chart) {
+      this.pendingCandleSymbol = this.activeSymbol;
+    } else if (symbolChanged) {
+      void this.loadCandles(this.activeSymbol);
     }
 
     this.renderSymbolList();
@@ -3934,22 +4347,35 @@ class TradingMonitor {
 
     const payload = this.collectFormValues(this.accountForm, ACCOUNT_CONFIG_KEYS);
     if (!payload) {
-      this.showToast("info", "无需保存", "未检测到配置改动。");
+      this.showToast(
+        "info",
+        t("notifications.noChangesTitle"),
+        t("notifications.noChangesMessage"),
+      );
       return;
     }
 
     try {
       const updateResult = await this.sendConfigUpdate(payload);
       if (!updateResult.success) {
-        this.showToast("error", "保存失败", updateResult.error || "保存失败，请稍后重试。");
+        const message = updateResult.error || t("notifications.saveFailedDefault");
+        this.showToast("error", t("notifications.saveFailedTitle"), message);
         return;
       }
 
       const reloadResult = await this.triggerConfigReload();
       if (reloadResult.success) {
-        this.showToast("success", "账户配置已更新", "配置已保存并触发重载。若服务未自动重启，请手动重启进程。");
+        this.showToast(
+          "success",
+          t("notifications.accountSaveTitle"),
+          t("notifications.accountSaveMessage"),
+        );
       } else if (reloadResult.error) {
-        this.showToast("warning", "重载失败", `配置已保存，但重载失败：${reloadResult.error}`);
+        this.showToast(
+          "warning",
+          t("notifications.reloadFailedTitle"),
+          t("notifications.reloadFailedMessage", { error: reloadResult.error }),
+        );
       }
 
       this.hideModal(this.accountModal);
@@ -3957,7 +4383,11 @@ class TradingMonitor {
       await this.refreshAll();
     } catch (error) {
       console.error("[account] 保存配置失败", error);
-      this.showToast("error", "保存异常", "保存配置时发生异常，请检查控制台日志。");
+      this.showToast(
+        "error",
+        t("notifications.saveExceptionTitle"),
+        t("notifications.saveExceptionMessage"),
+      );
     }
   }
 
@@ -3968,7 +4398,11 @@ class TradingMonitor {
 
     const payload = this.collectFormValues(this.strategyForm, STRATEGY_CONFIG_KEYS);
     if (!payload) {
-      this.showToast("info", "无需保存", "未检测到配置改动。");
+      this.showToast(
+        "info",
+        t("notifications.noChangesTitle"),
+        t("notifications.noChangesMessage"),
+      );
       return;
     }
 
@@ -3980,7 +4414,11 @@ class TradingMonitor {
     // 验证交易币种：只在 payload 中包含 TRADING_SYMBOLS 时才验证（如果不包含说明值未改变）
     if (payload.hasOwnProperty('TRADING_SYMBOLS')) {
       if (!payload.TRADING_SYMBOLS || typeof payload.TRADING_SYMBOLS !== 'string' || payload.TRADING_SYMBOLS.trim() === '') {
-        this.showToast("warning", "字段缺失", "交易币种不能为空。");
+        this.showToast(
+          "warning",
+          t("notifications.fieldMissingTitle"),
+          t("notifications.tradingSymbolsRequired"),
+        );
         return;
       }
     }
@@ -3988,15 +4426,24 @@ class TradingMonitor {
     try {
       const updateResult = await this.sendConfigUpdate(payload);
       if (!updateResult.success) {
-        this.showToast("error", "保存失败", updateResult.error || "保存失败，请稍后重试。");
+        const message = updateResult.error || t("notifications.saveFailedDefault");
+        this.showToast("error", t("notifications.saveFailedTitle"), message);
         return;
       }
 
       const reloadResult = await this.triggerConfigReload();
       if (reloadResult.success) {
-        this.showToast("success", "策略配置已更新", "配置已保存并触发重载。若服务未自动重启，请手动重启进程。");
+        this.showToast(
+          "success",
+          t("notifications.strategySaveTitle"),
+          t("notifications.strategySaveMessage"),
+        );
       } else if (reloadResult.error) {
-        this.showToast("warning", "重载失败", `配置已保存，但重载失败：${reloadResult.error}`);
+        this.showToast(
+          "warning",
+          t("notifications.reloadFailedTitle"),
+          t("notifications.reloadFailedMessage", { error: reloadResult.error }),
+        );
       }
 
       this.hideModal(this.strategyModal);
@@ -4004,7 +4451,11 @@ class TradingMonitor {
       await this.refreshAll();
     } catch (error) {
       console.error("[strategy] 保存配置失败", error);
-      this.showToast("error", "保存异常", "保存配置时发生异常，请检查控制台日志。");
+      this.showToast(
+        "error",
+        t("notifications.saveExceptionTitle"),
+        t("notifications.saveExceptionMessage"),
+      );
     }
   }
 
@@ -4015,22 +4466,35 @@ class TradingMonitor {
 
     const payload = this.collectFormValues(this.settingsForm, SETTINGS_CONFIG_KEYS);
     if (!payload) {
-      this.showToast("info", "无需保存", "未检测到配置改动。");
+      this.showToast(
+        "info",
+        t("notifications.noChangesTitle"),
+        t("notifications.noChangesMessage"),
+      );
       return;
     }
 
     try {
       const updateResult = await this.sendConfigUpdate(payload);
       if (!updateResult.success) {
-        this.showToast("error", "保存失败", updateResult.error || "保存失败，请稍后重试。");
+        const message = updateResult.error || t("notifications.saveFailedDefault");
+        this.showToast("error", t("notifications.saveFailedTitle"), message);
         return;
       }
 
       const reloadResult = await this.triggerConfigReload();
       if (reloadResult.success) {
-        this.showToast("success", "系统设置已更新", "配置已保存并触发重载。若服务未自动重启，请手动重启进程。");
+        this.showToast(
+          "success",
+          t("notifications.settingsSaveTitle"),
+          t("notifications.settingsSaveMessage"),
+        );
       } else if (reloadResult.error) {
-        this.showToast("warning", "重载失败", `配置已保存，但重载失败：${reloadResult.error}`);
+        this.showToast(
+          "warning",
+          t("notifications.reloadFailedTitle"),
+          t("notifications.reloadFailedMessage", { error: reloadResult.error }),
+        );
       }
 
       this.hideModal(this.settingsModal);
@@ -4038,7 +4502,11 @@ class TradingMonitor {
       await this.refreshAll();
     } catch (error) {
       console.error("[settings] 保存配置失败", error);
-      this.showToast("error", "保存异常", "保存配置时发生异常，请检查控制台日志。");
+      this.showToast(
+        "error",
+        t("notifications.saveExceptionTitle"),
+        t("notifications.saveExceptionMessage"),
+      );
     }
   }
 
@@ -4058,7 +4526,7 @@ class TradingMonitor {
       return { success: true };
     } catch (error) {
       console.error("[config] 更新配置接口异常", error);
-      return { success: false, error: "请求失败，请检查网络连接。" };
+      return { success: false, error: t("notifications.networkRequestFailed") };
     }
   }
 
@@ -4206,11 +4674,11 @@ class TradingMonitor {
     const proxyValue = proxyInput ? proxyInput.value.trim() : this.latestConfig?.HTTP_PROXY_URL || "";
 
     if (!apiKey || !apiSecret || !passphrase) {
-      this.displayApiTestResult("api-test-result", "error", "请先填写完整的 OKX API 凭证。");
+      this.displayApiTestResult("api-test-result", "error", t("account.okx.testMessages.fillRequired"));
       return;
     }
 
-    this.displayApiTestResult("api-test-result", "loading", "正在测试 OKX API 连接...");
+    this.displayApiTestResult("api-test-result", "loading", t("account.okx.testMessages.testing"));
 
     try {
       const response = await fetch("/api/test-okx", {
@@ -4227,14 +4695,23 @@ class TradingMonitor {
 
       const result = await response.json().catch(() => ({}));
       if (response.ok && result.success) {
-        const balanceText = result.balance ? `账户权益: ${result.balance}` : "";
-        this.displayApiTestResult("api-test-result", "success", `${result.message || "测试成功"}${balanceText ? `（${balanceText}）` : ""}`);
+        let message = t("account.okx.testMessages.success");
+        if (result.balance) {
+          const balanceSuffix = t("account.okx.testMessages.balanceLabel", { balance: result.balance });
+          if (balanceSuffix) {
+            message = `${message}${balanceSuffix}`;
+          }
+        }
+        this.displayApiTestResult("api-test-result", "success", message);
       } else {
-        this.displayApiTestResult("api-test-result", "error", result.error || `HTTP ${response.status}`);
+        const detail = typeof result.error === "string" && result.error.trim()
+          ? result.error.trim()
+          : `HTTP ${response.status}`;
+        this.displayApiTestResult("api-test-result", "error", t("account.okx.testMessages.failure", { detail }));
       }
     } catch (error) {
       console.error("[account] 测试 OKX API 失败", error);
-      this.displayApiTestResult("api-test-result", "error", "请求失败，请检查网络或代理设置。");
+      this.displayApiTestResult("api-test-result", "error", t("account.okx.testMessages.networkError"));
     }
   }
 
@@ -4251,11 +4728,11 @@ class TradingMonitor {
     const proxyValue = proxyInput ? proxyInput.value.trim() : this.latestConfig?.HTTP_PROXY_URL || "";
 
     if (!apiKey || !baseUrl || !modelName) {
-      this.displayApiTestResult("ai-test-result", "error", "请先填写完整的 AI API 配置。");
+      this.displayApiTestResult("ai-test-result", "error", t("settings.ai.testMessages.fillRequired"));
       return;
     }
 
-    this.displayApiTestResult("ai-test-result", "loading", "正在测试 AI API 连接...");
+    this.displayApiTestResult("ai-test-result", "loading", t("settings.ai.testMessages.testing"));
 
     try {
       const response = await fetch("/api/test-ai", {
@@ -4271,15 +4748,23 @@ class TradingMonitor {
 
       const result = await response.json().catch(() => ({}));
       if (response.ok && result.success) {
-        const message = result.message || "测试成功";
-        const suffix = result.responseTime ? `（耗时 ${result.responseTime}）` : "";
-        this.displayApiTestResult("ai-test-result", "success", `${message}${suffix}`);
+        let message = t("settings.ai.testMessages.success");
+        if (result.responseTime) {
+          const timeSuffix = t("settings.ai.testMessages.responseTime", { time: result.responseTime });
+          if (timeSuffix) {
+            message = `${message}${timeSuffix}`;
+          }
+        }
+        this.displayApiTestResult("ai-test-result", "success", message);
       } else {
-        this.displayApiTestResult("ai-test-result", "error", result.error || `HTTP ${response.status}`);
+        const detail = typeof result.error === "string" && result.error.trim()
+          ? result.error.trim()
+          : `HTTP ${response.status}`;
+        this.displayApiTestResult("ai-test-result", "error", t("settings.ai.testMessages.failure", { detail }));
       }
     } catch (error) {
       console.error("[settings] 测试 AI API 失败", error);
-      this.displayApiTestResult("ai-test-result", "error", "请求失败，请检查网络或代理设置。");
+      this.displayApiTestResult("ai-test-result", "error", t("settings.ai.testMessages.networkError"));
     }
   }
 
@@ -4602,6 +5087,136 @@ class TradingMonitor {
 }
 
 
-window.addEventListener("DOMContentLoaded", () => {
+// ========== Load Contract Multipliers from API ==========
+async function loadContractMultipliers() {
+  try {
+    const response = await fetch('/api/public/contract-multipliers');
+    if (!response.ok) {
+      console.warn('[Contract Multipliers] Failed to load from API, using defaults');
+      return;
+    }
+    
+    const data = await response.json();
+    if (data.multipliers && typeof data.multipliers === 'object') {
+      CONTRACT_MULTIPLIERS = { ...DEFAULT_CONTRACT_MULTIPLIERS, ...data.multipliers };
+      contractMultipliersLastUpdated = data.lastUpdated;
+      console.log(`[Contract Multipliers] Loaded ${data.count} multipliers from API (updated: ${data.lastUpdated || 'N/A'})`);
+    }
+  } catch (error) {
+    console.error('[Contract Multipliers] Error loading:', error);
+  }
+}
+
+
+window.addEventListener("DOMContentLoaded", async () => {
+  try {
+    await ensureLanguageResources();
+  } catch (error) {
+    console.error("[i18n] Failed to ensure language resources", error);
+  }
+
+  // 加载合约乘数
+  await loadContractMultipliers();
+
+  applyI18nToDOM();
+
+  const languageSelector = document.getElementById("language-selector");
+  const languageToggle = document.getElementById("language-toggle");
+  const languageMenu = document.getElementById("language-menu");
+
+  if (languageSelector && languageToggle && languageMenu) {
+    const languageOptions = Array.from(languageMenu.querySelectorAll(".language-option"));
+
+    const setMenuState = (isOpen) => {
+      languageSelector.classList.toggle("is-open", Boolean(isOpen));
+      languageToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+    };
+
+    const closeLanguageMenu = () => {
+      setMenuState(false);
+      updateLanguageSelectorUI();
+    };
+
+    const openLanguageMenu = () => {
+      if (languageSelector.classList.contains("hidden")) {
+        return;
+      }
+      setMenuState(true);
+      updateLanguageSelectorUI();
+    };
+
+    const handleDocumentClick = (event) => {
+      if (!languageSelector.contains(event.target)) {
+        closeLanguageMenu();
+      }
+    };
+
+    const handleDocumentKeydown = (event) => {
+      if (event.key === "Escape" && languageSelector.classList.contains("is-open")) {
+        closeLanguageMenu();
+        languageToggle.focus();
+      }
+    };
+
+    async function handleLanguageSelection(newLang) {
+      const targetLang = SUPPORTED_LANGUAGES.includes(newLang) ? newLang : DEFAULT_LANGUAGE;
+
+      const normalizedLang = setLanguage(targetLang);
+      updateLanguageSelectorUI();
+
+      if (window.tradingMonitor && window.tradingMonitor.isAuthenticated) {
+        try {
+          const csrfToken = window.csrfManager?.getToken?.() || "";
+          await fetch("/api/user/language", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-CSRF-Token": csrfToken,
+            },
+            credentials: "include",
+            body: JSON.stringify({ language: normalizedLang }),
+          });
+          console.log(`Language preference saved to backend: ${normalizedLang}`);
+        } catch (error) {
+          console.warn("Failed to save language preference to backend:", error);
+        }
+      }
+
+      window.location.reload();
+    }
+
+    languageToggle.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (languageSelector.classList.contains("hidden")) {
+        return;
+      }
+      if (languageSelector.classList.contains("is-open")) {
+        closeLanguageMenu();
+      } else {
+        openLanguageMenu();
+      }
+    });
+
+    languageOptions.forEach((option) => {
+      option.addEventListener("click", (event) => {
+        event.preventDefault();
+        const selectedLang = option.getAttribute("data-lang");
+        if (!selectedLang) {
+          return;
+        }
+        closeLanguageMenu();
+        if (selectedLang === getCurrentLanguage()) {
+          return;
+        }
+        void handleLanguageSelection(selectedLang);
+      });
+    });
+
+    document.addEventListener("click", handleDocumentClick);
+    document.addEventListener("keydown", handleDocumentKeydown);
+
+    updateLanguageSelectorUI();
+  }
+
   window.tradingMonitor = new TradingMonitor();
 });
