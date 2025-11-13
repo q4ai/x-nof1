@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Q4AI 后台登录</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #111827 60%, #020617);
+      min-height: 100vh;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 18px;
+      padding: 32px;
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(14px);
+    }
+    .login-card h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+    }
+    .login-card p.subtitle {
+      margin: 0 0 24px;
+      color: rgba(148, 163, 184, 0.85);
+      font-size: 15px;
+    }
+    .login-card p.admin-path {
+      margin: 0 0 18px;
+      font-size: 13px;
+      color: rgba(148, 163, 184, 0.75);
+    }
+    .login-card p.admin-path code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      background: rgba(30, 41, 59, 0.8);
+      padding: 4px 8px;
+      border-radius: 6px;
+      color: #38bdf8;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      color: rgba(226, 232, 240, 0.9);
+    }
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.6);
+      color: #f8fafc;
+      font-size: 15px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      outline: none;
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+    button[type="submit"] {
+      width: 100%;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #0f172a;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button[type="submit"]:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 24px rgba(56, 189, 248, 0.35);
+    }
+    .message {
+      margin-top: 18px;
+      font-size: 13px;
+      min-height: 18px;
+    }
+    .message.success {
+      color: #4ade80;
+    }
+    .message.error {
+      color: #f87171;
+    }
+    .message.info {
+      color: rgba(148, 163, 184, 0.85);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <h1>Q4AI 后台登录</h1>
+    <p class="subtitle">请输入后台账号与密码，登录后方可修改系统配置</p>
+    <p class="admin-path">当前后台入口：<code>{{ADMIN_PATH}}</code></p>
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username">账号</label>
+        <input type="text" id="username" name="username" placeholder="admin" required autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label for="password">密码</label>
+        <input type="password" id="password" name="password" placeholder="请输入密码" required autocomplete="current-password" />
+      </div>
+      <button type="submit">登录</button>
+    </form>
+    <p class="message info" id="message">首次运行时，请在控制台或 ./.q4ai 文件查收凭证</p>
+  </div>
+  <script src="csrf.js"></script>
+  <script>
+    async function checkStatus() {
+      try {
+  const response = await fetch('/api/auth/status', { cache: 'no-store', credentials: 'same-origin' });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.authenticated) {
+            window.location.href = '/';
+          }
+        }
+      } catch (error) {
+        console.warn('查询登录状态失败', error);
+      }
+    }
+
+    checkStatus();
+
+    const form = document.getElementById('login-form');
+    const messageEl = document.getElementById('message');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      messageEl.textContent = '正在验证账号...';
+      messageEl.className = 'message info';
+
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'same-origin',
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result && result.success) {
+          if (result.csrfToken && window.csrfManager) {
+            window.csrfManager.setToken(result.csrfToken);
+          }
+          messageEl.textContent = '登录成功，正在跳转...';
+          messageEl.className = 'message success';
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 600);
+          return;
+        }
+
+        messageEl.textContent = (result && result.error) || '登录失败，请检查账号密码';
+        messageEl.className = 'message error';
+      } catch (error) {
+        console.error('登录请求异常', error);
+        messageEl.textContent = '网络异常，请稍后再试';
+        messageEl.className = 'message error';
+      }
+    });
+  </script>
+</body>
+</html>

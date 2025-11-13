@@ -1,0 +1,51 @@
+【交易周期 #{{ITERATION}}】{{CURRENT_TIME}}
+已运行 {{MINUTES_ELAPSED}} 分钟，执行周期 {{TRADING_INTERVAL_MINUTES}} 分钟
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+当前策略：{{STRATEGY_NAME}}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+【系统风险参数】
+- 单笔亏损阈值：{{EXTREME_STOP_LOSS_PERCENT}}%
+- 持仓时限：{{MAX_HOLDING_HOURS}} 小时（约 {{MAX_HOLDING_CYCLES}} 个周期）
+- 最大持仓数：{{MAX_POSITIONS}}
+- 账户止损：{{ACCOUNT_STOP_LOSS_USDT}} USDT
+- 账户止盈：{{ACCOUNT_TAKE_PROFIT_USDT}} USDT
+- 回撤警戒：{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}% / {{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}% / {{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}%
+- 允许交易品种：{{SYMBOL_LIST}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【策略执行框架】
+{{ENTRY_PROMPT}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【出场与风险控制】
+{{EXIT_PROMPT}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【变量提示与操作指引】
+{{VAR_PROMPT}}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+【数据说明】
+本提示词已预加载所有必需数据：
+• 所有币种的市场数据和技术指标（多时间框架）
+• 账户信息（余额、收益率、夏普比率）
+• 当前持仓状态（盈亏、持仓时间、杠杆）
+• 历史交易记录（最近10笔）
+
+【您的任务】
+直接基于上述数据做出交易决策，无需重复获取数据：
+1. 分析持仓管理需求 → 调用 closePosition / calculateRisk 等工具执行
+2. 识别新交易机会 → 调用 openPosition 执行
+3. 评估风险和仓位管理 → 调用 getAccountBalance / getPositions 等工具确认
+
+关键：必须实际调用工具执行决策，不要只停留在分析阶段！
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+以下所有价格或信号数据按时间顺序排列：最旧 → 最新
+
+时间框架说明：除非在章节标题中另有说明，否则日内序列以 3 分钟间隔提供。如果某个币种使用不同的间隔，将在该币种的章节中明确说明。
+
+所有币种的当前市场状态
