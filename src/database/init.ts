@@ -77,59 +77,67 @@ async function initDatabase() {
     const count = toNumber(existingHistoryRow?.count);
 
     if (count > 0) {
-      // 检查第一条记录的资金是否与当前设置不同
+      // 检查第一条记录的资金是否与当前设置不同，仅记录日志，不做删除操作
       const firstRecord = await client.execute(
         "SELECT total_value FROM account_history ORDER BY id ASC LIMIT 1"
       );
       const firstBalanceRow = asDbRows(firstRecord.rows)[0];
       const firstBalance = toNumber(firstBalanceRow?.total_value);
-      
+
       if (firstBalance !== initialBalance) {
-        logger.warn(`⚠️  检测到初始资金变更: ${firstBalance} USDT -> ${initialBalance} USDT`);
-        logger.info("清空现有数据，重新初始化...");
-        
-        // 清空所有交易数据
-        await client.execute("DELETE FROM trades");
-        await client.execute("DELETE FROM positions");
-        await client.execute("DELETE FROM account_history");
-        await client.execute("DELETE FROM trading_signals");
-        await client.execute("DELETE FROM agent_decisions");
-        
-        logger.info("✅ 旧数据已清空");
+        logger.warn(
+          `⚠️  检测到初始资金配置与数据库记录不一致: 数据库=${firstBalance} USDT, 环境变量=${initialBalance} USDT。` +
+            "系统将保留现有数据，并使用数据库中的初始资金作为基准。",
+        );
+
+        // 以数据库中的初始资金为准，覆盖环境变量配置
+        await client.execute({
+          sql: `INSERT INTO system_config (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?`,
+          args: [
+            "INITIAL_BALANCE",
+            firstBalance.toString(),
+            new Date().toISOString(),
+            firstBalance.toString(),
+            new Date().toISOString(),
+          ],
+        });
       } else {
         logger.info(`数据库已有 ${count} 条账户历史记录，跳过初始化`);
-        // 显示当前状态后直接返回
-        const latestAccount = await client.execute(
-          "SELECT * FROM account_history ORDER BY timestamp DESC LIMIT 1"
-        );
-        if (latestAccount.rows.length > 0) {
-          const accountRow = asDbRows(latestAccount.rows)[0];
-          const totalValue = toNumber(accountRow?.total_value);
-          const availableCash = toNumber(accountRow?.available_cash);
-          const unrealizedPnl = toNumber(accountRow?.unrealized_pnl);
-          const returnPercent = toNumber(accountRow?.return_percent);
-          logger.info("当前账户状态:");
-          logger.info(`  总资产: ${totalValue} USDT`);
-          logger.info(`  可用资金: ${availableCash} USDT`);
-          logger.info(`  未实现盈亏: ${unrealizedPnl} USDT`);
-          logger.info(`  总收益率: ${returnPercent}%`);
-        }
-        
-        const positions = await client.execute("SELECT * FROM positions");
-        if (positions.rows.length > 0) {
-          logger.info(`\n当前持仓 (${positions.rows.length}):`);
-          asDbRows(positions.rows).forEach((position) => {
-            logger.info(
-              `  ${toStringSafe(position.symbol)}: ${toStringSafe(position.quantity)} @ ${toStringSafe(position.entry_price)} (${toStringSafe(position.side)}, ${toStringSafe(position.leverage)}x)`,
-            );
-          });
-        } else {
-          logger.info("\n当前无持仓");
-        }
-        
-        logger.info("\n✅ 数据库初始化完成");
-        return;
       }
+
+      // 显示当前状态后直接返回
+      const latestAccount = await client.execute(
+        "SELECT * FROM account_history ORDER BY timestamp DESC LIMIT 1"
+      );
+      if (latestAccount.rows.length > 0) {
+        const accountRow = asDbRows(latestAccount.rows)[0];
+        const totalValue = toNumber(accountRow?.total_value);
+        const availableCash = toNumber(accountRow?.available_cash);
+        const unrealizedPnl = toNumber(accountRow?.unrealized_pnl);
+        const returnPercent = toNumber(accountRow?.return_percent);
+        logger.info("当前账户状态:");
+        logger.info(`  总资产: ${totalValue} USDT`);
+        logger.info(`  可用资金: ${availableCash} USDT`);
+        logger.info(`  未实现盈亏: ${unrealizedPnl} USDT`);
+        logger.info(`  总收益率: ${returnPercent}%`);
+      }
+
+      const positions = await client.execute("SELECT * FROM positions");
+      if (positions.rows.length > 0) {
+        logger.info(`\n当前持仓 (${positions.rows.length}):`);
+        asDbRows(positions.rows).forEach((position) => {
+          logger.info(
+            `  ${toStringSafe(position.symbol)}: ${toStringSafe(position.quantity)} @ ${toStringSafe(position.entry_price)} (${toStringSafe(position.side)}, ${toStringSafe(position.leverage)}x)`,
+          );
+        });
+      } else {
+        logger.info("\n当前无持仓");
+      }
+
+      logger.info("\n✅ 数据库初始化完成 (保留现有数据)");
+      return;
     }
 
     // 插入初始账户记录
@@ -183,9 +191,10 @@ async function initDatabase() {
     
     // 执行数据库迁移
     logger.info("检查数据库迁移...");
-    const { ensureAgentDecisionExecutionColumn, ensureContractMultipliersTable } = await import("./migrations");
+    const { ensureAgentDecisionExecutionColumn, ensureContractMultipliersTable, ensureAgentRequestLogsTable } = await import("./migrations");
     await ensureAgentDecisionExecutionColumn(client);
     await ensureContractMultipliersTable(client);
+    await ensureAgentRequestLogsTable(client);
     logger.info("数据库迁移检查完成");
   } catch (error: unknown) {
     if (error instanceof Error) {

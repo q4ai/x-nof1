@@ -66,11 +66,33 @@
   "tabs": {
     "positions": "Positions",
     "trades": "Trade History",
-    "logs": "Trade Logs"
+    "logs": "Trade Logs",
+    "decisionLogs": "Decision Logs"
   },
   "decision": {
     "title": "AI Decisions",
     "empty": "No AI decisions available"
+  },
+  "decisionRequest": {
+    "title": "Decision Requests",
+    "empty": "No decision requests",
+    "summaryLabel": "Response Overview",
+    "status": {
+      "success": "Success",
+      "error": "Error",
+      "unknown": "Unknown"
+    },
+    "detail": {
+      "time": "Time",
+      "iteration": "Iteration",
+      "model": "Model",
+      "status": "Status",
+      "instructions": "Instructions",
+      "prompt": "Prompt",
+      "response": "AI Output",
+      "error": "Error Message",
+      "durationLabel": "Output duration: {{value}}"
+    }
   },
   "modals": {
     "decision": {
@@ -78,6 +100,9 @@
     },
     "log": {
       "title": "Log Details"
+    },
+    "decisionRequest": {
+      "title": "Decision Request Details"
     },
     "statistics": {
       "title": "Trading Statistics",
@@ -168,6 +193,15 @@
         "close": "Close",
         "watching": "Watching"
       }
+    },
+    "decisionRequests": {
+      "headers": {
+        "time": "Time",
+        "model": "Model",
+        "summary": "AI Output Overview",
+        "duration": "Output Time"
+      },
+      "empty": "No decision requests"
     }
   },
   "stats": {
@@ -319,6 +353,7 @@
     "labels": {
       "ultraShort": "Ultra-Short",
       "swingTrend": "Swing Trend",
+      "dca": "DCA",
       "conservative": "Conservative",
       "balanced": "Balanced",
       "aggressive": "Aggressive",
@@ -327,6 +362,7 @@
     "labelMap": {
       "ultra-short": "Ultra-Short",
       "swing-trend": "Swing Trend",
+      "dca": "DCA",
       "conservative": "Conservative",
       "balanced": "Balanced",
       "aggressive": "Aggressive"
@@ -375,6 +411,10 @@
     "loginRequired": "Please log in to access this feature",
     "modelBadge": "AI Model Powered",
     "modelIconAlt": "AI model icon",
+    "triggerType": {
+      "manual": "Manual Trigger",
+      "scheduled": "Scheduled Trigger"
+    },
     "markers": {
       "trade": "Trade",
       "close": "Close",
@@ -445,6 +485,7 @@
   "strategyLabels": {
     "ultra-short": "Ultra-Short",
     "swing-trend": "Swing Trend",
+    "dca": "DCA",
     "conservative": "Conservative",
     "balanced": "Balanced",
     "aggressive": "Aggressive"

@@ -166,6 +166,7 @@
   <button class="tab-btn active" data-tab="positions" data-i18n="tabs.positions">Positions</button>
   <button class="tab-btn" data-tab="trades" data-i18n="tabs.trades">Trade History</button>
   <button class="tab-btn" data-tab="logs" data-i18n="tabs.logs">Trade Logs</button>
+  <button class="tab-btn" data-tab="decision-logs" data-i18n="tabs.decisionLogs">Decision Logs</button>
       </nav>
       <div class="tab-content">
         <div class="tab-panel active" id="tab-positions">
@@ -180,6 +181,11 @@
         </div>
         <div class="tab-panel" id="tab-logs">
           <div class="table-container" id="logs-container">
+            <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-decision-logs">
+          <div class="table-container" id="decision-logs-container">
             <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </div>
@@ -212,6 +218,18 @@
       <div class="modal-body" id="log-detail">
         <!-- 动态内容 -->
       </div>
+    </div>
+  </div>
+
+  <!-- 决策请求详情弹窗 -->
+  <div class="modal" id="decision-request-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3 data-i18n="modals.decisionRequest.title">Decision Request</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="decision-request-detail"></div>
     </div>
   </div>
 
@@ -494,6 +512,7 @@
                     <div class="quick-insert-buttons">
                       <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="dca" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.dca">DCA</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.conservative">Conservative</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.balanced">Balanced</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.aggressive">Aggressive</button>
@@ -514,6 +533,7 @@
                     <div class="quick-insert-buttons">
                       <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="dca" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.dca">DCA</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.conservative">Conservative</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.balanced">Balanced</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.aggressive">Aggressive</button>
@@ -534,6 +554,7 @@
                     <div class="quick-insert-buttons">
                       <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="dca" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.dca">DCA</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.conservative">Conservative</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.balanced">Balanced</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.aggressive">Aggressive</button>

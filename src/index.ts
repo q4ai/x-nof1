@@ -22,14 +22,16 @@ import { serve } from "@hono/node-server";
 import { createApiRoutes } from "./api/routes";
 import { startTradingLoop, initTradingSystem } from "./scheduler/tradingLoop";
 import { startAccountRecorder } from "./scheduler/accountRecorder";
-import { startTrailingStopMonitor, stopTrailingStopMonitor } from "./scheduler/trailingStopMonitor";
-import { startStopLossMonitor, stopStopLossMonitor } from "./scheduler/stopLossMonitor";
+// 注意：独立的止损/止盈监控器已禁用，改由 AI Agent 根据策略提示词自主决策
+// import { startTrailingStopMonitor, stopTrailingStopMonitor } from "./scheduler/trailingStopMonitor";
+// import { startStopLossMonitor, stopStopLossMonitor } from "./scheduler/stopLossMonitor";
 import { startContractMultiplierSync, stopContractMultiplierSync } from "./scheduler/contractMultiplierSync";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams.new";
 import { getAccountRiskConfig, getTradingStrategy } from "./agents/tradingAgent";
 import { getStrategyLabel } from "./config/strategyTypes";
-import { SWING_TREND_TRAILING_STOP_CONFIG, SWING_TREND_STOP_LOSS_CONFIG } from "./config/strategyControls";
+// 注意：strategyControls.ts 中的硬编码参数已废弃，改为在策略提示词中定义
+// import { SWING_TREND_TRAILING_STOP_CONFIG, SWING_TREND_STOP_LOSS_CONFIG } from "./config/strategyControls";
 import { initializeTerminalEncoding } from "./utils/encodingUtils";
 import { initializeAdminAuth } from "./utils/adminAuth";
 import { websocketService } from "./services/websocketService";
@@ -103,13 +105,15 @@ async function main() {
   logger.info("启动账户资产记录器...");
   startAccountRecorder();
   
-  // 9. 启动移动止盈监控器（每10秒检查一次）
-  logger.info("启动移动止盈监控器...");
-  startTrailingStopMonitor();
+  // 9. 移动止盈监控器已禁用
+  // 注意：移动止盈逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
+  // logger.info("启动移动止盈监控器...");
+  // startTrailingStopMonitor();
   
-  // 10. 启动止损监控器（每10秒检查一次）
-  logger.info("启动止损监控器...");
-  startStopLossMonitor();
+  // 10. 止损监控器已禁用
+  // 注意：止损逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
+  // logger.info("启动止损监控器...");
+  // startStopLossMonitor();
   
   // 11. 启动合约乘数同步定时任务（每1小时执行一次）
   logger.info("启动合约乘数同步定时任务...");
@@ -124,23 +128,12 @@ async function main() {
   logger.info("系统启动完成！");
   logger.info("=".repeat(80));
   logger.info(`\n监控界面: http://localhost:${port}/`);
-  logger.info(`交易策略: ${strategyLabel}${isCodeLevelEnabled ? " (启用代码级保护)" : " (AI主导控制)"}`);
+  logger.info(`交易策略: ${strategyLabel} (AI主导控制)`);
   logger.info(`交易间隔: ${RISK_PARAMS.TRADING_INTERVAL_MINUTES} 分钟`);
   logger.info(`账户记录间隔: ${process.env.ACCOUNT_RECORD_INTERVAL_MINUTES || 10} 分钟`);
   
-  if (isCodeLevelEnabled) {
-    logger.info(`  • ${SWING_TREND_TRAILING_STOP_CONFIG.stage1.description}`);
-    logger.info(`  • ${SWING_TREND_TRAILING_STOP_CONFIG.stage2.description}`);
-    logger.info(`  • ${SWING_TREND_TRAILING_STOP_CONFIG.stage3.description}`);
-    logger.info(`  • ${SWING_TREND_TRAILING_STOP_CONFIG.stage4.description}`);
-    logger.info(`  • ${SWING_TREND_TRAILING_STOP_CONFIG.stage5.description}`);
-    logger.info(`\n🛡️ 代码级自动止损监控（仅波段策略，每10秒检查）:`);
-    logger.info(`  • ${SWING_TREND_STOP_LOSS_CONFIG.lowRisk.description}`);
-    logger.info(`  • ${SWING_TREND_STOP_LOSS_CONFIG.mediumRisk.description}`);
-    logger.info(`  • ${SWING_TREND_STOP_LOSS_CONFIG.highRisk.description}`);
-  } else {
-    logger.info(`\n⚠️  当前策略未启用代码级监控，止损止盈完全由AI控制`);
-  }
+  // 注意：代码级监控已禁用，止损/止盈/仓位管理等完全由 AI Agent 根据策略提示词决策
+  logger.info(`\n⚠️  止损止盈策略完全由 AI 根据策略提示词控制，无硬编码规则`);
   
   logger.info(`\n支持币种: ${RISK_PARAMS.TRADING_SYMBOLS.join(', ')}`);
   logger.info(`最大杠杆: ${RISK_PARAMS.MAX_LEVERAGE}x`);
@@ -171,15 +164,11 @@ async function gracefulShutdown(signal: string) {
       logger.info("合约乘数同步定时任务已停止");
     }
     
-    // 停止移动止盈监控器
-    logger.info("正在停止移动止盈监控器...");
-    stopTrailingStopMonitor();
-    logger.info("移动止盈监控器已停止");
+    // 移动止盈监控器已禁用，无需停止
+    // stopTrailingStopMonitor();
     
-    // 停止止损监控器
-    logger.info("正在停止止损监控器...");
-    stopStopLossMonitor();
-    logger.info("止损监控器已停止");
+    // 止损监控器已禁用，无需停止
+    // stopStopLossMonitor();
     
     // 关闭 WebSocket 服务器
     logger.info("正在关闭 WebSocket 服务器...");

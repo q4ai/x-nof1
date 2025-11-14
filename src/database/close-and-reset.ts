@@ -104,6 +104,20 @@ CREATE TABLE IF NOT EXISTS trade_logs (
     fee REAL,
     status TEXT NOT NULL
 );
+
+  CREATE TABLE IF NOT EXISTS agent_request_logs (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    iteration INTEGER,
+    model_name TEXT NOT NULL,
+    instructions TEXT NOT NULL,
+    prompt TEXT NOT NULL,
+    response TEXT,
+    response_summary TEXT,
+    status TEXT NOT NULL DEFAULT 'success',
+    error_message TEXT,
+    output_duration_ms INTEGER
+  );
 `;
 
 /**
@@ -175,6 +189,7 @@ async function resetDatabase(): Promise<void> {
 
     // 删除所有表
     logger.info("🗑️  删除现有表...");
+    await client.execute("DROP TABLE IF EXISTS agent_request_logs");
     await client.execute("DROP TABLE IF EXISTS trade_logs");
     await client.execute("DROP TABLE IF EXISTS agent_decisions");
     await client.execute("DROP TABLE IF EXISTS trading_signals");

@@ -1,4 +1,4 @@
-export type TradingStrategy = "conservative" | "balanced" | "aggressive" | "ultra-short" | "swing-trend";
+export type TradingStrategy = "conservative" | "balanced" | "aggressive" | "ultra-short" | "swing-trend" | "dca";
 
 export const SUPPORTED_STRATEGY_LANGUAGES = ["en", "zh", "ja"] as const;
 
@@ -12,6 +12,7 @@ export const ALL_TRADING_STRATEGIES: TradingStrategy[] = [
 	"aggressive",
 	"ultra-short",
 	"swing-trend",
+	"dca",
 ];
 
 const STRATEGY_LABELS: Record<StrategyLanguage, Record<TradingStrategy, string>> = {
@@ -21,6 +22,7 @@ const STRATEGY_LABELS: Record<StrategyLanguage, Record<TradingStrategy, string>>
 		aggressive: "Breakout Momentum",
 		"ultra-short": "Ultra-Short",
 		"swing-trend": "Swing Trend",
+		dca: "DCA",
 	},
 	zh: {
 		conservative: "保守增值",
@@ -28,6 +30,7 @@ const STRATEGY_LABELS: Record<StrategyLanguage, Record<TradingStrategy, string>>
 		aggressive: "进攻突破",
 		"ultra-short": "超短线",
 		"swing-trend": "波段趋势",
+		dca: "DCA定投",
 	},
 	ja: {
 		conservative: "資本保全",
@@ -35,6 +38,7 @@ const STRATEGY_LABELS: Record<StrategyLanguage, Record<TradingStrategy, string>>
 		aggressive: "ブレイクアウトモメンタム",
 		"ultra-short": "超短期",
 		"swing-trend": "スイングトレンド",
+		dca: "DCA積立",
 	},
 };
 

@@ -23,14 +23,14 @@ import cron, { ScheduledTask } from "node-cron";
 import { createLogger } from "../utils/loggerUtils";
 import { createClient } from "@libsql/client";
 import { createTradingAgent, generateTradingPrompt, getAccountRiskConfig, getTradingStrategy } from "../agents/tradingAgent";
-import { ULTRA_SHORT_CYCLE_LOCK_PROFIT_TRIGGER } from "../config/strategyControls";
 import type { AccountRiskConfig } from "../agents/tradingAgent";
 import { createOkxClient } from "../services/okxClient";
 import { getChinaTimeISO } from "../utils/timeUtils";
 import { RISK_PARAMS } from "../config/riskParams.new";
 import { getQuantoMultiplier } from "../utils/contractUtils";
-import { ensureAgentDecisionExecutionColumn } from "../database/migrations";
+import { ensureAgentDecisionExecutionColumn, ensureAgentRequestLogsTable } from "../database/migrations";
 import { websocketService } from "../services/websocketService";
+import { insertAgentRequestLog } from "../database/agent-request-logs";
 
 const logger = createLogger({
   name: "trading-loop",
@@ -1697,24 +1697,8 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
         // 考虑杠杆后，需要的盈利百分比 = 0.1% * 杠杆
         const feeThreshold = 0.1 * leverage;
         
-        // 移动止盈的第一档触发阈值
-    const trailingStopTrigger = ULTRA_SHORT_CYCLE_LOCK_PROFIT_TRIGGER;
-        
-        // 规则1：每周期2%锁利规则（优先级最高）
-        // 每个交易周期内，如果盈利 >2% 但未触发移动止盈（<4%），立即平仓锁定利润
-        if (pnlPercent > 2 && pnlPercent < trailingStopTrigger) {
-          shouldClose = true;
-          closeReason = `超短线策略周期锁利规则：盈利${pnlPercent.toFixed(2)}% >2%，未达到移动止盈触发线${trailingStopTrigger}%，立即平仓锁定利润`;
-          logger.info(`【超短线周期锁利】${symbol} ${closeReason}`);
-        }
-        
-        // 规则2：30分钟盈利平仓规则（保底规则）
-        // 如果持仓超过30分钟，处于盈利状态，但没有触发移动止盈，且覆盖了交易费，进行平仓
-        if (!shouldClose && holdingMinutes >= 30 && pnlPercent > feeThreshold && pnlPercent < trailingStopTrigger) {
-          shouldClose = true;
-          closeReason = `超短线策略30分钟盈利平仓规则：持仓${holdingMinutes.toFixed(1)}分钟，盈利${pnlPercent.toFixed(2)}%（已覆盖手续费${feeThreshold.toFixed(2)}%），但未达到移动止盈触发线${trailingStopTrigger}%，执行保守平仓`;
-          logger.info(`【超短线30分钟规则】${symbol} ${closeReason}`);
-        }
+        // 注意：超短线盈利锁定逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
+        // 之前的硬编码规则（周期锁利、30分钟平仓等）已废弃
       }
       
       // d) 其他风控检查已移除，交由AI全权决策
@@ -1941,14 +1925,17 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     // 推送状态：分析市场 (等待2秒)
     await pushStatusWithDelay("analyzing", "Analyzing market data...", trigger);
     
-    const agent = await createTradingAgent(intervalMinutes);
+    const { agent, instructions, modelName } = await createTradingAgent(intervalMinutes);
     
+    let agentRequestStartedAt: number | null = null;
+
     try {
       // 推送状态：AI 决策中 (等待2秒)
       await pushStatusWithDelay("ai_deciding", "AI decision in progress...", trigger);
       
       // 设置足够大的 maxOutputTokens 以避免输出被截断
       // DeepSeek API 限制: max_tokens 范围为 [1, 8192]
+      agentRequestStartedAt = Date.now();
       const response = await agent.generateText(prompt, {
         maxOutputTokens: 8192,
         maxSteps: 20,
@@ -2035,6 +2022,18 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       logger.info("=".repeat(80));
       logger.info(decisionText || "无决策输出");
       logger.info("=".repeat(80) + "\n");
+
+      const outputDurationMs = agentRequestStartedAt ? Date.now() - agentRequestStartedAt : null;
+
+      await insertAgentRequestLog(dbClient, {
+        iteration: iterationCount,
+        modelName,
+        instructions,
+        prompt,
+        response: decisionText,
+        status: "success",
+        outputDurationMs,
+      });
       
       const decisionTimestamp = getChinaTimeISO();
       const actionsTakenRecords = await getTradeActionsBetween(executionStartedAt, decisionTimestamp);
@@ -2114,6 +2113,17 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     } catch (agentError) {
       logger.error("Agent 执行失败:", agentError as any);
       websocketService.pushTradingStatus("error", "AI decision execution failed", trigger);
+      const outputDurationMs = agentRequestStartedAt ? Date.now() - agentRequestStartedAt : null;
+      await insertAgentRequestLog(dbClient, {
+        iteration: iterationCount,
+        modelName,
+        instructions,
+        prompt,
+        response: null,
+        status: "error",
+        errorMessage: agentError instanceof Error ? agentError.message : String(agentError),
+        outputDurationMs,
+      });
       try {
         await syncPositionsFromOkx();
       } catch (syncError) {
@@ -2161,6 +2171,7 @@ export async function initTradingSystem() {
   logger.info("初始化交易系统配置...");
 
   await ensureAgentDecisionExecutionColumn(dbClient);
+  await ensureAgentRequestLogsTable(dbClient);
   
   // 1. 加载配置
   accountRiskConfig = await getAccountRiskConfig();

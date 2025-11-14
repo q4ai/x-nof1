@@ -7,12 +7,34 @@
   "login": {
     "pageTitle": "Q4AI 管理ログイン",
     "title": "Q4AI 管理ログイン",
-    "subtitle": "管理者アカウントでサインインしてシステムを管理します",
+    "logs": "取引ログ",
+    "decisionLogs": "意思決定ログ"
     "adminPath": "管理画面入口: {{path}}",
     "usernameLabel": "ユーザー名",
     "usernamePlaceholder": "ユーザー名を入力",
     "passwordLabel": "パスワード",
     "passwordPlaceholder": "パスワードを入力",
+  "decisionRequest": {
+    "title": "意思決定リクエスト",
+    "empty": "意思決定リクエストはまだありません",
+    "summaryLabel": "応答サマリー",
+    "status": {
+      "success": "成功",
+      "error": "失敗",
+      "unknown": "不明"
+    },
+    "detail": {
+      "time": "時間",
+      "iteration": "イテレーション",
+      "model": "モデル",
+      "status": "ステータス",
+      "instructions": "システム指示",
+      "prompt": "トレーディングプロンプト",
+      "response": "AI 出力",
+      "error": "エラーメッセージ",
+      "durationLabel": "出力時間：{{value}}"
+    }
+  },
     "submit": "ログイン",
     "initialMessage": "初回起動時はコンソールまたは ./.q4ai にある認証情報を確認してください。",
     "messages": {
@@ -20,6 +42,9 @@
       "success": "ログインに成功しました。リダイレクト中...",
       "failure": "ログインに失敗しました。ユーザー名とパスワードを確認してください。",
       "networkError": "ネットワークエラーです。しばらくしてから再試行してください。",
+    "decisionRequest": {
+      "title": "意思決定リクエストの詳細"
+    },
       "statusError": "ログイン状態を確認できません。"
     }
   },
@@ -168,6 +193,15 @@
         "close": "決済",
         "watching": "様子見"
       }
+    },
+    "decisionRequests": {
+      "headers": {
+        "time": "時間",
+        "model": "モデル",
+        "summary": "AI 応答概要",
+        "duration": "出力時間"
+      },
+      "empty": "意思決定リクエストはありません"
     }
   },
   "stats": {
@@ -319,6 +353,7 @@
     "labels": {
       "ultraShort": "超短期",
       "swingTrend": "スイングトレンド",
+      "dca": "DCA積立",
       "conservative": "資本保全",
       "balanced": "バランス拡張",
       "aggressive": "ブレイクアウトモメンタム",
@@ -327,6 +362,7 @@
     "labelMap": {
       "ultra-short": "超短期",
       "swing-trend": "スイングトレンド",
+      "dca": "DCA積立",
       "conservative": "資本保全",
       "balanced": "バランス拡張",
       "aggressive": "ブレイクアウトモメンタム"
@@ -375,6 +411,10 @@
     "loginRequired": "先にログインしてください",
     "modelBadge": "AIモデル搭載",
     "modelIconAlt": "AIモデルアイコン",
+    "triggerType": {
+      "manual": "手動トリガー",
+      "scheduled": "定期トリガー"
+    },
     "markers": {
       "trade": "取引",
       "close": "決済",
@@ -445,6 +485,7 @@
   "strategyLabels": {
     "ultra-short": "超短期",
     "swing-trend": "スイングトレンド",
+    "dca": "DCA積立",
     "conservative": "資本保全",
     "balanced": "バランス拡張",
     "aggressive": "ブレイクアウトモメンタム"

@@ -21,6 +21,7 @@ const DATA_TABLES = [
   "account_history",
   "trading_signals",
   "agent_decisions",
+  "agent_request_logs",
 ];
 
 const MEMORY_DB_URL = process.env.TRADING_MEMORY_DB_URL || "file:./db/trading-memory.db";

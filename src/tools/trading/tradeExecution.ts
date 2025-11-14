@@ -28,7 +28,6 @@ import { getChinaTimeISO } from "../../utils/timeUtils";
 import { RISK_PARAMS } from "../../config/riskParams.new";
 import { getQuantoMultiplier } from "../../utils/contractUtils";
 import { recordTradeLog } from "../../utils/tradeLogUtils";
-import { getVolatilityAdjustmentConfig } from "../../config/strategyControls";
 
 const logger = createLogger({
   name: "trade-execution",
@@ -232,72 +231,11 @@ export const openPositionTool = createTool({
         // 如果无法获取订单簿，发出警告但继续
       }
       
-      // ====== 波动率自适应调整 ======
-      
-      // 获取当前策略和市场数据
-  const { getTradingStrategy } = await import("../../agents/tradingAgent.js");
-  const strategy = getTradingStrategy();
-  const volatilityConfig = getVolatilityAdjustmentConfig(strategy);
-      
-      let adjustedLeverage = leverage;
-      let adjustedAmountUsdt = amountUsdt;
-      
-      // 从market data中获取ATR（需要从上下文传入）
-      // 这里先计算ATR百分比
-      let atrPercent = 0;
-      let volatilityLevel = "normal";
-      
-      try {
-        // 获取市场数据（包含ATR）
-        const marketDataModule = await import("../trading/marketData.js");
-        const ticker = await client.getFuturesTicker(contract);
-        const currentPrice = Number.parseFloat(ticker.last || "0");
-        
-        // 获取1小时K线计算ATR
-        const candles1h = await client.getFuturesCandles(contract, "1h", 24);
-        if (candles1h && candles1h.length > 14) {
-          // 计算ATR14
-          const trs = [];
-          for (let i = 1; i < candles1h.length; i++) {
-            const high = Number.parseFloat(candles1h[i].h);
-            const low = Number.parseFloat(candles1h[i].l);
-            const prevClose = Number.parseFloat(candles1h[i - 1].c);
-            const tr = Math.max(high - low, Math.abs(high - prevClose), Math.abs(low - prevClose));
-            trs.push(tr);
-          }
-          const atr14 = trs.slice(-14).reduce((a, b) => a + b, 0) / 14;
-          atrPercent = (atr14 / currentPrice) * 100;
-          
-          // 确定波动率级别
-          if (atrPercent > 5) {
-            volatilityLevel = "high";
-          } else if (atrPercent < 2) {
-            volatilityLevel = "low";
-          }
-        }
-      } catch (error) {
-        logger.warn(`计算波动率失败: ${error}`);
-      }
-      
-      // 根据波动率调整参数
-      if (volatilityLevel === "high") {
-        const adjustment = volatilityConfig.high;
-        adjustedLeverage = Math.max(1, Math.round(leverage * adjustment.leverageFactor));
-        adjustedAmountUsdt = Math.max(10, amountUsdt * adjustment.positionFactor);
-        logger.info(`🌊 高波动市场 (ATR ${atrPercent.toFixed(2)}%)：杠杆 ${leverage}x → ${adjustedLeverage}x，仓位 ${amountUsdt.toFixed(0)} → ${adjustedAmountUsdt.toFixed(0)} USDT`);
-      } else if (volatilityLevel === "low") {
-        const adjustment = volatilityConfig.low;
-        adjustedLeverage = Math.min(RISK_PARAMS.MAX_LEVERAGE, Math.round(leverage * adjustment.leverageFactor));
-        adjustedAmountUsdt = Math.min(totalBalance * 0.32, amountUsdt * adjustment.positionFactor);
-        logger.info(`🌊 低波动市场 (ATR ${atrPercent.toFixed(2)}%)：杠杆 ${leverage}x → ${adjustedLeverage}x，仓位 ${amountUsdt.toFixed(0)} → ${adjustedAmountUsdt.toFixed(0)} USDT`);
-      } else {
-        logger.info(`🌊 正常波动市场 (ATR ${atrPercent.toFixed(2)}%)：保持原始参数`);
-      }
-      
       // ====== 风控检查通过，继续开仓 ======
+      // 注意：波动率调整逻辑已移至策略提示词中，由 AI Agent 根据市场数据自主决策
       
-      // 设置杠杆（使用调整后的杠杆）
-      await client.setLeverage(contract, adjustedLeverage);
+      // 设置杠杆
+      await client.setLeverage(contract, leverage);
       
       // 获取当前价格和合约信息
       const ticker = await client.getFuturesTicker(contract);
@@ -343,23 +281,23 @@ export const openPositionTool = createTool({
       }
       
       // 计算可以开多少张合约
-      // 保证金 = (quantity * quantoMultiplier * currentPrice) / adjustedLeverage
-      // => quantity = (adjustedAmountUsdt * adjustedLeverage) / (quantoMultiplier * currentPrice)
-      // ⚠️ 注意：必须使用 adjustedLeverage（实际设置的杠杆），而不是原始 leverage 参数
-      let quantity = (adjustedAmountUsdt * adjustedLeverage) / (quantoMultiplier * currentPrice);
+      // 保证金 = (quantity * quantoMultiplier * currentPrice) / leverage
+      // => quantity = (amountUsdt * leverage) / (quantoMultiplier * currentPrice)
+      // ⚠️ 注意：必须使用 leverage（实际设置的杠杆），而不是原始 leverage 参数
+      let quantity = (amountUsdt * leverage) / (quantoMultiplier * currentPrice);
       
-      logger.info(`💡 张数计算：保证金=${adjustedAmountUsdt.toFixed(2)} USDT × 杠杆=${adjustedLeverage}x ÷ (乘数=${quantoMultiplier} × 价格=${currentPrice.toFixed(2)}) = ${quantity.toFixed(4)} 张`);
+      logger.info(`💡 张数计算：保证金=${amountUsdt.toFixed(2)} USDT × 杠杆=${leverage}x ÷ (乘数=${quantoMultiplier} × 价格=${currentPrice.toFixed(2)}) = ${quantity.toFixed(4)} 张`);
 
       if (!Number.isFinite(quantity) || quantity <= 0) {
-        return fail(`无法计算下单数量，请检查参数（amountUsdt=${adjustedAmountUsdt.toFixed(2)}, leverage=${adjustedLeverage}, price=${currentPrice})`);
+        return fail(`无法计算下单数量，请检查参数（amountUsdt=${amountUsdt.toFixed(2)}, leverage=${leverage}, price=${currentPrice})`);
       }
 
       // 将数量对齐到合约步长
       quantity = normalizeToStep(quantity, "down");
 
       if (quantity < minSize) {
-        const requiredMargin = (minSize * quantoMultiplier * currentPrice) / adjustedLeverage;
-        return fail(`计算的合约张数 ${quantity.toFixed(4)} 低于最小下单单位 ${minSize.toFixed(4)}，至少需要 ${requiredMargin.toFixed(2)} USDT 保证金（当前${adjustedAmountUsdt.toFixed(2)} USDT，杠杆${adjustedLeverage}x）。`);
+        const requiredMargin = (minSize * quantoMultiplier * currentPrice) / leverage;
+        return fail(`计算的合约张数 ${quantity.toFixed(4)} 低于最小下单单位 ${minSize.toFixed(4)}，至少需要 ${requiredMargin.toFixed(2)} USDT 保证金（当前${amountUsdt.toFixed(2)} USDT，杠杆${leverage}x）。`);
       }
 
       if (quantity > maxSize) {
@@ -368,10 +306,10 @@ export const openPositionTool = createTool({
 
       const size = side === "long" ? quantity : -quantity;
       
-      // 计算实际使用的保证金（使用 adjustedLeverage）
-      let actualMargin = (Math.abs(size) * quantoMultiplier * currentPrice) / adjustedLeverage;
+      // 计算实际使用的保证金（使用 leverage）
+      let actualMargin = (Math.abs(size) * quantoMultiplier * currentPrice) / leverage;
       
-      logger.info(`开仓 ${symbol} ${side === "long" ? "做多" : "做空"} ${Math.abs(size)}张 (杠杆${adjustedLeverage}x)`);
+      logger.info(`开仓 ${symbol} ${side === "long" ? "做多" : "做空"} ${Math.abs(size)}张 (杠杆${leverage}x)`);
       
       //  市价单开仓（不设置止盈止损）
       const order = await client.placeOrder({
@@ -494,7 +432,7 @@ export const openPositionTool = createTool({
           "open",
           actualFillPrice, // 使用实际成交价格
           finalQuantity,   // 使用实际成交数量
-          adjustedLeverage, // 使用实际设置的杠杆
+          leverage, // 使用实际设置的杠杆
           fee,            // 手续费
           getChinaTimeISO(),
           dbStatus,
@@ -546,8 +484,8 @@ export const openPositionTool = createTool({
   // 如果未能从 OKX 获取强平价，使用估算公式（仅作为后备）
       if (liquidationPrice === 0) {
         liquidationPrice = side === "long" 
-          ? actualFillPrice * (1 - 0.9 / adjustedLeverage)
-          : actualFillPrice * (1 + 0.9 / adjustedLeverage);
+          ? actualFillPrice * (1 - 0.9 / leverage)
+          : actualFillPrice * (1 + 0.9 / leverage);
         logger.warn(`使用估算强平价: ${liquidationPrice}`);
       }
         
@@ -618,9 +556,9 @@ export const openPositionTool = createTool({
         size: Math.abs(size), // 合约张数
         contractAmount, // 实际币的数量
         price: actualFillPrice,
-        leverage: adjustedLeverage, // 使用实际设置的杠杆
+        leverage: leverage, // 使用实际设置的杠杆
         actualMargin,
-        message: `✅ 成功开仓 ${symbol} ${side === "long" ? "做多" : "做空"} ${Math.abs(size)} 张 (${contractAmount.toFixed(4)} ${symbol})，成交价 ${actualFillPrice.toFixed(2)}，保证金 ${actualMargin.toFixed(2)} USDT，杠杆 ${adjustedLeverage}x。⚠️ 未设置止盈止损，请在每个周期主动决策是否平仓。`,
+        message: `✅ 成功开仓 ${symbol} ${side === "long" ? "做多" : "做空"} ${Math.abs(size)} 张 (${contractAmount.toFixed(4)} ${symbol})，成交价 ${actualFillPrice.toFixed(2)}，保证金 ${actualMargin.toFixed(2)} USDT，杠杆 ${leverage}x。⚠️ 未设置止盈止损，请在每个周期主动决策是否平仓。`,
         rawRequest: okxRawRequest,
         rawResponse: okxRawResponse,
       });

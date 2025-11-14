@@ -112,6 +112,20 @@ export interface AgentDecision {
   positions_count: number;
 }
 
+export interface AgentRequestLog {
+  id: number;
+  created_at: string;
+  iteration?: number;
+  model_name: string;
+  instructions: string;
+  prompt: string;
+  response?: string;
+  response_summary?: string;
+  status: "success" | "error";
+  error_message?: string;
+  output_duration_ms?: number;
+}
+
 export interface SystemConfig {
   id: number;
   key: string;
@@ -230,6 +244,21 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
   positions_count INTEGER NOT NULL
 );
 
+-- Agent 请求日志表
+CREATE TABLE IF NOT EXISTS agent_request_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  iteration INTEGER,
+  model_name TEXT NOT NULL,
+  instructions TEXT NOT NULL,
+  prompt TEXT NOT NULL,
+  response TEXT,
+  response_summary TEXT,
+  status TEXT NOT NULL DEFAULT 'success',
+  error_message TEXT,
+  output_duration_ms INTEGER
+);
+
 -- 系统配置表
 CREATE TABLE IF NOT EXISTS system_config (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -255,5 +284,6 @@ CREATE INDEX IF NOT EXISTS idx_signals_timestamp ON trading_signals(timestamp);
 CREATE INDEX IF NOT EXISTS idx_signals_symbol ON trading_signals(symbol);
 CREATE INDEX IF NOT EXISTS idx_history_timestamp ON account_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON agent_decisions(timestamp);
+CREATE INDEX IF NOT EXISTS idx_agent_request_logs_created_at ON agent_request_logs(created_at);
 `;
 

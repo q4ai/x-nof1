@@ -1142,6 +1142,19 @@ a:hover {
   display: flex;
 }
 
+.modal.modal-stacked-behind {
+  pointer-events: none;
+}
+
+.modal.modal-stacked-behind .modal-overlay {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.modal.modal-stacked-behind .modal-content {
+  pointer-events: none;
+}
+
 #records-modal {
   z-index: 1005;
 }
@@ -1171,6 +1184,63 @@ a:hover {
   max-height: 80vh;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
+.decision-request-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.decision-request-section {
+  margin-bottom: 18px;
+}
+.decision-request-section:last-child {
+  margin-bottom: 0;
+}
+.decision-request-section .section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+.decision-request-section .section-title .section-meta {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.decision-request-section .code-block {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+.decision-request-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+.decision-request-status.negative {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fecaca;
+}
+.decision-request-summary {
+  font-size: 13px;
+  color: var(--text-muted);
+}
   border-radius: 8px;
   display: flex;
   flex-direction: column;

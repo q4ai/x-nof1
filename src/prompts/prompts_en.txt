@@ -1,9 +1,7 @@
+The strategy should be executed strictly in accordance with the [Execution Framework] as the entry condition and the [Exit & Risk Control] as the exit condition.
+
 [Trading Cycle #{{ITERATION}}] {{CURRENT_TIME}}
 Runtime {{MINUTES_ELAPSED}} minutes, scheduled interval {{TRADING_INTERVAL_MINUTES}} minutes
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Current Strategy: {{STRATEGY_NAME}}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 [System Risk Parameters]
 - Single-trade loss threshold: {{EXTREME_STOP_LOSS_PERCENT}}%

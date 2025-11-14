@@ -66,11 +66,33 @@
   "tabs": {
     "positions": "当前持仓",
     "trades": "交易历史",
-    "logs": "交易日志"
+    "logs": "交易日志",
+    "decisionLogs": "决策日志"
   },
   "decision": {
     "title": "AI 决策",
     "empty": "暂无 AI 决策记录"
+  },
+  "decisionRequest": {
+    "title": "决策请求",
+    "empty": "暂无决策请求数据",
+    "summaryLabel": "响应摘要",
+    "status": {
+      "success": "成功",
+      "error": "失败",
+      "unknown": "未知"
+    },
+    "detail": {
+      "time": "时间",
+      "iteration": "迭代",
+      "model": "模型",
+      "status": "状态",
+      "instructions": "系统指令",
+      "prompt": "交易提示词",
+      "response": "AI 输出",
+      "error": "错误信息",
+      "durationLabel": "输出耗时：{{value}}"
+    }
   },
   "modals": {
     "decision": {
@@ -78,6 +100,9 @@
     },
     "log": {
       "title": "日志详情"
+    },
+    "decisionRequest": {
+      "title": "决策请求详情"
     },
     "statistics": {
       "title": "交易统计",
@@ -168,6 +193,15 @@
         "close": "平仓",
         "watching": "观望"
       }
+    },
+    "decisionRequests": {
+      "headers": {
+        "time": "时间",
+        "model": "模型",
+        "summary": "AI 输出概览",
+        "duration": "输出耗时"
+      },
+      "empty": "暂无决策请求"
     }
   },
   "stats": {
@@ -319,6 +353,7 @@
     "labels": {
       "ultraShort": "超短线",
       "swingTrend": "波段趋势",
+      "dca": "DCA定投",
       "conservative": "稳健",
       "balanced": "平衡",
       "aggressive": "激进",
@@ -327,6 +362,7 @@
     "labelMap": {
       "ultra-short": "超短线",
       "swing-trend": "波段趋势",
+      "dca": "DCA定投",
       "conservative": "稳健",
       "balanced": "平衡",
       "aggressive": "激进"
@@ -375,6 +411,10 @@
     "loginRequired": "请先登录后台",
     "modelBadge": "AI 模型驱动",
     "modelIconAlt": "AI 模型图标",
+    "triggerType": {
+      "manual": "手动触发",
+      "scheduled": "CRON"
+    },
     "markers": {
       "trade": "交易",
       "close": "平仓",
@@ -445,6 +485,7 @@
   "strategyLabels": {
     "ultra-short": "超短线",
     "swing-trend": "波段趋势",
+    "dca": "DCA定投",
     "conservative": "稳健",
     "balanced": "平衡",
     "aggressive": "激进"

@@ -32,6 +32,7 @@ let contractMultipliersLastUpdated = null;
 const DEFAULT_STRATEGY_LABELS = {
   "ultra-short": "Ultra-Short",
   "swing-trend": "Swing Trend",
+  "dca": "DCA",
   conservative: "Conservative",
   balanced: "Balanced",
   aggressive: "Aggressive",
@@ -131,15 +132,18 @@ function updateLanguageSelectorUI() {
   });
 }
 
-// Get translated text
-function t(key, replacements = undefined) {
+function t(key, replacements = null) {
+  if (!key) {
+    return key;
+  }
+
   const lang = getCurrentLanguage();
-  const segments = key.split('.');
+  const segments = String(key).split(".");
 
   const resolveValue = (source) => {
     let current = source;
     for (const segment of segments) {
-      if (current && typeof current === 'object' && segment in current) {
+      if (current && typeof current === "object" && segment in current) {
         current = current[segment];
       } else {
         return undefined;
@@ -348,6 +352,11 @@ class TradingMonitor {
     this.positionsUpdatedEl = document.getElementById("positions-updated");
     this.tradesContainerEl = document.getElementById("trades-container");
     this.logsContainerEl = document.getElementById("logs-container");
+    this.decisionLogsContainerEl = document.getElementById("decision-logs-container");
+    this.decisionModal = document.getElementById("decision-modal");
+    this.decisionDetailEl = document.getElementById("decision-detail");
+    this.logModal = document.getElementById("log-modal");
+    this.logDetailEl = document.getElementById("log-detail");
     this.recordsModal = document.getElementById("records-modal");
     this.recordsTableContainer = document.getElementById("records-table-container");
     this.recordsTitleEl = document.getElementById("records-modal-title");
@@ -366,9 +375,11 @@ class TradingMonitor {
       total: 0,
     };
     this.recordsCurrentItems = [];
+    this.recordsModalStack = 0;
     this.tradesViewAllLink = null;
     this.logsViewAllLink = null;
     this.decisionsViewAllLink = null;
+    this.decisionRequestsViewAllLink = null;
     this.accountBtn = document.getElementById("account-btn");
     this.strategyBtn = document.getElementById("strategy-btn");
     this.settingsBtn = document.getElementById("settings-btn");
@@ -382,6 +393,8 @@ class TradingMonitor {
     this.strategyModal = document.getElementById("strategy-modal");
     this.settingsModal = document.getElementById("settings-modal");
     this.statisticsModal = document.getElementById("statistics-modal");
+    this.decisionRequestModal = document.getElementById("decision-request-modal");
+    this.decisionRequestDetailEl = document.getElementById("decision-request-detail");
     this.accountForm = document.getElementById("account-form");
     this.strategyForm = document.getElementById("strategy-form");
     this.settingsForm = document.getElementById("settings-form");
@@ -447,6 +460,7 @@ class TradingMonitor {
       this.loadTrades(),
       this.loadTradeLogs(),
       this.loadDecisions(),
+      this.loadDecisionRequests(),
     ]);
 
     await Promise.all([this.loadPrices(), this.loadCandles(this.activeSymbol)]);
@@ -461,6 +475,7 @@ class TradingMonitor {
       void this.loadTrades();
       void this.loadTradeLogs();
       void this.loadDecisions();
+      void this.loadDecisionRequests();
       
       // 未登录用户也需要定期刷新交易循环状态
       if (!this.isAuthenticated) {
@@ -495,12 +510,10 @@ class TradingMonitor {
   }
 
   setupModals() {
-    const decisionModal = document.getElementById("decision-modal");
-    const logModal = document.getElementById("log-modal");
-
     [
-      decisionModal,
-      logModal,
+      this.decisionModal,
+      this.logModal,
+      this.decisionRequestModal,
       this.accountModal,
       this.strategyModal,
       this.settingsModal,
@@ -512,8 +525,8 @@ class TradingMonitor {
       const overlay = modal.querySelector(".modal-overlay");
       const closeBtn = modal.querySelector(".modal-close");
 
-      overlay?.addEventListener("click", () => modal.classList.remove("show"));
-      closeBtn?.addEventListener("click", () => modal.classList.remove("show"));
+      overlay?.addEventListener("click", () => this.hideModal(modal));
+      closeBtn?.addEventListener("click", () => this.hideModal(modal));
     });
 
     // 统计详情按钮
@@ -522,6 +535,28 @@ class TradingMonitor {
         e.preventDefault();
         void this.showStatisticsModal();
       });
+    }
+  }
+
+  pushRecordsModalBehind() {
+    if (!this.recordsModal || !this.recordsModal.classList.contains("show")) {
+      return false;
+    }
+    if (!this.recordsModalStack) {
+      this.recordsModalStack = 0;
+    }
+    this.recordsModalStack += 1;
+    this.recordsModal.classList.add("modal-stacked-behind");
+    return true;
+  }
+
+  popRecordsModalBehind() {
+    if (!this.recordsModal || !this.recordsModalStack) {
+      return;
+    }
+    this.recordsModalStack = Math.max(0, this.recordsModalStack - 1);
+    if (this.recordsModalStack === 0) {
+      this.recordsModal.classList.remove("modal-stacked-behind");
     }
   }
 
@@ -814,6 +849,13 @@ class TradingMonitor {
         this.updateViewAllVisibility(this.logsContainerEl, this.logsViewAllLink);
       });
     }
+
+    if (this.decisionLogsContainerEl) {
+      this.decisionRequestsViewAllLink = this.createViewAllLink("decisionRequests");
+      this.decisionLogsContainerEl.addEventListener("scroll", () => {
+        this.updateViewAllVisibility(this.decisionLogsContainerEl, this.decisionRequestsViewAllLink);
+      });
+    }
   }
 
   createViewAllLink(type) {
@@ -898,6 +940,8 @@ class TradingMonitor {
         typeLabel = t("tabs.logs");
       } else if (type === "decisions") {
         typeLabel = t("decision.title");
+      } else if (type === "decisionRequests") {
+        typeLabel = t("decisionRequest.title");
       }
       this.recordsTitleEl.textContent = typeLabel ? `${baseTitle} - ${typeLabel}` : baseTitle;
     }
@@ -932,6 +976,9 @@ class TradingMonitor {
     } else if (type === "decisions") {
       endpoint = "/api/logs";
       dataKey = "logs";
+    } else if (type === "decisionRequests") {
+      endpoint = "/api/decision-requests";
+      dataKey = "requests";
     } else {
       return;
     }
@@ -982,6 +1029,8 @@ class TradingMonitor {
       this.renderRecordsLogs(items);
     } else if (type === "decisions") {
       this.renderRecordsDecisions(items);
+    } else if (type === "decisionRequests") {
+      this.renderRecordsDecisionRequests(items);
     }
 
     this.updateRecordsPagination();
@@ -1188,6 +1237,67 @@ class TradingMonitor {
           const decision = this.recordsCurrentItems[index];
           if (decision) {
             this.showDecisionDetail(decision);
+          }
+        });
+      }
+    });
+  }
+
+  renderRecordsDecisionRequests(requests) {
+    if (!this.recordsTableContainer) return;
+    if (!requests.length) {
+      this.recordsTableContainer.innerHTML = `<p class="empty-state">${t("decisionRequest.empty")}</p>`;
+      return;
+    }
+
+    const rows = requests
+      .map((request, index) => {
+        const timestamp = request.createdAt ? this.formatTime(request.createdAt) : "--";
+        const model = request.modelName ? this.escapeHtml(String(request.modelName)) : "--";
+        const summary = this.escapeHtml(this.getDecisionRequestSummaryText(request));
+        const statusKey = typeof request.status === "string" ? request.status.toLowerCase() : "unknown";
+        const statusLabelKey = `decisionRequest.status.${statusKey}`;
+        let statusLabel = t(statusLabelKey);
+        if (!statusLabel || statusLabel === statusLabelKey) {
+          statusLabel = request.status || t("decisionRequest.status.unknown");
+        }
+        const statusClass = statusKey === "error" ? "negative" : "";
+        const durationLabel = this.formatOutputDuration(request.outputDurationMs);
+
+        return `
+          <tr data-decision-request-index="${index}">
+            <td>${timestamp}</td>
+            <td>${model}</td>
+            <td>${summary}</td>
+            <td>${durationLabel}</td>
+            <td><span class="${statusClass}">${this.escapeHtml(statusLabel)}</span></td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    this.recordsTableContainer.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>${t("tables.decisionRequests.headers.time")}</th>
+            <th>${t("tables.decisionRequests.headers.model")}</th>
+            <th>${t("tables.decisionRequests.headers.summary")}</th>
+            <th>${t("tables.decisionRequests.headers.duration")}</th>
+            <th>${t("tables.logs.headers.status")}</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    this.recordsTableContainer.querySelectorAll("tbody tr").forEach((row) => {
+      const index = Number(row.dataset.decisionRequestIndex);
+      if (Number.isInteger(index)) {
+        row.addEventListener("click", () => {
+          const request = this.recordsCurrentItems[index];
+          if (request) {
+            this.showDecisionRequestDetail(request);
           }
         });
       }
@@ -1790,6 +1900,82 @@ class TradingMonitor {
     });
 
     this.appendViewAllLink(this.logsContainerEl, this.logsViewAllLink);
+  }
+
+  getDecisionRequestSummaryText(request) {
+    const baseCandidates = [
+      typeof request?.responseSummary === "string" ? request.responseSummary : null,
+      typeof request?.response === "string" ? request.response : null,
+      typeof request?.errorMessage === "string" ? request.errorMessage : null,
+    ];
+    const base = baseCandidates.find((text) => text && text.trim() !== "") || "";
+    if (!base) {
+      return t("decisionRequest.summaryLabel");
+    }
+    const normalized = base.replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return t("decisionRequest.summaryLabel");
+    }
+    if (normalized.length <= 180) {
+      return normalized;
+    }
+    return `${normalized.slice(0, 177)}…`;
+  }
+
+  async loadDecisionRequests() {
+    if (!this.decisionLogsContainerEl) return;
+    const timestamp = Date.now();
+    const data = await this.fetchJson(`/api/decision-requests?limit=10&_t=${timestamp}`);
+    const requests = Array.isArray(data?.requests) ? data.requests : [];
+
+    if (!requests.length) {
+      this.decisionLogsContainerEl.innerHTML = `<p class="empty-state">${t("decisionRequest.empty")}</p>`;
+      this.removeViewAllLink(this.decisionRequestsViewAllLink);
+      return;
+    }
+
+    const rows = requests
+      .map((request, index) => {
+        const timestampLabel = request.createdAt ? this.formatTime(request.createdAt) : "--";
+        const modelLabel = request.modelName ? this.escapeHtml(String(request.modelName)) : "--";
+        const summary = this.escapeHtml(this.getDecisionRequestSummaryText(request));
+        const durationLabel = this.formatOutputDuration(request.outputDurationMs);
+
+        return `
+          <tr data-decision-request-index="${index}">
+            <td>${timestampLabel}</td>
+            <td>${modelLabel}</td>
+            <td>${summary}</td>
+            <td>${durationLabel}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    this.decisionLogsContainerEl.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>${t("tables.decisionRequests.headers.time")}</th>
+            <th>${t("tables.decisionRequests.headers.model")}</th>
+            <th>${t("tables.decisionRequests.headers.summary")}</th>
+            <th>${t("tables.decisionRequests.headers.duration")}</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    this.decisionLogsContainerEl.querySelectorAll("tbody tr").forEach((row) => {
+      const index = Number(row.dataset.decisionRequestIndex);
+      if (Number.isInteger(index)) {
+        row.addEventListener("click", () => {
+          this.showDecisionRequestDetail(requests[index]);
+        });
+      }
+    });
+
+    this.appendViewAllLink(this.decisionLogsContainerEl, this.decisionRequestsViewAllLink);
   }
 
   async loadDecisions() {
@@ -2480,9 +2666,16 @@ class TradingMonitor {
   }
 
   showLogDetail(log) {
-    const modal = document.getElementById("log-modal");
-    const detailEl = document.getElementById("log-detail");
+    const modal = this.logModal;
+    const detailEl = this.logDetailEl;
     if (!modal || !detailEl) return;
+
+    const stackedFromRecords = this.pushRecordsModalBehind();
+    if (stackedFromRecords) {
+      modal.dataset.stackedFromRecords = "true";
+    } else if (modal.dataset?.stackedFromRecords) {
+      delete modal.dataset.stackedFromRecords;
+    }
 
     const timestamp = log.createdAt ? this.formatTime(log.createdAt) : "--";
     const symbolRaw = log.symbol ? String(log.symbol).toUpperCase() : "--";
@@ -2529,6 +2722,92 @@ class TradingMonitor {
     `;
 
     modal.classList.add("show");
+  }
+
+  renderDecisionRequestSection(title, content, options = {}) {
+    const hasContent = typeof content === "string" && content.trim() !== "";
+    const metaText = typeof options.meta === "string" && options.meta.trim() !== ""
+      ? options.meta.trim()
+      : "";
+    const metaHtml = metaText ? `<span class="section-meta">${this.escapeHtml(metaText)}</span>` : "";
+    if (!hasContent) {
+      return `
+        <div class="decision-request-section">
+          <div class="section-title">${this.escapeHtml(title)}${metaHtml}</div>
+          <div class="decision-request-summary">${t("tables.common.noContent")}</div>
+        </div>
+      `;
+    }
+
+    return `
+      <div class="decision-request-section">
+        <div class="section-title">${this.escapeHtml(title)}${metaHtml}</div>
+        <pre class="code-block">${this.escapeHtml(content)}</pre>
+      </div>
+    `;
+  }
+
+  showDecisionRequestDetail(request) {
+    if (!this.decisionRequestModal || !this.decisionRequestDetailEl) {
+      return;
+    }
+
+    const stackedFromRecords = this.pushRecordsModalBehind();
+    if (stackedFromRecords) {
+      this.decisionRequestModal.dataset.stackedFromRecords = "true";
+    } else if (this.decisionRequestModal.dataset?.stackedFromRecords) {
+      delete this.decisionRequestModal.dataset.stackedFromRecords;
+    }
+
+    const timestamp = request?.createdAt ? this.formatTime(request.createdAt) : "--";
+    const iterationValue = Number(request?.iteration);
+    const iteration = Number.isFinite(iterationValue) ? `#${iterationValue}` : "--";
+    const modelName = request?.modelName ? this.escapeHtml(String(request.modelName)) : "--";
+    const statusKey = typeof request?.status === "string" ? request.status.toLowerCase() : "unknown";
+    const statusLabelKey = `decisionRequest.status.${statusKey}`;
+    let statusLabel = t(statusLabelKey);
+    if (!statusLabel || statusLabel === statusLabelKey) {
+      statusLabel = request?.status || t("decisionRequest.status.unknown");
+    }
+    const statusClass = statusKey === "error" ? "decision-request-status negative" : "decision-request-status";
+    const errorMessage = request?.errorMessage && String(request.errorMessage).trim() !== ""
+      ? this.escapeHtml(String(request.errorMessage))
+      : "";
+
+    const durationDisplay = this.formatOutputDuration(request?.outputDurationMs);
+    const durationMeta = durationDisplay !== "--"
+      ? t("decisionRequest.detail.durationLabel", { value: durationDisplay })
+      : "";
+
+    const sections = [
+      this.renderDecisionRequestSection(t("decisionRequest.detail.instructions"), request?.instructions || ""),
+      this.renderDecisionRequestSection(t("decisionRequest.detail.prompt"), request?.prompt || ""),
+      this.renderDecisionRequestSection(t("decisionRequest.detail.response"), request?.response || "", {
+        meta: durationMeta,
+      }),
+    ].join("");
+
+    const errorSection = errorMessage
+      ? `
+        <div class="decision-request-section">
+          <div class="section-title">${t("decisionRequest.detail.error")}</div>
+          <div class="decision-request-summary">${errorMessage}</div>
+        </div>
+      `
+      : "";
+
+    this.decisionRequestDetailEl.innerHTML = `
+      <div class="decision-request-meta">
+        <span>${t("decisionRequest.detail.time")}：${timestamp}</span>
+        <span>${t("decisionRequest.detail.iteration")}：${iteration}</span>
+        <span>${t("decisionRequest.detail.model")}：${modelName}</span>
+        <span>${t("decisionRequest.detail.status")}：<span class="${statusClass}">${this.escapeHtml(statusLabel)}</span></span>
+      </div>
+      ${errorSection}
+      ${sections}
+    `;
+
+    this.decisionRequestModal.classList.add("show");
   }
 
   async loadPrices() {
@@ -3940,13 +4219,36 @@ class TradingMonitor {
       error: t("aiOverlay.status.error"),
     };
 
-    let displayText = normalizedStatusMessage || statusTextMap[status] || "";
-    if (!displayText) {
-      displayText = typeof status === "string" ? status : "";
+    const triggerTextMap = {
+      manual: t("chart.triggerType.manual"),
+      scheduled: t("chart.triggerType.scheduled"),
+    };
+
+    const parts = [];
+    const translatedStatus = statusTextMap[status];
+    if (translatedStatus) {
+      parts.push(translatedStatus);
     }
-    if (!displayText) {
-      displayText = t("aiOverlay.statusFallback") || t("chart.modelBadge");
+
+    if (!translatedStatus && normalizedStatusMessage) {
+      parts.push(normalizedStatusMessage);
     }
+
+    if (trigger && triggerTextMap[trigger]) {
+      parts.push(triggerTextMap[trigger]);
+    }
+
+    if (parts.length === 0) {
+      if (normalizedStatusMessage) {
+        parts.push(normalizedStatusMessage);
+      } else if (typeof status === "string" && status) {
+        parts.push(status);
+      } else {
+        parts.push(t("aiOverlay.statusFallback") || t("chart.modelBadge"));
+      }
+    }
+
+    const displayText = parts.join(" · ");
     this.aiOverlayText.textContent = displayText;
 
     // 根据状态添加/移除 executing 类
@@ -4070,8 +4372,28 @@ class TradingMonitor {
   }
 
   hideModal(modal) {
-    if (!modal) return;
+    if (!modal || !modal.classList.contains("show")) {
+      if (modal === this.recordsModal) {
+        this.recordsModalStack = 0;
+        this.recordsModal?.classList.remove("modal-stacked-behind");
+      }
+      return;
+    }
     modal.classList.remove("show");
+    this.onModalClosed(modal);
+  }
+
+  onModalClosed(modal) {
+    if (!modal) return;
+    if (modal === this.recordsModal) {
+      this.recordsModalStack = 0;
+      this.recordsModal.classList.remove("modal-stacked-behind");
+      return;
+    }
+    if (modal.dataset && modal.dataset.stackedFromRecords === "true") {
+      delete modal.dataset.stackedFromRecords;
+      this.popRecordsModalBehind();
+    }
   }
 
   async openAccountModal() {
@@ -4218,7 +4540,7 @@ class TradingMonitor {
     if (iconEl.src !== resolvedUrl) {
       iconEl.src = iconSrc;
     }
-    iconEl.setAttribute("alt", `${displayName} 图标`);
+    iconEl.setAttribute("alt", t("chart.modelIconAlt"));
     textEl.textContent = displayName;
   }
 
@@ -4244,13 +4566,13 @@ class TradingMonitor {
 
   extractModelDisplayName(modelName) {
     if (typeof modelName !== "string" || modelName.trim() === "") {
-      return "AI 模型驱动";
+      return t("chart.modelBadge");
     }
 
     const trimmed = modelName.trim();
     const segments = trimmed.split(/[\/:]/).filter(Boolean);
     const lastSegment = segments.length > 0 ? segments[segments.length - 1] : trimmed;
-    return lastSegment || "AI 模型驱动";
+    return lastSegment || t("chart.modelBadge");
   }
 
   populateForm(form, config, keys) {
@@ -4892,6 +5214,24 @@ class TradingMonitor {
       minute: "2-digit",
       second: "2-digit",
     });
+  }
+
+  formatOutputDuration(durationMs) {
+    if (typeof durationMs !== "number" || Number.isNaN(durationMs) || durationMs <= 0) {
+      return "--";
+    }
+
+    if (durationMs < 1000) {
+      return `${Math.round(durationMs)} ms`;
+    }
+
+    const seconds = durationMs / 1000;
+    if (seconds < 60) {
+      return seconds >= 10 ? `${seconds.toFixed(1)} s` : `${seconds.toFixed(2)} s`;
+    }
+
+    const minutes = seconds / 60;
+    return minutes >= 10 ? `${minutes.toFixed(0)} min` : `${minutes.toFixed(1)} min`;
   }
 
   escapeHtml(value) {

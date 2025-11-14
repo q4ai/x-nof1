@@ -720,7 +720,13 @@ async function generateInstructions(strategy: TradingStrategy, intervalMinutes: 
 	return applyTemplateVariables(template, variables);
 }
 
-export async function createTradingAgent(intervalMinutes = 5) {
+export interface TradingAgentHandle {
+	agent: Agent;
+	instructions: string;
+	modelName: string;
+}
+
+export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAgentHandle> {
 	const { getAllConfig } = await import("../database/init-config");
 	const config = await getAllConfig();
 
@@ -749,7 +755,7 @@ export async function createTradingAgent(intervalMinutes = 5) {
 
 	const instructions = await generateInstructions(strategy, intervalMinutes);
 
-	return new Agent({
+	const agentInstance = new Agent({
 		name: "trading-agent",
 		instructions,
 		model: openai.chat(modelName),
@@ -770,4 +776,10 @@ export async function createTradingAgent(intervalMinutes = 5) {
 		],
 		memory,
 	});
+
+	return {
+		agent: agentInstance,
+		instructions,
+		modelName,
+	};
 }

@@ -44,6 +44,7 @@ import {
   setTradingLoopEnabled,
   setTradingStartTime,
 } from "../scheduler/tradingLoop";
+import { summarizeAgentResponseText } from "../database/agent-request-logs";
 
 const logger = createLogger({
   name: "api-routes",
@@ -1107,6 +1108,68 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取 AI 决策请求日志
+   */
+  app.get("/api/decision-requests", async (c) => {
+    try {
+      const rawLimit = Number.parseInt(c.req.query("limit") || "20", 10);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 20;
+      const rawPage = Number.parseInt(c.req.query("page") || "1", 10);
+      const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+      const offset = (page - 1) * limit;
+
+      const [result, countResult] = await Promise.all([
+        dbClient.execute({
+          sql: `SELECT * FROM agent_request_logs ORDER BY datetime(created_at) DESC LIMIT ? OFFSET ?`,
+          args: [limit, offset],
+        }),
+        dbClient.execute({
+          sql: `SELECT COUNT(*) AS total FROM agent_request_logs`,
+          args: [],
+        }),
+      ]);
+
+      const requests = asDbRows(result.rows).map((row) => {
+        const rawResponse = row.response ?? null;
+        const responseText = rawResponse === null || rawResponse === undefined ? null : toStringSafe(rawResponse);
+        const summaryRaw = row.response_summary ?? null;
+        const durationRaw = row.output_duration_ms ?? null;
+        const outputDurationMs = durationRaw === null || durationRaw === undefined ? null : toNumber(durationRaw);
+
+        return {
+          id: toStringSafe(row.id),
+          createdAt: toStringSafe(row.created_at),
+          iteration: toNumber(row.iteration),
+          modelName: toStringSafe(row.model_name),
+          instructions: toStringSafe(row.instructions),
+          prompt: toStringSafe(row.prompt),
+          response: responseText,
+          responseSummary: summaryRaw ? toStringSafe(summaryRaw) : summarizeAgentResponseText(responseText),
+          status: toStringSafe(row.status, "success"),
+          errorMessage: toStringSafe(row.error_message) || null,
+          outputDurationMs,
+        };
+      });
+
+      const totalRows = asDbRows(countResult.rows);
+      const total = totalRows.length > 0 ? toNumber(totalRows[0].total, requests.length) : requests.length;
+
+      return c.json({
+        requests,
+        pagination: {
+          page,
+          pageSize: limit,
+          total,
+        },
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取决策请求日志失败", error);
       return c.json({ error: message }, 500);
     }
   });
