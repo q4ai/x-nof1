@@ -301,6 +301,8 @@
 			"tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB",
 			"interval": "调度周期（分钟）",
 			"intervalPlaceholder": "请输入分钟数",
+			"executionSection": "⏱️ 执行周期",
+			"marginMode": "保证金模式",
 			"riskSection": "⚠️ 风险参数",
 			"maxLeverage": "最大杠杆",
 			"maxLeveragePlaceholder": "请输入最大杠杆",

@@ -34,6 +34,7 @@ export {
   openPositionTool,
   closePositionTool,
   cancelOrderTool,
+  executeClosePosition,
 } from "./tradeExecution";
 
 // 账户管理工具

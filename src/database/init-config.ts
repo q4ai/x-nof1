@@ -21,6 +21,7 @@ const DEFAULT_CONFIG = {
   // 交易配置
   TRADING_SYMBOLS: process.env.TRADING_SYMBOLS || "BTC,ETH,SOL,XRP,BNB,BCH",
   TRADING_INTERVAL_MINUTES: process.env.TRADING_INTERVAL_MINUTES || "20",
+  TRADING_MARGIN_MODE: process.env.TRADING_MARGIN_MODE || "cross",
   TRADING_STRATEGY: process.env.TRADING_STRATEGY || "balanced",
   
   // 风险参数

@@ -1010,6 +1010,16 @@ a:hover {
   z-index: 50;
 }
 
+.close-confirmation-popover.popover-align-right {
+  left: auto;
+  right: 0;
+}
+
+.close-confirmation-popover.popover-top {
+  top: auto;
+  bottom: calc(100% + 8px);
+}
+
 .close-confirmation-popover.is-visible {
   display: block;
 }
@@ -1715,6 +1725,14 @@ a:hover {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  flex: 1;
+}
+
+.form-group--wide {
+  flex: 3;
+}
+
+.form-group--narrow {
   flex: 1;
 }
 

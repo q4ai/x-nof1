@@ -30,7 +30,7 @@ import { readFile } from "node:fs/promises";
 import { createOkxClient } from "../services/okxClient";
 import { createLogger } from "../utils/loggerUtils";
 import { getQuantoMultiplier } from "../utils/contractUtils";
-import { closePositionTool } from "../tools/trading";
+import { executeClosePosition } from "../tools/trading";
 import type { AdminAuthConfig } from "../utils/adminAuth";
 import type { TradingStrategy } from "../config/strategyTypes";
 import { getStrategyPromptDefaultSections, getTradingStrategy } from "../agents/tradingAgent";
@@ -87,10 +87,12 @@ const CONFIG_BOOLEAN_KEYS = new Set(["OKX_USE_PAPER", "COMMUNITY_REPORT_ENABLED"
 const CONFIG_ENUM_VALUES: Record<string, string[]> = {
   TRADING_STRATEGY: ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"],
   PROMPT_LANGUAGE: ["zh", "en", "ja"],
+  TRADING_MARGIN_MODE: ["cross", "isolated"],
 };
 
 const CONFIG_ALLOWED_KEYS = new Set([
   "TRADING_SYMBOLS",
+  "TRADING_MARGIN_MODE",
   "TRADING_INTERVAL_MINUTES",
   "TRADING_STRATEGY",
   "MAX_LEVERAGE",
@@ -716,10 +718,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     }
 
     const symbol = symbolParam.toUpperCase();
-    const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
-    if (!allowedSymbols.has(symbol)) {
-      return c.json({ success: false, error: "该币种不在当前交易白名单中" }, 400);
-    }
 
     let percentage = 100;
     try {
@@ -742,10 +740,11 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     }
 
     try {
-      const result = await closePositionTool.execute({
-        symbol: symbol as (typeof RISK_PARAMS.TRADING_SYMBOLS)[number],
+      const result = await executeClosePosition({
+        symbol,
         percentage,
         skipGuards: true,
+        enforceWhitelist: false,
       });
       const success = Boolean(result?.success);
       const message = typeof result?.message === "string" && result.message.length > 0

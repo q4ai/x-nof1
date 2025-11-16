@@ -144,9 +144,15 @@ export const RISK_PARAMS = {
     return normalizeStrategyLanguage(getConfig("PROMPT_LANGUAGE", DEFAULT_STRATEGY_LANGUAGE));
   },
   
-  // 交易间隔（分钟）
+  // 调度周期（分钟）
   get TRADING_INTERVAL_MINUTES(): number {
     return Number.parseInt(getConfig("TRADING_INTERVAL_MINUTES", "20"), 10);
+  },
+
+  // 默认保证金模式
+  get TRADING_MARGIN_MODE(): "cross" | "isolated" {
+    const normalized = getConfig("TRADING_MARGIN_MODE", "cross").toLowerCase();
+    return normalized === "isolated" ? "isolated" : "cross";
   },
 } as const;
 

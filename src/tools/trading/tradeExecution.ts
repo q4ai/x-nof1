@@ -14,9 +14,9 @@
  * 
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
- */
-
-/**
+    }
+  },
+});
  * 交易执行工具
  */
 import { createTool } from "@voltagent/core";
@@ -585,20 +585,41 @@ export const closePositionTool = createTool({
     percentage: z.number().min(1).max(100).default(100).describe("平仓百分比（1-100）"),
     skipGuards: z.boolean().optional().describe("是否跳过最小持仓时间等保护（仅限手动平仓）"),
   }),
-  execute: async ({ symbol, percentage, skipGuards = false }) => {
+  execute: async ({ symbol, percentage, skipGuards = false }) =>
+    executeClosePosition({ symbol, percentage, skipGuards, enforceWhitelist: true }),
+});
+
+type ClosePositionOptions = {
+  symbol: string;
+  percentage: number;
+  skipGuards?: boolean;
+  enforceWhitelist?: boolean;
+};
+
+/**
+ * 平仓执行逻辑
+ */
+export async function executeClosePosition({
+  symbol,
+  percentage,
+  skipGuards = false,
+  enforceWhitelist = true,
+}: ClosePositionOptions) {
+  const normalizedSymbol = symbol.toUpperCase();
+  const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
   const client = createOkxClient();
-    const contract = `${symbol}_USDT`;
-    let logSide: "long" | "short" | undefined;
-    let logLeverage: number | undefined;
-    let logSize: number | undefined;
-    const buildToolInput = () => ({
-      symbol,
-      percentage,
-      side: logSide,
-      leverage: logLeverage,
-      targetSize: logSize,
-    });
-    const finalize = async (result: {
+  const contract = `${normalizedSymbol}_USDT`;
+  let logSide: "long" | "short" | undefined;
+  let logLeverage: number | undefined;
+  let logSize: number | undefined;
+  const buildToolInput = () => ({
+    symbol: normalizedSymbol,
+    percentage,
+    side: logSide,
+    leverage: logLeverage,
+    targetSize: logSize,
+  });
+  const finalize = async (result: {
       success: boolean;
       message: string;
       orderId?: string;
@@ -610,7 +631,7 @@ export const closePositionTool = createTool({
       const { rawRequest, rawResponse, ...rest } = result;
       await recordTradeLog({
         action: "close",
-        symbol,
+        symbol: normalizedSymbol,
         side: logSide,
         leverage: logLeverage,
         size: typeof rest.closedSize === "number" ? rest.closedSize : logSize,
@@ -622,9 +643,13 @@ export const closePositionTool = createTool({
       });
       return rest;
     };
-    const fail = async (message: string, extra: Record<string, unknown> = {}) => finalize({ success: false, message, ...extra });
-    
-    try {
+  const fail = async (message: string, extra: Record<string, unknown> = {}) => finalize({ success: false, message, ...extra });
+  
+  try {
+    if (enforceWhitelist && !allowedSymbols.has(normalizedSymbol)) {
+      return fail(`该币种 ${normalizedSymbol} 不在当前交易白名单中`);
+    }
+
       //  参数验证
       if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
         return fail(`无效的平仓百分比: ${percentage}（必须在1-100之间）`);
@@ -635,7 +660,7 @@ export const closePositionTool = createTool({
       const okxPosition = allPositions.find((p: any) => p.contract === contract);
       
       if (!okxPosition || Number.parseFloat(okxPosition.size || "0") === 0) {
-        return fail(`没有找到 ${symbol} 的持仓`);
+        return fail(`没有找到 ${normalizedSymbol} 的持仓`);
       }
 
       const okxPosSideRaw = typeof okxPosition.posSide === "string" ? okxPosition.posSide.toLowerCase() : "";
@@ -652,7 +677,7 @@ export const closePositionTool = createTool({
 
         const dbPositionResult = await dbClient.execute({
           sql: `SELECT opened_at FROM positions WHERE symbol = ? LIMIT 1`,
-          args: [symbol],
+          args: [normalizedSymbol],
         });
 
         if (dbPositionResult.rows.length > 0) {
@@ -665,10 +690,10 @@ export const closePositionTool = createTool({
           const minHoldingMinutes = intervalMinutes / 2;
 
           if (holdingMinutes < minHoldingMinutes) {
-            return fail(`拒绝平仓 ${symbol}：持仓时间仅 ${holdingMinutes.toFixed(1)} 分钟，少于最小持仓时间 ${minHoldingMinutes.toFixed(1)} 分钟。请等待至少半个交易周期后再评估平仓。这是为了防止在同一周期内刚开仓就立即平仓，造成不必要的手续费损失。`);
+            return fail(`拒绝平仓 ${normalizedSymbol}：持仓时间仅 ${holdingMinutes.toFixed(1)} 分钟，少于最小持仓时间 ${minHoldingMinutes.toFixed(1)} 分钟。请等待至少半个交易周期后再评估平仓。这是为了防止在同一周期内刚开仓就立即平仓，造成不必要的手续费损失。`);
           }
 
-          logger.info(`${symbol} 持仓时间: ${holdingMinutes.toFixed(1)} 分钟，通过最小持仓时间检查`);
+          logger.info(`${normalizedSymbol} 持仓时间: ${holdingMinutes.toFixed(1)} 分钟，通过最小持仓时间检查`);
         }
       }
       
@@ -782,7 +807,7 @@ export const closePositionTool = createTool({
       // 净盈亏 = 毛盈亏 - 总手续费（此值为预估，平仓后会基于实际成交价重新计算）
       let pnl = grossPnl - totalFees;
       
-      logger.info(`平仓 ${symbol} ${side === "long" ? "做多" : "做空"} ${closeSize}张 (入场: ${entryPrice.toFixed(2)}, 当前: ${currentPrice.toFixed(2)})`);
+      logger.info(`平仓 ${normalizedSymbol} ${side === "long" ? "做多" : "做空"} ${closeSize}张 (入场: ${entryPrice.toFixed(2)}, 当前: ${currentPrice.toFixed(2)})`);
       
   //  市价单平仓（OKX 市价单：price 为 "0"，不设置 tif）
       const order = await client.placeOrder({
@@ -925,7 +950,7 @@ export const closePositionTool = createTool({
       }
       
       // 详细日志记录（用于debug）
-      logger.info(`【平仓盈亏详情】${symbol} ${side}`);
+      logger.info(`【平仓盈亏详情】${normalizedSymbol} ${side}`);
       logger.info(`  开仓价: ${entryPrice.toFixed(4)}, 平仓价: ${actualExitPrice.toFixed(4)}, 数量: ${actualCloseSize}张`);
       logger.info(`  价格变动: ${priceChangeCheck.toFixed(4)}, 合约乘数: ${dbQuantoMultiplier}`);
       logger.info(`  毛盈亏: ${(priceChangeCheck * actualCloseSize * dbQuantoMultiplier).toFixed(2)} USDT`);
@@ -946,7 +971,7 @@ export const closePositionTool = createTool({
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
           order.id?.toString() || "",
-          symbol,
+          normalizedSymbol,
           side,             // 原持仓方向（便于统计某个币种的多空盈亏）
           "close",
           actualExitPrice,   // 使用实际成交价格
@@ -962,7 +987,7 @@ export const closePositionTool = createTool({
       // 从数据库获取止损止盈订单ID（如果存在）
       const posResult = await dbClient.execute({
         sql: "SELECT sl_order_id, tp_order_id FROM positions WHERE symbol = ?",
-        args: [symbol],
+        args: [normalizedSymbol],
       });
       
       // 取消止损止盈订单（先检查订单状态）
@@ -1002,7 +1027,7 @@ export const closePositionTool = createTool({
       if (percentage === 100) {
         await dbClient.execute({
           sql: "DELETE FROM positions WHERE symbol = ?",
-          args: [symbol],
+          args: [normalizedSymbol],
         });
       }
       logSize = actualCloseSize;
@@ -1010,7 +1035,7 @@ export const closePositionTool = createTool({
       return finalize({
         success: true,
         orderId: order.id?.toString(),
-        symbol,
+        symbol: normalizedSymbol,
         side,
         closedSize: actualCloseSize,  // 使用实际成交数量
         entryPrice,
@@ -1019,7 +1044,7 @@ export const closePositionTool = createTool({
         pnl,                          // 净盈亏（已扣除手续费）
         fee: totalFee,                // 总手续费
         totalBalance,
-        message: `成功平仓 ${symbol} ${actualCloseSize} 张，入场价 ${entryPrice.toFixed(4)}，平仓价 ${actualExitPrice.toFixed(4)}，净盈亏 ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT (已扣手续费 ${totalFee.toFixed(2)} USDT)，当前总资产 ${totalBalance.toFixed(2)} USDT`,
+        message: `成功平仓 ${normalizedSymbol} ${actualCloseSize} 张，入场价 ${entryPrice.toFixed(4)}，平仓价 ${actualExitPrice.toFixed(4)}，净盈亏 ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT (已扣手续费 ${totalFee.toFixed(2)} USDT)，当前总资产 ${totalBalance.toFixed(2)} USDT`,
         rawRequest: okxRawRequest,
         rawResponse: okxRawResponse,
       });
@@ -1033,8 +1058,7 @@ export const closePositionTool = createTool({
         rawResponse: error.rawResponse,
       });
     }
-  },
-});
+  }
 
 /**
  * 取消订单工具

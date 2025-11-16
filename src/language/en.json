@@ -301,6 +301,8 @@
 			"tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB",
 			"interval": "Trading Interval (minutes)",
 			"intervalPlaceholder": "Enter minutes",
+			"executionSection": "⏱️ Execution Cycle",
+			"marginMode": "Margin Mode",
 			"riskSection": "⚠️ Risk Parameters",
 			"maxLeverage": "Max Leverage",
 			"maxLeveragePlaceholder": "Enter max leverage",

@@ -505,13 +505,13 @@ export class OkxClient {
     }));
   }
 
-  async setLeverage(contract: string, leverage: number) {
+  async setLeverage(contract: string, leverage: number, marginMode: "cross" | "isolated" = "cross") {
     const instId = this.contractToInstrument(contract);
     try {
       const body = {
         instId,
         lever: String(leverage),
-        mgnMode: "cross",
+        mgnMode: marginMode === "isolated" ? "isolated" : "cross",
         posSide: "net",
       };
       await this.request("POST", "/api/v5/account/set-leverage", undefined, body);

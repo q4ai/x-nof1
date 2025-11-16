@@ -301,6 +301,8 @@
 			"tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB",
 			"interval": "トレード間隔 (分)",
 			"intervalPlaceholder": "分数を入力",
+			"executionSection": "⏱️ 実行サイクル",
+			"marginMode": "証拠金モード",
 			"riskSection": "⚠️ リスクパラメータ",
 			"maxLeverage": "最大レバレッジ",
 			"maxLeveragePlaceholder": "レバレッジを入力",

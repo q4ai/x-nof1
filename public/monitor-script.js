@@ -260,6 +260,7 @@ const ACCOUNT_CONFIG_KEYS = [
 
 const STRATEGY_CONFIG_KEYS = [
   "TRADING_SYMBOLS",
+  "TRADING_MARGIN_MODE",
   "TRADING_INTERVAL_MINUTES",
   "MAX_LEVERAGE",
   "MAX_POSITIONS",
@@ -360,6 +361,7 @@ class TradingMonitor {
         this.hideCloseConfirmation();
       }
     };
+    this.handleCloseConfirmationResize = () => this.repositionActiveCloseConfirmation();
     if (this.positionsContainerEl) {
       this.positionsContainerEl.addEventListener("click", (event) => this.handlePositionsContainerClick(event));
     }
@@ -1857,9 +1859,13 @@ class TradingMonitor {
       this.setCloseConfirmationVisibility(this.activeCloseConfirmationSymbol, false);
     }
     this.setCloseConfirmationVisibility(symbol, true);
+    this.adjustCloseConfirmationPosition(symbol);
     this.activeCloseConfirmationSymbol = symbol;
     document.addEventListener("click", this.handleCloseConfirmationOutsideClick, true);
     document.addEventListener("keydown", this.handleCloseConfirmationKeydown, true);
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", this.handleCloseConfirmationResize, true);
+    }
   }
 
   hideCloseConfirmation(symbol = null) {
@@ -1898,8 +1904,54 @@ class TradingMonitor {
       popover.classList.add("is-visible");
       popover.setAttribute("aria-hidden", "false");
     } else {
-      popover.classList.remove("is-visible");
+      popover.classList.remove("is-visible", "popover-align-right", "popover-top");
       popover.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  repositionActiveCloseConfirmation() {
+    if (!this.activeCloseConfirmationSymbol) {
+      return;
+    }
+    this.adjustCloseConfirmationPosition(this.activeCloseConfirmationSymbol);
+  }
+
+  adjustCloseConfirmationPosition(symbol) {
+    if (!symbol) {
+      return;
+    }
+    const wrapper = this.getCloseActionWrapper(symbol);
+    if (!wrapper) {
+      return;
+    }
+    const popover = wrapper.querySelector(".close-confirmation-popover");
+    if (!popover || !popover.classList.contains("is-visible")) {
+      return;
+    }
+
+    const applyPosition = () => {
+      popover.classList.remove("popover-align-right", "popover-top");
+      const rect = popover.getBoundingClientRect();
+      const docElement = document.documentElement;
+      const viewportWidth = (docElement && docElement.clientWidth) || window.innerWidth || 0;
+      const viewportHeight = (docElement && docElement.clientHeight) || window.innerHeight || 0;
+
+      const overflowRight = rect.right > viewportWidth - 8;
+      const overflowBottom = rect.bottom > viewportHeight - 8;
+
+      if (overflowRight) {
+        popover.classList.add("popover-align-right");
+      }
+
+      if (overflowBottom) {
+        popover.classList.add("popover-top");
+      }
+    };
+
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      window.requestAnimationFrame(applyPosition);
+    } else {
+      applyPosition();
     }
   }
 
@@ -1923,6 +1975,9 @@ class TradingMonitor {
     this.activeCloseConfirmationSymbol = null;
     document.removeEventListener("click", this.handleCloseConfirmationOutsideClick, true);
     document.removeEventListener("keydown", this.handleCloseConfirmationKeydown, true);
+    if (typeof window !== "undefined") {
+      window.removeEventListener("resize", this.handleCloseConfirmationResize, true);
+    }
   }
 
   async executeClosePosition(symbol) {
@@ -4913,6 +4968,14 @@ class TradingMonitor {
       if (!field) return;
 
       const value = config[key];
+
+      if (key === "TRADING_MARGIN_MODE") {
+        const normalized = typeof value === "string" && value.trim() !== ""
+          ? value.trim().toLowerCase()
+          : "cross";
+        field.value = normalized === "isolated" ? "isolated" : "cross";
+        return;
+      }
       if (field.type === "checkbox") {
         field.checked = String(value).toLowerCase() === "true";
         return;

@@ -446,15 +446,26 @@
               <!-- 交易配置 -->
               <div class="settings-section">
                 <h4 data-i18n-html="strategy.basic.tradeSection">💼 Trading Configuration</h4>
-                <div class="form-group">
-                  <label data-i18n="strategy.basic.tradingSymbols">Trading Symbols (comma separated)</label>
-                  <input type="text" name="TRADING_SYMBOLS" placeholder="BTC,ETH,SOL,XRP,BNB" data-i18n-placeholder="strategy.basic.tradingSymbolsPlaceholder" />
-                </div>
                 <div class="form-row">
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.interval">Trading Interval (minutes)</label>
-                    <input type="number" name="TRADING_INTERVAL_MINUTES" min="1" max="1440" data-i18n-placeholder="strategy.basic.intervalPlaceholder" placeholder="Enter minutes" />
+                  <div class="form-group form-group--wide">
+                    <label data-i18n="strategy.basic.tradingSymbols">Trading Symbols (comma separated)</label>
+                    <input type="text" name="TRADING_SYMBOLS" placeholder="BTC,ETH,SOL,XRP,BNB" data-i18n-placeholder="strategy.basic.tradingSymbolsPlaceholder" />
                   </div>
+                  <div class="form-group form-group--narrow">
+                    <label data-i18n="strategy.basic.marginMode">Margin Mode</label>
+                    <select name="TRADING_MARGIN_MODE">
+                      <option value="cross" data-i18n="tables.positions.marginMode.cross">Cross</option>
+                      <option value="isolated" data-i18n="tables.positions.marginMode.isolated">Isolated</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <div class="settings-section">
+                <h4 data-i18n-html="strategy.basic.executionSection">⏱️ Execution Cycle</h4>
+                <div class="form-group form-group-compact">
+                  <label data-i18n="strategy.basic.interval">Trading Interval (minutes)</label>
+                  <input type="number" name="TRADING_INTERVAL_MINUTES" min="1" max="1440" data-i18n-placeholder="strategy.basic.intervalPlaceholder" placeholder="Enter minutes" />
                 </div>
               </div>
 

@@ -196,8 +196,8 @@ class OkxTradingClient {
     };
   }
 
-  async setLeverage(contract: string, leverage: number) {
-    return this.client.setLeverage(contract, leverage);
+  async setLeverage(contract: string, leverage: number, marginMode: "cross" | "isolated" = "cross") {
+    return this.client.setLeverage(contract, leverage, marginMode);
   }
 
   async placeOrder(params: {
@@ -209,11 +209,12 @@ class OkxTradingClient {
     stopLoss?: number;
     takeProfit?: number;
     positionSide?: "long" | "short" | "net";
+    marginMode?: "cross" | "isolated";
   }): Promise<FuturesOrder> {
-  const order = await this.client.placeOrder(params);
-  this.rememberOrder(order.id, params.contract);
+    const order = await this.client.placeOrder(params);
+    this.rememberOrder(order.id, params.contract);
 
-  const side: "long" | "short" = params.size > 0 ? "long" : "short";
+    const side: "long" | "short" = params.size > 0 ? "long" : "short";
 
     return {
       id: order.id ?? "",
