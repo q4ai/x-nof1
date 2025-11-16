@@ -352,6 +352,17 @@ class TradingMonitor {
     this.decisionUpdatedEl = document.getElementById("decision-updated");
     this.positionsContainerEl = document.getElementById("positions-container");
     this.positionsUpdatedEl = document.getElementById("positions-updated");
+    this.pendingPositionClosures = new Set();
+    this.activeCloseConfirmationSymbol = null;
+    this.handleCloseConfirmationOutsideClick = (event) => this.onDocumentClickForCloseConfirmation(event);
+    this.handleCloseConfirmationKeydown = (event) => {
+      if (event?.key === "Escape") {
+        this.hideCloseConfirmation();
+      }
+    };
+    if (this.positionsContainerEl) {
+      this.positionsContainerEl.addEventListener("click", (event) => this.handlePositionsContainerClick(event));
+    }
     this.tradesContainerEl = document.getElementById("trades-container");
     this.logsContainerEl = document.getElementById("logs-container");
     this.decisionLogsContainerEl = document.getElementById("decision-logs-container");
@@ -1069,12 +1080,11 @@ class TradingMonitor {
         }
         const price = this.formatPrice(trade.price);
         const quantityValue = Number(trade.quantity);
-        
-        // 将张数转换为币数量
-        const actualQuantity = this.convertContractsToQuantity(symbol, quantityValue);
-        const quantityLabel = Number.isFinite(actualQuantity) ? this.formatQuantity(actualQuantity) : "--";
-        
         const contractsValue = Number(trade.contracts);
+        const actualQuantity = Number.isFinite(quantityValue) && quantityValue > 0
+          ? quantityValue
+          : this.convertContractsToQuantity(symbol, contractsValue);
+        const quantityLabel = Number.isFinite(actualQuantity) ? this.formatQuantity(actualQuantity) : "--";
         const contractsLabel = Number.isFinite(contractsValue) && contractsValue > 0
           ? t("tables.common.contractsWithUnit", { value: this.formatQuantity(contractsValue) })
           : "";
@@ -1655,6 +1665,7 @@ class TradingMonitor {
     });
 
     if (!positions.length) {
+      this.resetCloseConfirmationState();
       this.positionsContainerEl.innerHTML = `<p class="empty-state">${t("tables.positions.empty")}</p>`;
       this.updateTimestamp(this.positionsUpdatedEl, timestamp);
       if (newSymbolAdded) {
@@ -1663,12 +1674,21 @@ class TradingMonitor {
       return;
     }
 
+    const showActions = Boolean(this.isAuthenticated);
     const rows = positions
       .map((pos) => {
         const symbol = String(pos.symbol || "--").toUpperCase();
-        const leverage = pos.leverage ? `${pos.leverage}x` : "";
-        const symbolDisplay = leverage 
-          ? `<span class="symbol-name">${symbol}</span> <span class="leverage-label">${leverage}</span>` 
+        const leverageValue = Number(pos.leverage);
+        const leverageLabel = Number.isFinite(leverageValue) && leverageValue > 0
+          ? `${leverageValue}x`
+          : (typeof pos.leverage === "string" && pos.leverage.trim() !== ""
+            ? `${pos.leverage}x`
+            : "");
+        const marginModeRaw = typeof pos.marginMode === "string" ? pos.marginMode.toLowerCase() : "";
+        const marginModeLabel = this.getMarginModeLabel(marginModeRaw);
+        const leverageDisplay = leverageLabel ? `${marginModeLabel || ""}${leverageLabel}` : "";
+        const symbolDisplay = leverageDisplay 
+          ? `<span class="symbol-name">${symbol}</span> <span class="leverage-label">${leverageDisplay}</span>` 
           : `<span class="symbol-name">${symbol}</span>`;
         const sideRaw = String(pos.side || "").toLowerCase();
         const sideLabel = sideRaw === "long"
@@ -1678,12 +1698,12 @@ class TradingMonitor {
             : "--";
         const sideClass = sideRaw === "long" ? "positive" : sideRaw === "short" ? "negative" : "";
         const quantityValue = Number(pos.quantity);
-        
-        // 将张数转换为币数量
-        const actualQuantity = this.convertContractsToQuantity(symbol, quantityValue);
+        const contractsValue = Number(pos.contracts);
+        const actualQuantity = Number.isFinite(quantityValue) && quantityValue > 0
+          ? quantityValue
+          : this.convertContractsToQuantity(symbol, contractsValue);
         const quantityLabel = Number.isFinite(actualQuantity) ? this.formatQuantity(actualQuantity) : "--";
         
-        const contractsValue = Number(pos.contracts);
         const contractsLabel = Number.isFinite(contractsValue) && contractsValue > 0
           ? t("tables.common.contractsWithUnit", { value: this.formatQuantity(contractsValue) })
           : "";
@@ -1696,6 +1716,9 @@ class TradingMonitor {
         const pnlClass = pnl >= 0 ? "positive" : "negative";
         const openedAtRaw = pos.exchangeOpenedAt || pos.openedAt || pos.opened_at;
         const openedAt = openedAtRaw ? this.formatTime(openedAtRaw) : "--";
+        const actionCell = showActions
+          ? `<td class="position-action-cell">${symbol === "--" ? "--" : this.renderPositionActions(symbol, sideRaw)}</td>`
+          : "";
 
         return `
           <tr>
@@ -1706,11 +1729,13 @@ class TradingMonitor {
             <td>${markPrice}</td>
             <td class="${pnlClass}">${this.formatCurrency(pnl, 2, true)}</td>
             <td>${openedAt}</td>
+            ${actionCell}
           </tr>
         `;
       })
       .join("");
 
+    this.resetCloseConfirmationState();
     this.positionsContainerEl.innerHTML = `
       <table class="data-table">
         <thead>
@@ -1722,6 +1747,7 @@ class TradingMonitor {
             <th>${t("tables.positions.headers.markPrice")}</th>
             <th>${t("tables.positions.headers.unrealizedPnl")}</th>
             <th>${t("tables.positions.headers.openedAt")}</th>
+            ${showActions ? `<th>${t("tables.positions.headers.actions")}</th>` : ""}
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1733,6 +1759,253 @@ class TradingMonitor {
     if (newSymbolAdded) {
       this.schedulePriceSubscriptionUpdate();
     }
+  }
+
+  renderPositionActions(symbol, sideRaw) {
+    const safeSymbol = this.escapeHtml(symbol);
+    const safeSide = this.escapeHtml(sideRaw || "");
+    const isPending = this.pendingPositionClosures.has(symbol);
+    const mainLabel = t(isPending ? "tables.positions.actions.closing" : "tables.positions.actions.close");
+    const confirmMessage = this.escapeHtml(t("tables.positions.actions.confirm", { symbol }) || "");
+    const confirmLabel = this.escapeHtml(
+      t("tables.positions.actions.confirmButton") || t("common.confirm") || "Confirm"
+    );
+    const cancelLabel = this.escapeHtml(
+      t("tables.positions.actions.cancelButton") || t("common.cancel") || "Cancel"
+    );
+    const disabledAttr = isPending ? "disabled" : "";
+    return `
+      <button type="button" class="btn-ghost btn-ghost-danger close-position-btn" data-symbol="${safeSymbol}" data-side="${safeSide}" ${disabledAttr}>${mainLabel}</button>
+      <div class="close-confirmation-popover" role="alert" aria-hidden="true" data-symbol="${safeSymbol}">
+        <p class="close-confirmation-text">${confirmMessage}</p>
+        <div class="close-confirmation-actions">
+          <button type="button" class="link-button cancel-close-btn">${cancelLabel}</button>
+          <button type="button" class="btn-danger btn-small confirm-close-btn" data-symbol="${safeSymbol}" ${disabledAttr}>${confirmLabel}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  handlePositionsContainerClick(event) {
+    if (!event) {
+      return;
+    }
+    const target = event.target instanceof Element ? event.target : null;
+    if (!target) {
+      return;
+    }
+
+    if (this.positionsContainerEl && this.positionsContainerEl.contains(target)) {
+      const confirmButton = target.closest(".confirm-close-btn");
+      if (confirmButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const symbol = confirmButton.getAttribute("data-symbol");
+        if (!symbol) {
+          return;
+        }
+        if (!this.isAuthenticated) {
+          this.showToast("warning", t("tables.positions.actions.errorTitle"), t("tables.positions.actions.loginRequired"));
+          this.hideCloseConfirmation(symbol);
+          return;
+        }
+        this.hideCloseConfirmation(symbol);
+        void this.executeClosePosition(symbol.toUpperCase());
+        return;
+      }
+
+      const cancelButton = target.closest(".cancel-close-btn");
+      if (cancelButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        const popover = cancelButton.closest(".close-confirmation-popover");
+        const symbol = popover?.getAttribute("data-symbol");
+        this.hideCloseConfirmation(symbol ? symbol.toUpperCase() : null);
+        return;
+      }
+
+      const button = target.closest(".close-position-btn");
+      if (!button || !this.positionsContainerEl.contains(button)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      const symbol = button.getAttribute("data-symbol");
+      if (!symbol || button.disabled) {
+        return;
+      }
+      this.toggleCloseConfirmation(symbol.toUpperCase());
+    }
+  }
+
+  toggleCloseConfirmation(symbol) {
+    if (!symbol) {
+      return;
+    }
+    if (this.activeCloseConfirmationSymbol === symbol) {
+      this.hideCloseConfirmation(symbol);
+    } else {
+      this.showCloseConfirmation(symbol);
+    }
+  }
+
+  showCloseConfirmation(symbol) {
+    if (!symbol || this.pendingPositionClosures.has(symbol)) {
+      return;
+    }
+    if (this.activeCloseConfirmationSymbol && this.activeCloseConfirmationSymbol !== symbol) {
+      this.setCloseConfirmationVisibility(this.activeCloseConfirmationSymbol, false);
+    }
+    this.setCloseConfirmationVisibility(symbol, true);
+    this.activeCloseConfirmationSymbol = symbol;
+    document.addEventListener("click", this.handleCloseConfirmationOutsideClick, true);
+    document.addEventListener("keydown", this.handleCloseConfirmationKeydown, true);
+  }
+
+  hideCloseConfirmation(symbol = null) {
+    const targetSymbol = symbol || this.activeCloseConfirmationSymbol;
+    if (!targetSymbol) {
+      this.resetCloseConfirmationState();
+      return;
+    }
+    this.setCloseConfirmationVisibility(targetSymbol, false);
+    if (!symbol || symbol === this.activeCloseConfirmationSymbol) {
+      this.resetCloseConfirmationState();
+    }
+  }
+
+  getCloseActionWrapper(symbol) {
+    if (!this.positionsContainerEl || !symbol) {
+      return null;
+    }
+    const selectorSymbol = typeof CSS !== "undefined" && typeof CSS.escape === "function"
+      ? CSS.escape(symbol)
+      : symbol.replace(/"/g, '\\"');
+    const btn = this.positionsContainerEl.querySelector(`.close-position-btn[data-symbol="${selectorSymbol}"]`);
+    return btn ? btn.closest('td') : null;
+  }
+
+  setCloseConfirmationVisibility(symbol, visible) {
+    const wrapper = this.getCloseActionWrapper(symbol);
+    if (!wrapper) {
+      return;
+    }
+    const popover = wrapper.querySelector(".close-confirmation-popover");
+    if (!popover) {
+      return;
+    }
+    if (visible) {
+      popover.classList.add("is-visible");
+      popover.setAttribute("aria-hidden", "false");
+    } else {
+      popover.classList.remove("is-visible");
+      popover.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  onDocumentClickForCloseConfirmation(event) {
+    if (!this.activeCloseConfirmationSymbol) {
+      return;
+    }
+    const wrapper = this.getCloseActionWrapper(this.activeCloseConfirmationSymbol);
+    if (!wrapper) {
+      this.resetCloseConfirmationState();
+      return;
+    }
+    const target = event.target instanceof Node ? event.target : null;
+    if (target && wrapper.contains(target)) {
+      return;
+    }
+    this.hideCloseConfirmation();
+  }
+
+  resetCloseConfirmationState() {
+    this.activeCloseConfirmationSymbol = null;
+    document.removeEventListener("click", this.handleCloseConfirmationOutsideClick, true);
+    document.removeEventListener("keydown", this.handleCloseConfirmationKeydown, true);
+  }
+
+  async executeClosePosition(symbol) {
+    if (!symbol) {
+      return;
+    }
+    if (!this.isAuthenticated) {
+      this.showToast("warning", t("tables.positions.actions.errorTitle"), t("tables.positions.actions.loginRequired"));
+      return;
+    }
+    if (this.pendingPositionClosures.has(symbol)) {
+      return;
+    }
+
+    this.pendingPositionClosures.add(symbol);
+    this.updateCloseButtonState(symbol, true);
+
+    try {
+      const response = await fetch(`/api/positions/${encodeURIComponent(symbol)}/close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ percentage: 100 }),
+      });
+
+      if (response.status === 401) {
+        this.isAuthenticated = false;
+        this.updateAuthUI();
+        if (window.csrfManager && typeof window.csrfManager.resetToken === "function") {
+          window.csrfManager.resetToken();
+        }
+        this.showToast("warning", t("tables.positions.actions.errorTitle"), t("tables.positions.actions.loginRequired"));
+        void this.loadPositions();
+        return;
+      }
+
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result && result.success !== false) {
+        this.showToast("success", t("tables.positions.actions.successTitle"), t("tables.positions.actions.successMessage", { symbol }));
+        await this.loadPositions();
+      } else {
+        const reason = typeof result?.message === "string" && result.message.trim()
+          ? result.message.trim()
+          : typeof result?.error === "string" && result.error.trim()
+            ? result.error.trim()
+            : t("tables.positions.actions.errorDefault");
+        this.showToast("error", t("tables.positions.actions.errorTitle"), reason);
+      }
+    } catch (error) {
+      console.error("[positions] close request failed", error);
+      this.showToast("error", t("tables.positions.actions.errorTitle"), t("tables.positions.actions.errorDefault"));
+    } finally {
+      this.pendingPositionClosures.delete(symbol);
+      this.updateCloseButtonState(symbol, false);
+    }
+  }
+
+  updateCloseButtonState(symbol, isPending) {
+    if (!this.positionsContainerEl) {
+      return;
+    }
+    const selector = `.close-position-btn[data-symbol="${symbol}"]`;
+    const buttons = this.positionsContainerEl.querySelectorAll(selector);
+    const nextLabel = t(isPending ? "tables.positions.actions.closing" : "tables.positions.actions.close");
+    buttons.forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      button.disabled = Boolean(isPending);
+      button.textContent = nextLabel;
+    });
+
+    const confirmSelector = `.confirm-close-btn[data-symbol="${symbol}"]`;
+    const confirmButtons = this.positionsContainerEl.querySelectorAll(confirmSelector);
+    const confirmLabel = t(
+      isPending ? "tables.positions.actions.closing" : "tables.positions.actions.confirmButton"
+    ) || (isPending ? nextLabel : t("common.confirm"));
+    confirmButtons.forEach((button) => {
+      if (!(button instanceof HTMLButtonElement)) {
+        return;
+      }
+      button.disabled = Boolean(isPending);
+      button.textContent = confirmLabel;
+    });
   }
 
   async loadTrades() {
@@ -1786,11 +2059,10 @@ class TradingMonitor {
         const price = this.formatPrice(trade.price);
         const timestamp = this.formatTime(trade.timestamp);
         const quantityValue = Number(trade.quantity);
-        
-        // 将张数转换为币数量
-        const actualQuantity = this.convertContractsToQuantity(symbol, quantityValue);
-        
         const contractsValue = Number(trade.contracts);
+        const actualQuantity = Number.isFinite(quantityValue) && quantityValue > 0
+          ? quantityValue
+          : this.convertContractsToQuantity(symbol, contractsValue);
         const hasQuantity = Number.isFinite(actualQuantity) && actualQuantity !== 0;
         const hasContracts = Number.isFinite(contractsValue) && contractsValue > 0;
         const quantityFormatted = hasQuantity ? this.formatQuantity(actualQuantity) : null;
@@ -3312,6 +3584,29 @@ class TradingMonitor {
     return contracts * multiplier;
   }
 
+  getMarginModeLabel(mode) {
+    if (!mode || typeof mode !== "string") {
+      return "";
+    }
+    const normalized = mode.toLowerCase();
+    const key = normalized === "isolated" || normalized === "cross" ? normalized : null;
+    if (!key) {
+      return "";
+    }
+    const i18nKey = `tables.positions.marginMode.${key}`;
+    const translated = t(i18nKey);
+    if (translated && translated !== i18nKey) {
+      return translated;
+    }
+    if (key === "isolated") {
+      return "Isolated ";
+    }
+    if (key === "cross") {
+      return "Cross ";
+    }
+    return "";
+  }
+
   formatStructuredText(value) {
     if (value === null || value === undefined) {
       return "--";
@@ -3593,6 +3888,7 @@ class TradingMonitor {
   }
 
   async syncAuthState() {
+    const previousState = this.isAuthenticated;
     try {
       const response = await fetch("/api/auth/status", {
         cache: "no-store",
@@ -3624,6 +3920,10 @@ class TradingMonitor {
       console.warn("[auth] 查询登录状态失败", error);
       this.isAuthenticated = false;
       // 认证失败时也不覆盖 fetchPublicModelInfo() 的结果
+    }
+
+    if (previousState !== this.isAuthenticated) {
+      void this.loadPositions();
     }
 
     this.updateAuthUI();

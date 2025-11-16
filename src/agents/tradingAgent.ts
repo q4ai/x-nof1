@@ -182,14 +182,12 @@ function buildBasePromptVariables(
 	strategy: TradingStrategy,
 	intervalMinutes: number,
 	riskConfig: AccountRiskConfig,
-	strategyLabel: string,
 	language: StrategyLanguage,
 ): PromptVariables {
 	const symbolSeparator = language === "zh" ? "、" : ", ";
 	const symbolList = RISK_PARAMS.TRADING_SYMBOLS.join(symbolSeparator);
 	return {
 		STRATEGY_ID: strategy,
-		STRATEGY_NAME: strategyLabel,
 		TRADING_INTERVAL_MINUTES: formatNumber(intervalMinutes, 0),
 		MAX_HOLDING_HOURS: formatNumber(RISK_PARAMS.MAX_HOLDING_HOURS, 0),
 		MAX_HOLDING_CYCLES: formatNumber(RISK_PARAMS.MAX_HOLDING_CYCLES, 0),
@@ -262,7 +260,7 @@ export async function getStrategyPromptDefaultSections(
 	const actualLanguage = language || await getPromptLanguage();
 	const profile = getStrategyProfile(strategy, actualLanguage);
 	const riskConfig = await getAccountRiskConfig();
-	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, profile.label, actualLanguage);
+	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, actualLanguage);
 	return buildDefaultSections(profile, baseVariables);
 }
 
@@ -678,7 +676,7 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 	const language = await getPromptLanguage();
 	const profile = getStrategyProfile(strategy, language);
 	const riskConfig = getRiskConfigSnapshot();
-	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, profile.label, language);
+	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, language);
 	const defaultSections = buildDefaultSections(profile, baseVariables);
 	const sections = mergeUserPromptSections(baseVariables, defaultSections);
 
@@ -711,7 +709,7 @@ async function generateInstructions(strategy: TradingStrategy, intervalMinutes: 
 	const language = await getPromptLanguage();
 	const profile = getStrategyProfile(strategy, language);
 	const riskConfig = await getAccountRiskConfig();
-	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, profile.label, language);
+	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, language);
 	const defaultSections = buildDefaultSections(profile, baseVariables);
 	const sections = mergeUserPromptSections(baseVariables, defaultSections);
 

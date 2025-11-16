@@ -164,6 +164,22 @@ npm run trading:start
 
 在浏览器中访问 `http://localhost:3100`
 
+## 桌面客户端打包（DMG / EXE）
+
+通过 Electron 将后端与仪表盘封装为桌面程序：
+
+```bash
+# 并行启动开发服务器 + Electron 壳
+npm run desktop:dev
+
+# 生成安装包（release/ 文件夹）
+npm run desktop:build              # 当前平台（macOS -> dmg）
+npm run desktop:build -- --mac dmg # 指定目标
+npm run desktop:build -- --win nsis
+```
+
+> macOS 上交叉构建 Windows 包需要安装 `wine` 与 `mono`（如 `brew install --cask wine-stable`）。如需签名/公证，请配置 `CSC_*` 或 `WIN_CSC_*` 环境变量。
+
 ## 完整文档
 
 完整文档请参考：

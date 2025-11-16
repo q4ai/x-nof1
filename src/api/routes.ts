@@ -30,6 +30,7 @@ import { readFile } from "node:fs/promises";
 import { createOkxClient } from "../services/okxClient";
 import { createLogger } from "../utils/loggerUtils";
 import { getQuantoMultiplier } from "../utils/contractUtils";
+import { closePositionTool } from "../tools/trading";
 import type { AdminAuthConfig } from "../utils/adminAuth";
 import type { TradingStrategy } from "../config/strategyTypes";
 import { getStrategyPromptDefaultSections, getTradingStrategy } from "../agents/tradingAgent";
@@ -690,6 +691,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
               unrealizedPnl: Number.parseFloat(position.unrealisedPnl || "0"),
               leverage,
               side: size > 0 ? "long" : "short",
+              marginMode: position.marginMode || null,
               openValue,
               margin: marginUsed,
               profitTarget: Number.isFinite(profitTarget) ? profitTarget : null,
@@ -704,6 +706,60 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
       return c.json({ error: message }, 500);
+    }
+  });
+
+  app.post("/api/positions/:symbol/close", requireAuthWithCsrf, async (c) => {
+    const symbolParam = c.req.param("symbol");
+    if (!symbolParam) {
+      return c.json({ success: false, error: "缺少币种参数" }, 400);
+    }
+
+    const symbol = symbolParam.toUpperCase();
+    const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
+    if (!allowedSymbols.has(symbol)) {
+      return c.json({ success: false, error: "该币种不在当前交易白名单中" }, 400);
+    }
+
+    let percentage = 100;
+    try {
+      const body = await c.req.json<{ percentage?: number }>();
+      if (body && typeof body.percentage !== "undefined") {
+        const parsed = Number(body.percentage);
+        if (Number.isFinite(parsed)) {
+          percentage = parsed;
+        }
+      }
+    } catch (error) {
+      const err = error as Error;
+      if (err?.name !== "SyntaxError") {
+        logger.warn("解析平仓请求体失败", { error: err?.message });
+      }
+    }
+
+    if (!Number.isFinite(percentage) || percentage <= 0 || percentage > 100) {
+      return c.json({ success: false, error: "平仓百分比必须在 1-100 之间" }, 400);
+    }
+
+    try {
+      const result = await closePositionTool.execute({
+        symbol: symbol as (typeof RISK_PARAMS.TRADING_SYMBOLS)[number],
+        percentage,
+        skipGuards: true,
+      });
+      const success = Boolean(result?.success);
+      const message = typeof result?.message === "string" && result.message.length > 0
+        ? result.message
+        : success
+          ? `已提交 ${symbol} 平仓请求`
+          : `平仓 ${symbol} 失败`;
+      logger.info(`manual-close ${symbol}`, { success, percentage });
+      return c.json({ success, message, payload: result }, success ? 200 : 400);
+    } catch (error) {
+      const err = error as Error;
+      const message = err?.message || "未知错误";
+      logger.error(`手动平仓 ${symbol} 失败`, err);
+      return c.json({ success: false, error: message, message: `平仓失败: ${message}` }, 500);
     }
   });
 

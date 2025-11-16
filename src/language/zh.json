@@ -1,501 +1,517 @@
 {
-  "pageTitle": "Q4AI - 加密货币AI交易面板",
-  "tagline": "AI 智能交易平台",
-  "loadingGlobal": "正在加载...",
-  "github": "GitHub",
-  "docs": "文档",
-  "login": {
-    "pageTitle": "Q4AI 后台登录",
-    "title": "Q4AI 后台登录",
-    "subtitle": "请输入后台账号与密码，以管理系统配置",
-    "adminPath": "当前后台入口：{{path}}",
-    "usernameLabel": "账号",
-    "usernamePlaceholder": "请输入账号",
-    "passwordLabel": "密码",
-    "passwordPlaceholder": "请输入密码",
-    "submit": "登录",
-    "initialMessage": "首次运行请在控制台或 ./.q4ai 文件中查看默认凭证",
-    "messages": {
-      "verifying": "正在验证账号...",
-      "success": "登录成功，正在跳转...",
-      "failure": "登录失败，请检查账号或密码",
-      "networkError": "网络异常，请稍后再试",
-      "statusError": "查询登录状态失败"
-    }
-  },
-  "navigation": {
-    "account": "账户",
-    "strategy": "策略",
-    "settings": "设置",
-    "logout": "退出",
-    "language": "语言",
-    "languageTooltip": "界面语言：{{language}}"
-  },
-  "tradingSymbols": "交易币种",
-  "loading": "加载中...",
-  "interval": {
-    "1m": "1分钟",
-    "5m": "5分钟",
-    "15m": "15分钟",
-    "1h": "1小时",
-    "4h": "4小时",
-    "1D": "1天"
-  },
-  "accountStats": "账户统计",
-  "statsDetail": "统计详情",
-  "totalEquity": "账户净值",
-  "availableBalance": "可用余额",
-  "unrealizedPnL": "未实现盈亏",
-  "totalReturn": "总收益率",
-  "winRate": "胜率",
-  "maxDrawdown": "最大回撤",
-  "sharpeRatio": "夏普比率",
-  "positions": "持仓",
-  "noPositions": "暂无持仓",
-  "long": "做多",
-  "short": "做空",
-  "pnl": "盈亏",
-  "leverage": "杠杆",
-  "holdingTime": "持仓时间",
-  "hours": "小时",
-  "aiStatus": "AI 状态",
-  "aiIdle": "空闲",
-  "aiRunning": "运行中",
-  "aiAnalyzing": "分析中",
-  "aiDecisionMaking": "决策中",
-  "tabs": {
-    "positions": "当前持仓",
-    "trades": "交易历史",
-    "logs": "交易日志",
-    "decisionLogs": "决策日志"
-  },
-  "decision": {
-    "title": "AI 决策",
-    "empty": "暂无 AI 决策记录"
-  },
-  "decisionRequest": {
-    "title": "决策请求",
-    "empty": "暂无决策请求数据",
-    "summaryLabel": "响应摘要",
-    "status": {
-      "success": "成功",
-      "error": "失败",
-      "unknown": "未知"
-    },
-    "detail": {
-      "time": "时间",
-      "iteration": "迭代",
-      "model": "模型",
-      "status": "状态",
-      "instructions": "系统指令",
-      "prompt": "交易提示词",
-      "response": "AI 输出",
-      "error": "错误信息",
-      "durationLabel": "输出耗时：{{value}}"
-    }
-  },
-  "modals": {
-    "decision": {
-      "title": "决策详情"
-    },
-    "log": {
-      "title": "日志详情"
-    },
-    "decisionRequest": {
-      "title": "决策请求详情"
-    },
-    "statistics": {
-      "title": "交易统计",
-      "equityCurve": "资产曲线"
-    },
-    "records": {
-      "title": "全部记录"
-    },
-    "account": {
-      "title": "账户配置"
-    },
-    "strategy": {
-      "title": "策略配置"
-    },
-    "settings": {
-      "title": "系统设置"
-    }
-  },
-  "tables": {
-    "common": {
-      "quantityWithSymbol": "{{value}} {{symbol}}",
-      "contractsWithUnit": "{{value}} 张",
-      "contracts": "张",
-      "total": "总计",
-      "noContent": "暂无内容",
-      "viewAll": "查看所有"
-    },
-    "positions": {
-      "empty": "暂无持仓",
-      "headers": {
-        "contract": "合约",
-        "side": "方向",
-        "quantity": "数量",
-        "entryPrice": "开仓价",
-        "markPrice": "标记价",
-        "unrealizedPnl": "未实现盈亏",
-        "openedAt": "持仓创建时间"
-      }
-    },
-    "trades": {
-      "empty": "暂无交易记录",
-      "headers": {
-        "contract": "合约",
-        "type": "类型",
-        "side": "方向",
-        "price": "价格",
-        "quantity": "数量",
-        "pnl": "盈亏",
-        "time": "时间",
-        "fee": "手续费"
-      },
-      "types": {
-        "open": "开仓",
-        "close": "平仓"
-      }
-    },
-    "logs": {
-      "empty": "暂无交易日志",
-      "headers": {
-        "time": "时间",
-        "contract": "合约",
-        "action": "操作",
-        "status": "状态",
-        "summary": "摘要"
-      },
-      "status": {
-        "success": "成功",
-        "error": "错误",
-        "failed": "失败",
-        "warning": "警告",
-        "pending": "进行中",
-        "skipped": "已跳过",
-        "unknown": "未知"
-      }
-    },
-    "decisions": {
-      "headers": {
-        "time": "时间",
-        "iteration": "迭代",
-        "summary": "决策摘要",
-        "positions": "持仓数",
-        "accountValue": "账户权益"
-      },
-      "defaultSummary": "观望",
-      "actions": {
-        "long": "做多",
-        "short": "做空",
-        "close": "平仓",
-        "watching": "观望"
-      }
-    },
-    "decisionRequests": {
-      "headers": {
-        "time": "时间",
-        "model": "模型",
-        "summary": "AI 输出概览",
-        "duration": "输出耗时"
-      },
-      "empty": "暂无决策请求"
-    }
-  },
-  "stats": {
-    "winRate": "胜率",
-    "totalProfit": "总盈利",
-    "totalLoss": "总亏损",
-    "netPnl": "净盈亏",
-    "return": "收益率",
-    "maxDrawdown": "最大回撤",
-    "profitFactor": "盈利因子",
-    "totalTrades": "总交易次数",
-    "winTrades": "盈利笔数",
-    "lossTrades": "亏损笔数",
-    "avgWin": "平均盈利",
-    "avgLoss": "平均亏损",
-    "maxWin": "单笔最大盈利",
-    "maxLoss": "单笔最大亏损",
-    "sharpe": "夏普比率",
-    "sortino": "索提诺比率"
-  },
-  "pagination": {
-    "prev": "上一页",
-    "next": "下一页",
-    "page": "第 {{current}} / {{total}} 页（共 {{count}} 条）",
-    "empty": "暂无记录",
-    "loading": "加载中..."
-  },
-  "common": {
-    "confirm": "确认",
-    "cancel": "取消",
-    "save": "保存",
-    "delete": "删除",
-    "edit": "编辑",
-    "close": "关闭"
-  },
-  "account": {
-    "saveAndRestart": "保存并重启",
-    "okx": {
-      "sectionTitle": "🔑 OKX API 设置",
-      "registerLink": "注册 OKX 返佣账号 ↗",
-      "apiKeyLabel": "API Key <span class=\"required\">*</span>",
-      "apiKeyPlaceholder": "请输入 OKX API Key",
-      "apiSecretLabel": "API Secret <span class=\"required\">*</span>",
-      "apiSecretPlaceholder": "请输入 OKX API Secret",
-      "apiPassphraseLabel": "API Passphrase <span class=\"required\">*</span>",
-      "apiPassphrasePlaceholder": "请输入 OKX Passphrase",
-      "usePaper": "使用模拟盘 (Sandbox)",
-      "testButton": "🔍 测试 API 连接",
-      "testMessages": {
-        "fillRequired": "请先填写完整的 OKX API 凭证。",
-        "testing": "正在测试 OKX API 连接...",
-        "success": "测试成功",
-        "balanceLabel": "（账户权益：{{balance}}）",
-        "failure": "测试失败：{{detail}}",
-        "networkError": "请求失败，请检查网络或代理设置。"
-      }
-    },
-    "parameters": {
-      "sectionTitle": "💰 账户参数",
-      "initialBalance": "初始资金 (USDT)",
-      "initialBalancePlaceholder": "请输入初始资金",
-      "stopLoss": "账户止损 (USDT)",
-      "stopLossPlaceholder": "请输入止损金额",
-      "takeProfit": "账户止盈 (USDT)",
-      "takeProfitPlaceholder": "请输入止盈金额"
-    }
-  },
-  "strategy": {
-    "saveAndRestart": "保存并重启",
-    "tabs": {
-      "basic": "基础参数",
-      "entry": "入场逻辑",
-      "exit": "出场逻辑",
-      "variables": "提示词变量",
-      "preview": "预览"
-    },
-    "basic": {
-      "tradeSection": "💼 交易配置",
-      "tradingSymbols": "交易币种（逗号分隔）",
-      "tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB",
-      "interval": "调度周期（分钟）",
-      "intervalPlaceholder": "请输入分钟数",
-      "riskSection": "⚠️ 风险参数",
-      "maxLeverage": "最大杠杆",
-      "maxLeveragePlaceholder": "请输入最大杠杆",
-      "maxPositions": "最大持仓数",
-      "maxPositionsPlaceholder": "请输入最大持仓数",
-      "maxHoldingHours": "最大持仓时间（小时）",
-      "maxHoldingHoursPlaceholder": "请输入小时数",
-      "extremeStopLoss": "极端止损 (%)",
-      "extremeStopLossPlaceholder": "请输入百分比",
-      "drawdownSection": "📉 回撤控制",
-      "drawdownWarning": "预警阈值 (%)",
-      "drawdownWarningPlaceholder": "请输入百分比",
-      "drawdownNoNew": "禁止开新仓阈值 (%)",
-      "drawdownNoNewPlaceholder": "请输入百分比",
-      "drawdownForceClose": "强制平仓阈值 (%)",
-      "drawdownForceClosePlaceholder": "请输入百分比"
-    },
-    "entry": {
-      "promptLabel": "入场提示词",
-      "promptPlaceholder": "使用 {{VARIABLE}} 占位符描述入场逻辑",
-      "promptHint": "提示：描述入场条件并使用 {{VARIABLE}} 占位符，系统会自动注入内置校验（禁止对冲、加仓规则等）。"
-    },
-    "exit": {
-      "promptLabel": "出场提示词",
-      "promptPlaceholder": "定义止损、分批止盈与移动止盈逻辑",
-      "promptHint": "提示：列出止损/止盈规则与回撤要求，系统会自动注入内置校验（禁止对冲、加仓规则等）。"
-    },
-    "variables": {
-      "promptLabel": "变量说明 / 补充文本",
-      "promptPlaceholder": "可选：补充变量说明或额外提示",
-      "promptHint": "系统会展示自动生成的变量列表，你可以补充或覆盖。",
-      "placeholdersTitle": "可用占位符",
-      "placeholder": {
-        "strategyName": "<code>{{STRATEGY_NAME}}</code> 策略名称",
-        "strategyId": "<code>{{STRATEGY_ID}}</code> 策略标识",
-        "entryPrompt": "<code>{{ENTRY_PROMPT}}</code> 默认入场提示片段",
-        "exitPrompt": "<code>{{EXIT_PROMPT}}</code> 默认出场/风控提示片段",
-        "varPrompt": "<code>{{VAR_PROMPT}}</code> 默认变量说明",
-        "interval": "<code>{{TRADING_INTERVAL_MINUTES}}</code> 调度间隔（分钟）",
-        "maxHoldingHours": "<code>{{MAX_HOLDING_HOURS}}</code> 最大持仓时间",
-        "maxHoldingCycles": "<code>{{MAX_HOLDING_CYCLES}}</code> 最大持仓周期数",
-        "maxPositions": "<code>{{MAX_POSITIONS}}</code> 最大持仓数",
-        "extremeStopLoss": "<code>{{EXTREME_STOP_LOSS_PERCENT}}</code> 系统极端止损 (%)",
-        "accountStopLoss": "<code>{{ACCOUNT_STOP_LOSS_USDT}}</code> 账户止损 (USDT)",
-        "accountTakeProfit": "<code>{{ACCOUNT_TAKE_PROFIT_USDT}}</code> 账户止盈 (USDT)",
-        "drawdownWarning": "<code>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</code> 回撤预警阈值 (%)",
-        "drawdownNoNew": "<code>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</code> 禁止开新仓阈值 (%)",
-        "drawdownForceClose": "<code>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</code> 强制平仓阈值 (%)",
-        "symbolList": "<code>{{SYMBOL_LIST}}</code> 交易币种列表"
-      },
-      "placeholderHint": "保存时系统会以实时参数替换 {{VARIABLE}} 占位符并注入提示词。"
-    },
-    "quickInsert": {
-      "label": "快捷插入策略："
-    },
-    "fieldNames": {
-      "entry": "入场逻辑",
-      "exit": "出场逻辑",
-      "variables": "提示词变量",
-      "default": "模板"
-    },
-    "preview": {
-      "title": "📝 策略预览",
-      "subtitle": "展示保存后供 Agent 使用的组合策略内容。",
-      "empty": "尚无内容"
-    },
-    "labels": {
-      "ultraShort": "超短线",
-      "swingTrend": "波段趋势",
-      "dca": "DCA定投",
-      "conservative": "稳健",
-      "balanced": "平衡",
-      "aggressive": "激进",
-      "unknown": "未知策略"
-    },
-    "labelMap": {
-      "ultra-short": "超短线",
-      "swing-trend": "波段趋势",
-      "dca": "DCA定投",
-      "conservative": "稳健",
-      "balanced": "平衡",
-      "aggressive": "激进"
-    }
-  },
-  "settings": {
-    "saveAndRestart": "保存并重启",
-    "ai": {
-      "sectionTitle": "🤖 AI 模型配置",
-      "apiKeyLabel": "OpenAI API Key <span class=\"required\">*</span>",
-      "apiKeyPlaceholder": "sk-...",
-      "baseUrl": "API 基础地址",
-      "baseUrlPlaceholder": "https://openrouter.ai/api/v1",
-      "modelName": "AI 模型名称",
-      "modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
-      "testButton": "🔍 测试 AI 连接",
-      "testMessages": {
-        "fillRequired": "请先填写完整的 AI API 配置。",
-        "testing": "正在测试 AI API 连接...",
-        "success": "测试成功",
-        "responseTime": "（耗时 {{time}}）",
-        "failure": "测试失败：{{detail}}",
-        "networkError": "请求失败，请检查网络或代理设置。"
-      }
-    },
-    "network": {
-      "sectionTitle": "🌐 网络配置",
-      "httpProxy": "HTTP 代理（可选）",
-      "httpProxyPlaceholder": "http://127.0.0.1:7890"
-    },
-    "privacy": {
-      "sectionTitle": "🔒 隐私设置",
-      "description": "控制是否参加社区 AI 竞赛排名以及共享提示词。",
-      "reportEnabled": "加入社区 AI 竞赛排名",
-      "reportEnabledHint": "开启后系统会每小时上报匿名化的账户表现数据。",
-      "sharePrompts": "与社区分享我的策略入场/出场提示词",
-      "sharePromptsHint": "仅在开启竞赛上报时共享提示词内容，帮助社区优化策略。"
-    },
-    "reset": {
-      "sectionTitle": "⚠️ 重置实时环境",
-      "hint": "该操作会清空交易数据与策略设置，但保留 API 与代理配置。执行前请确保已停止实盘交易。",
-      "trigger": "重置实时数据",
-      "confirmHint": "输入 <code>RESET</code> 以确认。",
-      "confirmPlaceholder": "请输入 RESET 继续",
-      "confirm": "确认重置"
-    }
-  },
-  "chart": {
-    "aiToggleStart": "启动 AI 定时任务",
-    "aiToggleStop": "停止 AI 定时任务",
-    "tooltipStart": "点击启动 AI 智能交易",
-    "tooltipStop": "点击停止 AI 智能交易",
-    "manualTrigger": "点击手动触发 AI 决策",
-    "loginRequired": "请先登录后台",
-    "modelBadge": "AI 模型驱动",
-    "modelIconAlt": "AI 模型图标",
-    "triggerType": {
-      "manual": "手动触发",
-      "scheduled": "CRON"
-    },
-    "markers": {
-      "trade": "交易",
-      "close": "平仓",
-      "closeWithPnl": "平仓 {{pnl}}",
-      "closeWithPnlPercent": "平仓 {{pnl}}（{{percent}}%）"
-    }
-  },
-  "notifications": {
-    "loadFailedTitle": "加载失败",
-    "loadFailedDefault": "无法获取策略模板，请稍后重试。",
-    "templateInsertedTitle": "模板已插入",
-    "templateInsertedMessage": "已载入「{{strategy}}」策略的{{field}}模板。",
-    "noChangesTitle": "无需保存",
-    "noChangesMessage": "未检测到配置改动。",
-    "saveFailedTitle": "保存失败",
-    "saveFailedDefault": "保存失败，请稍后重试。",
-    "reloadFailedTitle": "重载失败",
-    "reloadFailedMessage": "配置已保存，但重载失败：{{error}}",
-    "accountSaveTitle": "账户配置已更新",
-    "accountSaveMessage": "配置已保存并触发重载。若服务未自动重启，请手动重启进程。",
-    "strategySaveTitle": "策略配置已更新",
-    "strategySaveMessage": "配置已保存并触发重载。若服务未自动重启，请手动重启进程。",
-    "settingsSaveTitle": "系统设置已更新",
-    "settingsSaveMessage": "配置已保存并触发重载。若服务未自动重启，请手动重启进程。",
-    "saveExceptionTitle": "保存异常",
-    "saveExceptionMessage": "保存配置时发生异常，请检查控制台日志。",
-    "fieldMissingTitle": "字段缺失",
-    "tradingSymbolsRequired": "交易币种不能为空。",
-    "networkRequestFailed": "请求失败，请检查网络连接。"
-  },
-  "aiManual": {
-    "loginRequiredTitle": "需要登录",
-    "loginRequiredMessage": "请先登录后台才能手动触发 AI 决策。",
-    "executingTitle": "执行中",
-    "executingMessage": "AI 决策正在执行，请稍候...",
-    "triggerFailedTitle": "触发失败",
-    "triggerFailedMessage": "触发 AI 决策失败，请检查网络连接。"
-  },
-  "aiOverlay": {
-    "status": {
-      "idle": "待机中",
-      "preparing": "准备执行...",
-      "collecting_data": "收集数据...",
-      "analyzing": "分析市场...",
-      "ai_deciding": "AI 决策中...",
-      "executing_trades": "执行交易...",
-      "completed": "执行完成 ✓",
-      "error": "执行失败 ✗"
-    },
-    "statusFallback": "AI 模型驱动"
-  },
-  "logDetail": {
-    "time": "时间",
-    "symbol": "合约",
-    "action": "操作",
-    "status": "状态",
-    "statusUnknown": "未知",
-    "summaryTitle": "执行摘要",
-    "noDetails": "暂无详细信息",
-    "rawRequest": "原始请求",
-    "rawResponse": "原始响应",
-    "rawMessage": "原始消息"
-  },
-  "loadingData": "正在加载数据...",
-  "saveSuccess": "保存成功",
-  "saveError": "保存失败",
-  "networkError": "网络错误",
-  "strategyLabels": {
-    "ultra-short": "超短线",
-    "swing-trend": "波段趋势",
-    "dca": "DCA定投",
-    "conservative": "稳健",
-    "balanced": "平衡",
-    "aggressive": "激进"
-  }
+	"pageTitle": "Q4AI - 加密货币AI交易面板",
+	"tagline": "新一代AI智能交易平台",
+	"loadingGlobal": "正在加载...",
+	"github": "GitHub",
+	"docs": "文档",
+	"login": {
+		"pageTitle": "Q4AI 后台登录",
+		"title": "Q4AI 后台登录",
+		"subtitle": "请输入后台账号与密码，以管理系统配置",
+		"adminPath": "当前后台入口：{{path}}",
+		"usernameLabel": "账号",
+		"usernamePlaceholder": "请输入账号",
+		"passwordLabel": "密码",
+		"passwordPlaceholder": "请输入密码",
+		"submit": "登录",
+		"initialMessage": "首次运行请在控制台或 ./.q4ai 文件中查看默认凭证",
+		"messages": {
+			"verifying": "正在验证账号...",
+			"success": "登录成功，正在跳转...",
+			"failure": "登录失败，请检查账号或密码",
+			"networkError": "网络异常，请稍后再试",
+			"statusError": "查询登录状态失败"
+		}
+	},
+	"navigation": {
+		"account": "账户",
+		"strategy": "策略",
+		"settings": "设置",
+		"logout": "退出",
+		"language": "语言",
+		"languageTooltip": "界面语言：{{language}}"
+	},
+	"tradingSymbols": "交易币种",
+	"loading": "加载中...",
+	"interval": {
+		"1m": "1分钟",
+		"5m": "5分钟",
+		"15m": "15分钟",
+		"1h": "1小时",
+		"4h": "4小时",
+		"1D": "1天"
+	},
+	"accountStats": "账户统计",
+	"statsDetail": "统计详情",
+	"totalEquity": "账户净值",
+	"availableBalance": "可用余额",
+	"unrealizedPnL": "未实现盈亏",
+	"totalReturn": "总收益率",
+	"winRate": "胜率",
+	"maxDrawdown": "最大回撤",
+	"sharpeRatio": "夏普比率",
+	"positions": "持仓",
+	"noPositions": "暂无持仓",
+	"long": "做多",
+	"short": "做空",
+	"pnl": "盈亏",
+	"leverage": "杠杆",
+	"holdingTime": "持仓时间",
+	"hours": "小时",
+	"aiStatus": "AI 状态",
+	"aiIdle": "空闲",
+	"aiRunning": "运行中",
+	"aiAnalyzing": "分析中",
+	"aiDecisionMaking": "决策中",
+	"tabs": {
+		"positions": "当前持仓",
+		"trades": "交易历史",
+		"logs": "交易日志",
+		"decisionLogs": "决策日志"
+	},
+	"decision": {
+		"title": "AI 决策",
+		"empty": "暂无 AI 决策记录"
+	},
+	"decisionRequest": {
+		"title": "决策请求",
+		"empty": "暂无决策请求数据",
+		"summaryLabel": "响应摘要",
+		"status": {
+			"success": "成功",
+			"error": "失败",
+			"unknown": "未知"
+		},
+		"detail": {
+			"time": "时间",
+			"iteration": "迭代",
+			"model": "模型",
+			"status": "状态",
+			"instructions": "系统指令",
+			"prompt": "交易提示词",
+			"response": "AI 输出",
+			"error": "错误信息",
+			"durationLabel": "输出耗时：{{value}}"
+		}
+	},
+	"modals": {
+		"decision": {
+			"title": "决策详情"
+		},
+		"log": {
+			"title": "日志详情"
+		},
+		"decisionRequest": {
+			"title": "决策请求详情"
+		},
+		"statistics": {
+			"title": "交易统计",
+			"equityCurve": "资产曲线"
+		},
+		"records": {
+			"title": "全部记录"
+		},
+		"account": {
+			"title": "账户配置"
+		},
+		"strategy": {
+			"title": "策略配置"
+		},
+		"settings": {
+			"title": "系统设置"
+		}
+	},
+	"tables": {
+		"common": {
+			"quantityWithSymbol": "{{value}} {{symbol}}",
+			"contractsWithUnit": "{{value}} 张",
+			"contracts": "张",
+			"total": "总计",
+			"noContent": "暂无内容",
+			"viewAll": "查看所有"
+		},
+		"positions": {
+			"empty": "暂无持仓",
+			"headers": {
+				"contract": "合约",
+				"side": "方向",
+				"quantity": "数量",
+				"entryPrice": "开仓价",
+				"markPrice": "标记价",
+				"unrealizedPnl": "未实现盈亏",
+				"openedAt": "持仓创建时间",
+				"actions": "操作"
+			},
+			"actions": {
+				"close": "平仓",
+				"closing": "平仓中...",
+				"confirm": "确认立即平仓 {{symbol}} 持仓？",
+				"confirmButton": "确认平仓",
+				"cancelButton": "取消",
+				"successTitle": "平仓指令已发送",
+				"successMessage": "已提交 {{symbol}} 市价平仓请求。",
+				"errorTitle": "平仓失败",
+				"errorDefault": "无法完成平仓，请稍后重试。",
+				"loginRequired": "需要登录后才能手动平仓。"
+			},
+			"marginMode": {
+				"cross": "全仓",
+				"isolated": "逐仓"
+			}
+		},
+		"trades": {
+			"empty": "暂无交易记录",
+			"headers": {
+				"contract": "合约",
+				"type": "类型",
+				"side": "方向",
+				"price": "价格",
+				"quantity": "数量",
+				"pnl": "盈亏",
+				"time": "时间",
+				"fee": "手续费"
+			},
+			"types": {
+				"open": "开仓",
+				"close": "平仓"
+			}
+		},
+		"logs": {
+			"empty": "暂无交易日志",
+			"headers": {
+				"time": "时间",
+				"contract": "合约",
+				"action": "操作",
+				"status": "状态",
+				"summary": "摘要"
+			},
+			"status": {
+				"success": "成功",
+				"error": "错误",
+				"failed": "失败",
+				"warning": "警告",
+				"pending": "进行中",
+				"skipped": "已跳过",
+				"unknown": "未知"
+			}
+		},
+		"decisions": {
+			"headers": {
+				"time": "时间",
+				"iteration": "迭代",
+				"summary": "决策摘要",
+				"positions": "持仓数",
+				"accountValue": "账户权益"
+			},
+			"defaultSummary": "观望",
+			"actions": {
+				"long": "做多",
+				"short": "做空",
+				"close": "平仓",
+				"watching": "观望"
+			}
+		},
+		"decisionRequests": {
+			"headers": {
+				"time": "时间",
+				"model": "模型",
+				"summary": "AI 输出概览",
+				"duration": "输出耗时"
+			},
+			"empty": "暂无决策请求"
+		}
+	},
+	"stats": {
+		"winRate": "胜率",
+		"totalProfit": "总盈利",
+		"totalLoss": "总亏损",
+		"netPnl": "净盈亏",
+		"return": "收益率",
+		"maxDrawdown": "最大回撤",
+		"profitFactor": "盈利因子",
+		"totalTrades": "总交易次数",
+		"winTrades": "盈利笔数",
+		"lossTrades": "亏损笔数",
+		"avgWin": "平均盈利",
+		"avgLoss": "平均亏损",
+		"maxWin": "单笔最大盈利",
+		"maxLoss": "单笔最大亏损",
+		"sharpe": "夏普比率",
+		"sortino": "索提诺比率"
+	},
+	"pagination": {
+		"prev": "上一页",
+		"next": "下一页",
+		"page": "第 {{current}} / {{total}} 页（共 {{count}} 条）",
+		"empty": "暂无记录",
+		"loading": "加载中..."
+	},
+	"common": {
+		"confirm": "确认",
+		"cancel": "取消",
+		"save": "保存",
+		"delete": "删除",
+		"edit": "编辑",
+		"close": "关闭"
+	},
+	"account": {
+		"saveAndRestart": "保存并重启",
+		"okx": {
+			"sectionTitle": "🔑 OKX API 设置",
+			"registerLink": "注册 OKX 返佣账号 ↗",
+			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
+			"apiKeyPlaceholder": "请输入 OKX API Key",
+			"apiSecretLabel": "API Secret <span class=\"required\">*</span>",
+			"apiSecretPlaceholder": "请输入 OKX API Secret",
+			"apiPassphraseLabel": "API Passphrase <span class=\"required\">*</span>",
+			"apiPassphrasePlaceholder": "请输入 OKX Passphrase",
+			"usePaper": "使用模拟盘 (Sandbox)",
+			"testButton": "🔍 测试 API 连接",
+			"testMessages": {
+				"fillRequired": "请先填写完整的 OKX API 凭证。",
+				"testing": "正在测试 OKX API 连接...",
+				"success": "测试成功",
+				"balanceLabel": "（账户权益：{{balance}}）",
+				"failure": "测试失败：{{detail}}",
+				"networkError": "请求失败，请检查网络或代理设置。"
+			}
+		},
+		"parameters": {
+			"sectionTitle": "💰 账户参数",
+			"initialBalance": "初始资金 (USDT)",
+			"initialBalancePlaceholder": "请输入初始资金",
+			"stopLoss": "账户止损 (USDT)",
+			"stopLossPlaceholder": "请输入止损金额",
+			"takeProfit": "账户止盈 (USDT)",
+			"takeProfitPlaceholder": "请输入止盈金额"
+		}
+	},
+	"strategy": {
+		"saveAndRestart": "保存并重启",
+		"tabs": {
+			"basic": "基础参数",
+			"entry": "入场逻辑",
+			"exit": "出场逻辑",
+			"variables": "提示词变量",
+			"preview": "预览"
+		},
+		"basic": {
+			"tradeSection": "💼 交易配置",
+			"tradingSymbols": "交易币种（逗号分隔）",
+			"tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB",
+			"interval": "调度周期（分钟）",
+			"intervalPlaceholder": "请输入分钟数",
+			"riskSection": "⚠️ 风险参数",
+			"maxLeverage": "最大杠杆",
+			"maxLeveragePlaceholder": "请输入最大杠杆",
+			"maxPositions": "最大持仓数",
+			"maxPositionsPlaceholder": "请输入最大持仓数",
+			"maxHoldingHours": "最大持仓时间（小时）",
+			"maxHoldingHoursPlaceholder": "请输入小时数",
+			"extremeStopLoss": "极端止损 (%)",
+			"extremeStopLossPlaceholder": "请输入百分比",
+			"drawdownSection": "📉 回撤控制",
+			"drawdownWarning": "预警阈值 (%)",
+			"drawdownWarningPlaceholder": "请输入百分比",
+			"drawdownNoNew": "禁止开新仓阈值 (%)",
+			"drawdownNoNewPlaceholder": "请输入百分比",
+			"drawdownForceClose": "强制平仓阈值 (%)",
+			"drawdownForceClosePlaceholder": "请输入百分比"
+		},
+		"entry": {
+			"promptLabel": "入场提示词",
+			"promptPlaceholder": "使用 {{VARIABLE}} 占位符描述入场逻辑",
+			"promptHint": "提示：描述入场条件并使用 {{VARIABLE}} 占位符，系统会自动注入内置校验（禁止对冲、加仓规则等）。"
+		},
+		"exit": {
+			"promptLabel": "出场提示词",
+			"promptPlaceholder": "定义止损、分批止盈与移动止盈逻辑",
+			"promptHint": "提示：列出止损/止盈规则与回撤要求，系统会自动注入内置校验（禁止对冲、加仓规则等）。"
+		},
+		"variables": {
+			"promptLabel": "变量说明 / 补充文本",
+			"promptPlaceholder": "可选：补充变量说明或额外提示",
+			"promptHint": "系统会展示自动生成的变量列表，你可以补充或覆盖。",
+			"placeholdersTitle": "可用占位符",
+			"placeholder": {
+				"strategyId": "<code>{{STRATEGY_ID}}</code> 策略标识",
+				"entryPrompt": "<code>{{ENTRY_PROMPT}}</code> 默认入场提示片段",
+				"exitPrompt": "<code>{{EXIT_PROMPT}}</code> 默认出场/风控提示片段",
+				"varPrompt": "<code>{{VAR_PROMPT}}</code> 默认变量说明",
+				"interval": "<code>{{TRADING_INTERVAL_MINUTES}}</code> 调度间隔（分钟）",
+				"maxHoldingHours": "<code>{{MAX_HOLDING_HOURS}}</code> 最大持仓时间",
+				"maxHoldingCycles": "<code>{{MAX_HOLDING_CYCLES}}</code> 最大持仓周期数",
+				"maxPositions": "<code>{{MAX_POSITIONS}}</code> 最大持仓数",
+				"extremeStopLoss": "<code>{{EXTREME_STOP_LOSS_PERCENT}}</code> 系统极端止损 (%)",
+				"accountStopLoss": "<code>{{ACCOUNT_STOP_LOSS_USDT}}</code> 账户止损 (USDT)",
+				"accountTakeProfit": "<code>{{ACCOUNT_TAKE_PROFIT_USDT}}</code> 账户止盈 (USDT)",
+				"drawdownWarning": "<code>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</code> 回撤预警阈值 (%)",
+				"drawdownNoNew": "<code>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</code> 禁止开新仓阈值 (%)",
+				"drawdownForceClose": "<code>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</code> 强制平仓阈值 (%)",
+				"symbolList": "<code>{{SYMBOL_LIST}}</code> 交易币种列表"
+			},
+			"placeholderHint": "保存时系统会以实时参数替换 {{VARIABLE}} 占位符并注入提示词。"
+		},
+		"quickInsert": {
+			"label": "快捷插入策略："
+		},
+		"fieldNames": {
+			"entry": "入场逻辑",
+			"exit": "出场逻辑",
+			"variables": "提示词变量",
+			"default": "模板"
+		},
+		"preview": {
+			"title": "📝 策略预览",
+			"subtitle": "展示保存后供 Agent 使用的组合策略内容。",
+			"empty": "尚无内容"
+		},
+		"labels": {
+			"ultraShort": "超短线",
+			"swingTrend": "波段趋势",
+			"dca": "DCA定投",
+			"conservative": "稳健",
+			"balanced": "平衡",
+			"aggressive": "激进",
+			"unknown": "未知策略"
+		},
+		"labelMap": {
+			"ultra-short": "超短线",
+			"swing-trend": "波段趋势",
+			"dca": "DCA定投",
+			"conservative": "稳健",
+			"balanced": "平衡",
+			"aggressive": "激进"
+		}
+	},
+	"settings": {
+		"saveAndRestart": "保存并重启",
+		"ai": {
+			"sectionTitle": "🤖 AI 模型配置",
+			"apiKeyLabel": "OpenAI API Key <span class=\"required\">*</span>",
+			"apiKeyPlaceholder": "sk-...",
+			"baseUrl": "API 基础地址",
+			"baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+			"modelName": "AI 模型名称",
+			"modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
+			"testButton": "🔍 测试 AI 连接",
+			"testMessages": {
+				"fillRequired": "请先填写完整的 AI API 配置。",
+				"testing": "正在测试 AI API 连接...",
+				"success": "测试成功",
+				"responseTime": "（耗时 {{time}}）",
+				"failure": "测试失败：{{detail}}",
+				"networkError": "请求失败，请检查网络或代理设置。"
+			}
+		},
+		"network": {
+			"sectionTitle": "🌐 网络配置",
+			"httpProxy": "HTTP 代理（可选）",
+			"httpProxyPlaceholder": "http://127.0.0.1:7890"
+		},
+		"privacy": {
+			"sectionTitle": "🔒 隐私设置",
+			"description": "控制是否参加社区 AI 竞赛排名以及共享提示词。",
+			"reportEnabled": "加入社区 AI 竞赛排名",
+			"reportEnabledHint": "开启后系统会每小时上报匿名化的账户表现数据。",
+			"sharePrompts": "与社区分享我的策略入场/出场提示词",
+			"sharePromptsHint": "仅在开启竞赛上报时共享提示词内容，帮助社区优化策略。"
+		},
+		"reset": {
+			"sectionTitle": "⚠️ 重置实时环境",
+			"hint": "该操作会清空交易数据与策略设置，但保留 API 与代理配置。执行前请确保已停止实盘交易。",
+			"trigger": "重置实时数据",
+			"confirmHint": "输入 <code>RESET</code> 以确认。",
+			"confirmPlaceholder": "请输入 RESET 继续",
+			"confirm": "确认重置"
+		}
+	},
+	"chart": {
+		"aiToggleStart": "启动 AI 定时任务",
+		"aiToggleStop": "停止 AI 定时任务",
+		"tooltipStart": "点击启动 AI 智能交易",
+		"tooltipStop": "点击停止 AI 智能交易",
+		"manualTrigger": "点击手动触发 AI 决策",
+		"loginRequired": "请先登录后台",
+		"modelBadge": "AI 模型驱动",
+		"modelIconAlt": "AI 模型图标",
+		"triggerType": {
+			"manual": "手动触发",
+			"scheduled": "CRON"
+		},
+		"markers": {
+			"trade": "交易",
+			"close": "平仓",
+			"closeWithPnl": "平仓 {{pnl}}",
+			"closeWithPnlPercent": "平仓 {{pnl}}（{{percent}}%）"
+		}
+	},
+	"notifications": {
+		"loadFailedTitle": "加载失败",
+		"loadFailedDefault": "无法获取策略模板，请稍后重试。",
+		"templateInsertedTitle": "模板已插入",
+		"templateInsertedMessage": "已载入「{{strategy}}」策略的{{field}}模板。",
+		"noChangesTitle": "无需保存",
+		"noChangesMessage": "未检测到配置改动。",
+		"saveFailedTitle": "保存失败",
+		"saveFailedDefault": "保存失败，请稍后重试。",
+		"reloadFailedTitle": "重载失败",
+		"reloadFailedMessage": "配置已保存，但重载失败：{{error}}",
+		"accountSaveTitle": "账户配置已更新",
+		"accountSaveMessage": "配置已保存并触发重载。若服务未自动重启，请手动重启进程。",
+		"strategySaveTitle": "策略配置已更新",
+		"strategySaveMessage": "配置已保存并触发重载。若服务未自动重启，请手动重启进程。",
+		"settingsSaveTitle": "系统设置已更新",
+		"settingsSaveMessage": "配置已保存并触发重载。若服务未自动重启，请手动重启进程。",
+		"saveExceptionTitle": "保存异常",
+		"saveExceptionMessage": "保存配置时发生异常，请检查控制台日志。",
+		"fieldMissingTitle": "字段缺失",
+		"tradingSymbolsRequired": "交易币种不能为空。",
+		"networkRequestFailed": "请求失败，请检查网络连接。"
+	},
+	"aiManual": {
+		"loginRequiredTitle": "需要登录",
+		"loginRequiredMessage": "请先登录后台才能手动触发 AI 决策。",
+		"executingTitle": "执行中",
+		"executingMessage": "AI 决策正在执行，请稍候...",
+		"triggerFailedTitle": "触发失败",
+		"triggerFailedMessage": "触发 AI 决策失败，请检查网络连接。"
+	},
+	"aiOverlay": {
+		"status": {
+			"idle": "待机中",
+			"preparing": "准备执行...",
+			"collecting_data": "收集数据...",
+			"analyzing": "分析市场...",
+			"ai_deciding": "AI 决策中...",
+			"executing_trades": "执行交易...",
+			"completed": "执行完成 ✓",
+			"error": "执行失败 ✗"
+		},
+		"statusFallback": "AI 模型驱动"
+	},
+	"logDetail": {
+		"time": "时间",
+		"symbol": "合约",
+		"action": "操作",
+		"status": "状态",
+		"statusUnknown": "未知",
+		"summaryTitle": "执行摘要",
+		"noDetails": "暂无详细信息",
+		"rawRequest": "原始请求",
+		"rawResponse": "原始响应",
+		"rawMessage": "原始消息"
+	},
+	"loadingData": "正在加载数据...",
+	"saveSuccess": "保存成功",
+	"saveError": "保存失败",
+	"networkError": "网络错误",
+	"strategyLabels": {
+		"ultra-short": "超短线",
+		"swing-trend": "波段趋势",
+		"dca": "DCA定投",
+		"conservative": "稳健",
+		"balanced": "平衡",
+		"aggressive": "激进"
+	}
 }

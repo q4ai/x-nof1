@@ -14,6 +14,7 @@ type OrderParams = {
   stopLoss?: number;
   takeProfit?: number;
   positionSide?: "long" | "short" | "net";
+  marginMode?: "cross" | "isolated";
 };
 
 type RawPosition = {
@@ -29,6 +30,7 @@ type RawPosition = {
   liqPx?: string;
   cTime?: string;
   uTime?: string;
+  mgnMode?: string;
 };
 
 export type OkxPosition = {
@@ -44,6 +46,7 @@ export type OkxPosition = {
   posSide: string;
   createTime?: string;
   updateTime?: string;
+  marginMode?: "cross" | "isolated" | string;
 };
 
 type FetchOptions = RequestInit & { dispatcher?: Dispatcher };
@@ -411,6 +414,7 @@ export class OkxClient {
       const direction = posSide === "short" ? -size : size;
       const createTime = toIsoTimestamp(pos.cTime);
       const updateTime = toIsoTimestamp(pos.uTime);
+      const marginMode = (pos.mgnMode ?? "cross").toLowerCase() === "isolated" ? "isolated" : "cross";
 
       return {
         instId,
@@ -425,6 +429,7 @@ export class OkxClient {
         posSide,
         createTime,
         updateTime,
+        marginMode,
       };
     });
   }
@@ -526,9 +531,10 @@ export class OkxClient {
 
     const isLong = params.size > 0;
     const posSide = params.positionSide ?? (isLong ? "long" : "short");
+    const tdMode = params.marginMode === "isolated" ? "isolated" : "cross";
     const body: Record<string, string> = {
       instId,
-      tdMode: "cross",
+      tdMode,
       side: isLong ? "buy" : "sell",
       posSide,
       ordType: params.price && params.price > 0 ? "limit" : "market",

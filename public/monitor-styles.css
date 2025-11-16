@@ -976,6 +976,102 @@ a:hover {
   border-bottom: 1px solid rgba(75, 85, 105, 0.15);
 }
 
+.position-action-cell {
+  white-space: nowrap;
+  text-align: right;
+  min-width: 60px;
+}
+
+.position-action-cell {
+  white-space: nowrap;
+  text-align: left;
+  position: relative;
+  padding-left: 10px;
+}
+
+.position-action-cell .close-position-btn {
+  width: auto;
+  min-width: 0;
+}
+
+.close-confirmation-popover {
+  display: none;
+  background: var(--bg-tertiary);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-width: 160px;
+  max-width: 220px;
+  box-shadow: 0 10px 25px rgba(15, 23, 42, 0.32);
+  text-align: center;
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 50;
+}
+
+.close-confirmation-popover.is-visible {
+  display: block;
+}
+
+.close-confirmation-text {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 0 0 6px;
+}
+
+.close-confirmation-actions {
+  display: flex;
+  width: 100%;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.close-confirmation-actions .link-button {
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.close-confirmation-actions .btn-danger.btn-small {
+  padding: 4px 8px;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.btn-ghost {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: var(--text-secondary);
+  border-radius: 4px;
+  padding: 3px 10px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.3;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(148, 163, 184, 0.15);
+  border-color: rgba(148, 163, 184, 0.45);
+  color: var(--text-primary);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.btn-ghost-danger {
+  color: var(--accent-red);
+  border-color: rgba(239, 68, 68, 0.35);
+}
+
+.btn-ghost-danger:hover:not(:disabled) {
+  color: var(--accent-red);
+  border-color: rgba(239, 68, 68, 0.55);
+  background: rgba(239, 68, 68, 0.08);
+}
+
 .data-table tbody tr {
   transition: background 0.15s;
   cursor: pointer;
@@ -2022,6 +2118,36 @@ a:hover {
 .btn-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+  line-height: 1.2;
+}
+
+.link-button {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--accent-cyan);
+  text-decoration: none;
+}
+
+.link-button:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.link-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.link-danger {
+  color: var(--accent-red);
 }
 
 /* API 测试结果 */

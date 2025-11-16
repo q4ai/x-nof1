@@ -583,8 +583,9 @@ export const closePositionTool = createTool({
   parameters: z.object({
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
     percentage: z.number().min(1).max(100).default(100).describe("平仓百分比（1-100）"),
+    skipGuards: z.boolean().optional().describe("是否跳过最小持仓时间等保护（仅限手动平仓）"),
   }),
-  execute: async ({ symbol, percentage }) => {
+  execute: async ({ symbol, percentage, skipGuards = false }) => {
   const client = createOkxClient();
     const contract = `${symbol}_USDT`;
     let logSide: "long" | "short" | undefined;
@@ -636,35 +637,39 @@ export const closePositionTool = createTool({
       if (!okxPosition || Number.parseFloat(okxPosition.size || "0") === 0) {
         return fail(`没有找到 ${symbol} 的持仓`);
       }
+
+      const okxPosSideRaw = typeof okxPosition.posSide === "string" ? okxPosition.posSide.toLowerCase() : "";
+      const normalizedPosSide = okxPosSideRaw === "long" || okxPosSideRaw === "short" ? okxPosSideRaw : "net";
+      const marginModeRaw = typeof okxPosition.marginMode === "string" ? okxPosition.marginMode.toLowerCase() : "";
+      const marginModeForOrder = marginModeRaw === "isolated" ? "isolated" : "cross";
       
       // 🔒 防止同周期内平仓保护：检查持仓开仓时间，防止刚开仓就立即平仓
       // 从数据库获取持仓信息以检查开仓时间
-    const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./db/sqlite.db",
-      });
-      
-      const dbPositionResult = await dbClient.execute({
-        sql: `SELECT opened_at FROM positions WHERE symbol = ? LIMIT 1`,
-        args: [symbol],
-      });
-      
-      if (dbPositionResult.rows.length > 0) {
-        const openedAt = dbPositionResult.rows[0].opened_at as string;
-        const openedTime = new Date(openedAt).getTime();
-        const now = Date.now();
-        const holdingMinutes = (now - openedTime) / (1000 * 60);
-        
-        // 获取交易周期间隔（分钟）
-  const intervalMinutes = RISK_PARAMS.TRADING_INTERVAL_MINUTES;
-        // 最小持仓时间为半个交易周期
-        const minHoldingMinutes = intervalMinutes / 2;
-        
-        // 如果持仓时间少于最小持仓时间，拒绝平仓
-        if (holdingMinutes < minHoldingMinutes) {
-          return fail(`拒绝平仓 ${symbol}：持仓时间仅 ${holdingMinutes.toFixed(1)} 分钟，少于最小持仓时间 ${minHoldingMinutes.toFixed(1)} 分钟。请等待至少半个交易周期后再评估平仓。这是为了防止在同一周期内刚开仓就立即平仓，造成不必要的手续费损失。`);
+      if (!skipGuards) {
+        const dbClient = createClient({
+          url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+        });
+
+        const dbPositionResult = await dbClient.execute({
+          sql: `SELECT opened_at FROM positions WHERE symbol = ? LIMIT 1`,
+          args: [symbol],
+        });
+
+        if (dbPositionResult.rows.length > 0) {
+          const openedAt = dbPositionResult.rows[0].opened_at as string;
+          const openedTime = new Date(openedAt).getTime();
+          const now = Date.now();
+          const holdingMinutes = (now - openedTime) / (1000 * 60);
+
+          const intervalMinutes = RISK_PARAMS.TRADING_INTERVAL_MINUTES;
+          const minHoldingMinutes = intervalMinutes / 2;
+
+          if (holdingMinutes < minHoldingMinutes) {
+            return fail(`拒绝平仓 ${symbol}：持仓时间仅 ${holdingMinutes.toFixed(1)} 分钟，少于最小持仓时间 ${minHoldingMinutes.toFixed(1)} 分钟。请等待至少半个交易周期后再评估平仓。这是为了防止在同一周期内刚开仓就立即平仓，造成不必要的手续费损失。`);
+          }
+
+          logger.info(`${symbol} 持仓时间: ${holdingMinutes.toFixed(1)} 分钟，通过最小持仓时间检查`);
         }
-        
-        logger.info(`${symbol} 持仓时间: ${holdingMinutes.toFixed(1)} 分钟，通过最小持仓时间检查`);
       }
       
   // 从 OKX 获取实时数据
@@ -752,6 +757,7 @@ export const closePositionTool = createTool({
 
       const size = side === "long" ? -closeSize : closeSize;
       logSize = closeSize;
+      const positionSideForOrder = normalizedPosSide === "net" ? "net" : side;
       
       //  获取合约乘数用于计算盈亏和手续费
       const quantoMultiplier = await getQuantoMultiplier(contract);
@@ -784,7 +790,8 @@ export const closePositionTool = createTool({
         size,
         price: 0,  // 市价单必须传 price: 0
         reduceOnly: true, // 只减仓，不开新仓
-        positionSide: side,
+        positionSide: positionSideForOrder,
+        marginMode: marginModeForOrder,
       });
       const okxRawRequest = order?.raw?.request;
       const okxRawResponse = order?.raw?.response;
