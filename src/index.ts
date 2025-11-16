@@ -26,6 +26,7 @@ import { startAccountRecorder } from "./scheduler/accountRecorder";
 // import { startTrailingStopMonitor, stopTrailingStopMonitor } from "./scheduler/trailingStopMonitor";
 // import { startStopLossMonitor, stopStopLossMonitor } from "./scheduler/stopLossMonitor";
 import { startContractMultiplierSync, stopContractMultiplierSync } from "./scheduler/contractMultiplierSync";
+import { startCommunityReporter, stopCommunityReporter } from "./scheduler/communityReporter";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams.new";
 import { getAccountRiskConfig, getTradingStrategy } from "./agents/tradingAgent";
@@ -52,6 +53,7 @@ const logger = createLogger({
 // 全局服务器实例
 let server: any = null;
 let contractMultiplierSyncTimer: NodeJS.Timeout | null = null;
+let communityReporterTask: ReturnType<typeof startCommunityReporter> | null = null;
 
 /**
  * 主函数
@@ -104,18 +106,22 @@ async function main() {
   // 8. 启动账户资产记录器
   logger.info("启动账户资产记录器...");
   startAccountRecorder();
+
+  // 9. 启动社区竞赛上报任务
+  logger.info("启动社区竞赛上报任务...");
+  communityReporterTask = startCommunityReporter();
   
-  // 9. 移动止盈监控器已禁用
+  // 10. 移动止盈监控器已禁用
   // 注意：移动止盈逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
   // logger.info("启动移动止盈监控器...");
   // startTrailingStopMonitor();
   
-  // 10. 止损监控器已禁用
+  // 11. 止损监控器已禁用
   // 注意：止损逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
   // logger.info("启动止损监控器...");
   // startStopLossMonitor();
   
-  // 11. 启动合约乘数同步定时任务（每1小时执行一次）
+  // 12. 启动合约乘数同步定时任务（每1小时执行一次）
   logger.info("启动合约乘数同步定时任务...");
   contractMultiplierSyncTimer = startContractMultiplierSync(1);
   
@@ -169,6 +175,12 @@ async function gracefulShutdown(signal: string) {
     
     // 止损监控器已禁用，无需停止
     // stopStopLossMonitor();
+
+    if (communityReporterTask) {
+      logger.info("正在停止社区竞赛上报任务...");
+      stopCommunityReporter(communityReporterTask);
+      communityReporterTask = null;
+    }
     
     // 关闭 WebSocket 服务器
     logger.info("正在关闭 WebSocket 服务器...");

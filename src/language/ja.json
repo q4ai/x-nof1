@@ -393,6 +393,14 @@
       "httpProxy": "HTTP プロキシ (任意)",
       "httpProxyPlaceholder": "http://127.0.0.1:7890"
     },
+    "privacy": {
+      "sectionTitle": "🔒 プライバシー設定",
+      "description": "コミュニティ大会への参加方法と共有データを管理します。",
+      "reportEnabled": "コミュニティAIランキングに参加する",
+      "reportEnabledHint": "有効にすると匿名化されたパフォーマンスが毎時送信されます。",
+      "sharePrompts": "エントリー/エグジットのプロンプトを共有する",
+      "sharePromptsHint": "ランキング報告が有効な場合のみプロンプト内容が送信されます。"
+    },
     "reset": {
       "sectionTitle": "⚠️ 実運用データをリセット",
       "hint": "この操作は取引データとストラテジー設定を初期化します (API・プロキシ設定は維持)。実運用を停止したうえで実行してください。",

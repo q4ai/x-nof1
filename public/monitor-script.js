@@ -281,6 +281,8 @@ const SETTINGS_CONFIG_KEYS = [
   "OPENAI_BASE_URL",
   "AI_MODEL_NAME",
   "HTTP_PROXY_URL",
+  "COMMUNITY_REPORT_ENABLED",
+  "COMMUNITY_SHARE_PROMPTS",
 ];
 
 const CLIENT_NUMERIC_KEYS = new Set([
@@ -409,6 +411,8 @@ class TradingMonitor {
   this.resetLiveDataInput = document.getElementById("reset-live-data-input");
   this.resetLiveDataCancelBtn = document.getElementById("reset-live-data-cancel");
   this.resetLiveDataConfirmBtn = document.getElementById("reset-live-data-confirm-btn");
+    this.communityReportCheckbox = document.querySelector('input[name="COMMUNITY_REPORT_ENABLED"]');
+    this.communityShareCheckbox = document.querySelector('input[name="COMMUNITY_SHARE_PROMPTS"]');
     this.statsDetailBtn = document.getElementById("stats-detail-btn");
     this.statsPnlChart = null;
     this.latestConfig = null;
@@ -432,6 +436,7 @@ class TradingMonitor {
     this.renderSymbolList();
 
     this.bindSettingsForms();
+    this.setupPrivacyControls();
   this.setupStrategyTabs();
   this.setupStrategyPromptEditors();
     this.initAiModelOverlay();
@@ -3469,6 +3474,30 @@ class TradingMonitor {
     }
   }
 
+  setupPrivacyControls() {
+    if (!this.communityReportCheckbox || !this.communityShareCheckbox) {
+      return;
+    }
+
+    this.communityReportCheckbox.addEventListener("change", () => {
+      this.applyPrivacyDependencies();
+    });
+    this.applyPrivacyDependencies();
+  }
+
+  applyPrivacyDependencies() {
+    if (!this.communityShareCheckbox) {
+      return;
+    }
+
+    const shareGroup = this.communityShareCheckbox.closest(".form-group");
+    const enabled = this.communityReportCheckbox?.checked ?? false;
+    this.communityShareCheckbox.disabled = !enabled;
+    if (shareGroup) {
+      shareGroup.classList.toggle("is-disabled", !enabled);
+    }
+  }
+
   initAiModelOverlay() {
     if (this.aiOverlay) {
       return;
@@ -4442,6 +4471,7 @@ class TradingMonitor {
     }
 
     this.populateForm(this.settingsForm, config, SETTINGS_CONFIG_KEYS);
+    this.applyPrivacyDependencies();
     this.showModal(this.settingsModal);
   }
 

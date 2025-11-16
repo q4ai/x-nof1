@@ -393,6 +393,14 @@
       "httpProxy": "HTTP 代理（可选）",
       "httpProxyPlaceholder": "http://127.0.0.1:7890"
     },
+    "privacy": {
+      "sectionTitle": "🔒 隐私设置",
+      "description": "控制是否参加社区 AI 竞赛排名以及共享提示词。",
+      "reportEnabled": "加入社区 AI 竞赛排名",
+      "reportEnabledHint": "开启后系统会每小时上报匿名化的账户表现数据。",
+      "sharePrompts": "与社区分享我的策略入场/出场提示词",
+      "sharePromptsHint": "仅在开启竞赛上报时共享提示词内容，帮助社区优化策略。"
+    },
     "reset": {
       "sectionTitle": "⚠️ 重置实时环境",
       "hint": "该操作会清空交易数据与策略设置，但保留 API 与代理配置。执行前请确保已停止实盘交易。",

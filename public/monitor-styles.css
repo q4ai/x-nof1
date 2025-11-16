@@ -1622,6 +1622,16 @@ a:hover {
   flex: 1;
 }
 
+.form-group.is-disabled {
+  opacity: 0.6;
+}
+
+.form-group.is-disabled input,
+.form-group.is-disabled label,
+.form-group.is-disabled .checkbox-label {
+  cursor: not-allowed;
+}
+
 .form-group label {
   font-size: 12px;
   color: var(--text-muted);

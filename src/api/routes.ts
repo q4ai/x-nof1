@@ -81,7 +81,7 @@ const CONFIG_NUMERIC_KEYS = new Set([
   "ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT",
 ]);
 
-const CONFIG_BOOLEAN_KEYS = new Set(["OKX_USE_PAPER"]);
+const CONFIG_BOOLEAN_KEYS = new Set(["OKX_USE_PAPER", "COMMUNITY_REPORT_ENABLED", "COMMUNITY_SHARE_PROMPTS"]);
 
 const CONFIG_ENUM_VALUES: Record<string, string[]> = {
   TRADING_STRATEGY: ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"],
@@ -106,6 +106,8 @@ const CONFIG_ALLOWED_KEYS = new Set([
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
   "HTTP_PROXY_URL",
+  "COMMUNITY_REPORT_ENABLED",
+  "COMMUNITY_SHARE_PROMPTS",
   "OKX_API_KEY",
   "OKX_API_SECRET",
   "OKX_API_PASSPHRASE",

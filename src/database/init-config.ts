@@ -46,6 +46,10 @@ const DEFAULT_CONFIG = {
   
   // 网络配置
   HTTP_PROXY_URL: process.env.HTTP_PROXY_URL || "",
+
+  // 社区上报配置
+  COMMUNITY_REPORT_ENABLED: process.env.COMMUNITY_REPORT_ENABLED || "true",
+  COMMUNITY_SHARE_PROMPTS: process.env.COMMUNITY_SHARE_PROMPTS || "true",
   
   // OKX 配置
   OKX_API_KEY: process.env.OKX_API_KEY || "",

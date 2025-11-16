@@ -393,6 +393,14 @@
       "httpProxy": "HTTP Proxy (optional)",
       "httpProxyPlaceholder": "http://127.0.0.1:7890"
     },
+    "privacy": {
+      "sectionTitle": "🔒 Privacy Settings",
+      "description": "Control how this node participates in the community competition.",
+      "reportEnabled": "Join community AI competition leaderboard",
+      "reportEnabledHint": "When enabled, anonymized performance data is reported hourly.",
+      "sharePrompts": "Share my entry & exit prompt logic",
+      "sharePromptsHint": "Prompt details are only sent if leaderboard reporting is enabled."
+    },
     "reset": {
       "sectionTitle": "⚠️ Reset Live Environment",
       "hint": "This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.",
