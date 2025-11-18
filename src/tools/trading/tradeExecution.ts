@@ -28,6 +28,9 @@ import { getChinaTimeISO } from "../../utils/timeUtils";
 import { RISK_PARAMS } from "../../config/riskParams.new";
 import { getQuantoMultiplier } from "../../utils/contractUtils";
 import { recordTradeLog } from "../../utils/tradeLogUtils";
+import { getExchangeProvider, type ExchangeProvider } from "../../config/exchange";
+import { getBinancePrecision } from "../../database/binancePrecision";
+import { BinanceClient } from "../../services/binanceClient";
 
 const logger = createLogger({
   name: "trade-execution",
@@ -37,6 +40,140 @@ const logger = createLogger({
 const dbClient = createClient({
   url: process.env.DATABASE_URL || "file:./db/sqlite.db",
 });
+
+type LotSizingInfo = {
+  lotSize: number;
+  lotSizePrecision: number;
+  minSizeRaw: number;
+  maxSizeRaw: number;
+  normalizeToStep: (value: number, direction: "up" | "down") => number;
+};
+
+function computeLotSizePrecision(lotSizeString: string): number {
+  if (!lotSizeString.includes(".")) {
+    return 0;
+  }
+  const decimals = lotSizeString.split(".")[1]?.replace(/0+$/, "") ?? "";
+  return Math.min(decimals.length, 12);
+}
+
+async function buildLotSizingInfo(
+  contract: string,
+  contractInfo: any,
+  provider: ExchangeProvider
+): Promise<LotSizingInfo> {
+  const lotSizeSource = contractInfo?.lotSize ?? "1";
+  let lotSizeString = typeof lotSizeSource === "string" ? lotSizeSource : String(lotSizeSource ?? "1");
+  let lotSizeRaw = Number.parseFloat(lotSizeString);
+  let lotSize = Number.isFinite(lotSizeRaw) && lotSizeRaw > 0 ? lotSizeRaw : 1;
+  let lotSizePrecision = computeLotSizePrecision(lotSizeString);
+  let minSizeRaw = Number.parseFloat(contractInfo?.orderSizeMin ?? contractInfo?.minSize ?? String(lotSize));
+  let maxSizeRaw = Number.parseFloat(contractInfo?.orderSizeMax ?? contractInfo?.maxSize ?? "1000000");
+
+  if (provider === "binance") {
+    const precisionRecord = await getBinancePrecision(contract);
+    if (precisionRecord) {
+      if (precisionRecord.step_size) {
+        lotSizeString = precisionRecord.step_size;
+        lotSizeRaw = Number.parseFloat(lotSizeString);
+        if (Number.isFinite(lotSizeRaw) && lotSizeRaw > 0) {
+          lotSize = lotSizeRaw;
+        }
+        if (Number.isFinite(precisionRecord.precision)) {
+          lotSizePrecision = Math.max(precisionRecord.precision, 0);
+        } else {
+          lotSizePrecision = computeLotSizePrecision(lotSizeString);
+        }
+      }
+
+      const minCandidate = Number.parseFloat(precisionRecord.min_qty);
+      if (Number.isFinite(minCandidate) && minCandidate > 0) {
+        minSizeRaw = minCandidate;
+      }
+
+      const maxCandidate = Number.parseFloat(precisionRecord.max_qty);
+      if (Number.isFinite(maxCandidate) && maxCandidate > 0) {
+        maxSizeRaw = maxCandidate;
+      }
+    }
+  }
+
+  const normalizeToStep = (value: number, direction: "up" | "down") => {
+    if (!Number.isFinite(value)) {
+      return 0;
+    }
+
+    if (!Number.isFinite(lotSize) || lotSize <= 0) {
+      const factor = 10 ** Math.max(lotSizePrecision, 0);
+      if (direction === "up") {
+        return Math.ceil(value * factor) / factor;
+      }
+      return Math.floor(value * factor) / factor;
+    }
+
+    const ratio = direction === "up"
+      ? Math.ceil((value - Number.EPSILON) / lotSize)
+      : Math.floor((value + Number.EPSILON) / lotSize);
+    const stepped = Math.max(ratio, 0) * lotSize;
+    return Number(stepped.toFixed(Math.min(lotSizePrecision, 12)));
+  };
+
+  return {
+    lotSize,
+    lotSizePrecision,
+    minSizeRaw: Number.isFinite(minSizeRaw) && minSizeRaw > 0 ? minSizeRaw : lotSize,
+    maxSizeRaw: Number.isFinite(maxSizeRaw) && maxSizeRaw > 0 ? maxSizeRaw : 1000000,
+    normalizeToStep,
+  };
+}
+
+async function getBinanceOrderRealizedPnl(
+  client: any,
+  contract: string,
+  orderId: string
+): Promise<number | null> {
+  if (!(client instanceof BinanceClient)) {
+    return null;
+  }
+
+  try {
+    const trades = await client.getMyTrades(contract, 50);
+    if (!Array.isArray(trades) || trades.length === 0) {
+      return null;
+    }
+
+    const normalizedOrderId = orderId.toString();
+    const matched = trades.filter((trade: any) => {
+      const candidate = trade?.orderId ?? trade?.orderID ?? trade?.ordId;
+      if (candidate === undefined || candidate === null) {
+        return false;
+      }
+      return String(candidate) === normalizedOrderId;
+    });
+
+    if (!matched.length) {
+      return null;
+    }
+
+    const total = matched.reduce((sum: number, trade: any) => {
+      const raw = trade?.realizedPnl ?? trade?.realisedPnl ?? trade?.realizedPNL;
+      const value = Number.parseFloat(raw ?? "NaN");
+      if (!Number.isFinite(value)) {
+        return sum;
+      }
+      return sum + value;
+    }, 0);
+
+    if (!Number.isFinite(total)) {
+      return null;
+    }
+
+    return total;
+  } catch (error) {
+    logger.warn(`获取 Binance realizedPnl 失败(order ${orderId}): ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
 
 /**
  * 开仓工具
@@ -55,6 +192,7 @@ export const openPositionTool = createTool({
     const stopLoss = undefined;
     const takeProfit = undefined;
   const client = createOkxClient();
+  const exchangeProvider = getExchangeProvider();
     const contract = `${symbol}_USDT`;
     const toolInput = { symbol, side, leverage, amountUsdt } as const;
     const finalize = async (result: {
@@ -249,24 +387,11 @@ export const openPositionTool = createTool({
       
       // 获取合约乘数
       const quantoMultiplier = await getQuantoMultiplier(contract);
-      const lotSizeRaw = Number.parseFloat(contractInfo.lotSize ?? "1");
-      const lotSize = Number.isFinite(lotSizeRaw) && lotSizeRaw > 0 ? lotSizeRaw : 1;
-      const minSizeRaw = Number.parseFloat(
-        contractInfo.orderSizeMin ?? contractInfo.minSize ?? String(lotSize)
+      const { lotSize, minSizeRaw, maxSizeRaw, normalizeToStep } = await buildLotSizingInfo(
+        contract,
+        contractInfo,
+        exchangeProvider
       );
-      const maxSizeRaw = Number.parseFloat(
-        contractInfo.orderSizeMax ?? contractInfo.maxSize ?? "1000000"
-      );
-
-      const normalizeToStep = (value: number, direction: "up" | "down") => {
-        if (!Number.isFinite(value)) {
-          return 0;
-        }
-        const ratio = direction === "up"
-          ? Math.ceil((value - Number.EPSILON) / lotSize)
-          : Math.floor((value + Number.EPSILON) / lotSize);
-        return Number((Math.max(ratio, 0) * lotSize).toFixed(10));
-      };
 
       const minSize = normalizeToStep(
         Math.max(minSizeRaw > 0 ? minSizeRaw : lotSize, lotSize),
@@ -336,7 +461,7 @@ export const openPositionTool = createTool({
         
         while (retryCount < maxRetries) {
           try {
-            const orderDetail = await client.getOrder(order.id.toString());
+            const orderDetail = await client.getOrder(order.id.toString(), contract);
             finalOrderStatus = orderDetail.status;
             const detailSize = Number.parseFloat(orderDetail.size || "0");
             const detailLeft = Number.parseFloat(orderDetail.left || "0");
@@ -608,6 +733,7 @@ export async function executeClosePosition({
   const normalizedSymbol = symbol.toUpperCase();
   const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
   const client = createOkxClient();
+  const exchangeProvider = getExchangeProvider();
   const contract = `${normalizedSymbol}_USDT`;
   let logSide: "long" | "short" | undefined;
   let logLeverage: number | undefined;
@@ -710,21 +836,11 @@ export async function executeClosePosition({
     logSize = rawQuantity;
 
       const contractInfo = await client.getContractInfo(contract);
-      const lotSizeRaw = Number.parseFloat(contractInfo.lotSize ?? "1");
-      const lotSize = Number.isFinite(lotSizeRaw) && lotSizeRaw > 0 ? lotSizeRaw : 1;
-      const minSizeRaw = Number.parseFloat(
-        contractInfo.orderSizeMin ?? contractInfo.minSize ?? String(lotSize)
+      const { lotSize, minSizeRaw, normalizeToStep } = await buildLotSizingInfo(
+        contract,
+        contractInfo,
+        exchangeProvider
       );
-
-      const normalizeToStep = (value: number, direction: "up" | "down") => {
-        if (!Number.isFinite(value)) {
-          return 0;
-        }
-        const ratio = direction === "up"
-          ? Math.ceil((value - Number.EPSILON) / lotSize)
-          : Math.floor((value + Number.EPSILON) / lotSize);
-        return Number((Math.max(ratio, 0) * lotSize).toFixed(10));
-      };
 
       const minTradableSize = normalizeToStep(
         Math.max(minSizeRaw > 0 ? minSizeRaw : lotSize, lotSize),
@@ -828,6 +944,7 @@ export async function executeClosePosition({
       let actualExitPrice = currentPrice;
       let actualCloseSize = closeSize;
       let finalOrderStatus = order.status;
+      let usedExchangeRealizedPnl = false;
       
       if (order.id) {
         let retryCount = 0;
@@ -835,7 +952,7 @@ export async function executeClosePosition({
         
         while (retryCount < maxRetries) {
           try {
-            const orderDetail = await client.getOrder(order.id.toString());
+            const orderDetail = await client.getOrder(order.id.toString(), contract);
             finalOrderStatus = orderDetail.status;
         const detailSize = Number.parseFloat(orderDetail.size || "0");
         const detailLeft = Number.parseFloat(orderDetail.left || "0");
@@ -912,6 +1029,15 @@ export async function executeClosePosition({
             }
           }
         }
+
+        if (exchangeProvider === "binance" && order.id) {
+          const exchangePnl = await getBinanceOrderRealizedPnl(client, contract, order.id.toString());
+          if (exchangePnl !== null) {
+            pnl = exchangePnl;
+            usedExchangeRealizedPnl = true;
+            logger.info(`采用 Binance realizedPnl: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} USDT`);
+          }
+        }
       }
       
       // 获取账户信息用于记录当前总资产
@@ -937,7 +1063,7 @@ export async function executeClosePosition({
       const expectedPnl = priceChangeCheck * actualCloseSize * dbQuantoMultiplier - totalFee;
       
       // 检测盈亏是否被错误地设置为名义价值
-      if (Math.abs(pnl - notionalValue) < Math.abs(pnl - expectedPnl)) {
+      if (!usedExchangeRealizedPnl && Math.abs(pnl - notionalValue) < Math.abs(pnl - expectedPnl)) {
         logger.error(`🚨 检测到盈亏计算异常！`);
         logger.error(`  当前pnl: ${pnl.toFixed(2)} USDT 接近名义价值 ${notionalValue.toFixed(2)} USDT`);
         logger.error(`  预期pnl: ${expectedPnl.toFixed(2)} USDT`);
@@ -997,7 +1123,7 @@ export async function executeClosePosition({
         if (dbPosition.sl_order_id) {
           try {
             // 先获取订单状态
-            const orderDetail = await client.getOrder(dbPosition.sl_order_id);
+            const orderDetail = await client.getOrder(dbPosition.sl_order_id, contract);
             // 只取消未完成的订单（open状态）
             if (orderDetail.status === 'open') {
               await client.cancelOrder(contract, dbPosition.sl_order_id);
@@ -1011,7 +1137,7 @@ export async function executeClosePosition({
         if (dbPosition.tp_order_id) {
           try {
             // 先获取订单状态
-            const orderDetail = await client.getOrder(dbPosition.tp_order_id);
+            const orderDetail = await client.getOrder(dbPosition.tp_order_id, contract);
             // 只取消未完成的订单（open状态）
             if (orderDetail.status === 'open') {
               await client.cancelOrder(contract, dbPosition.tp_order_id);
@@ -1094,7 +1220,7 @@ export const cancelOrderTool = createTool({
 
     try {
       const existingOrder = await client.getOrder(orderId);
-      const cancelResult = await client.cancelOrder(existingOrder.contract, orderId);
+      const cancelResult: any = await client.cancelOrder(existingOrder.contract, orderId);
       
       return finalize({
         success: true,

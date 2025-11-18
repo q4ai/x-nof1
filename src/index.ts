@@ -26,6 +26,7 @@ import { startAccountRecorder } from "./scheduler/accountRecorder";
 // import { startTrailingStopMonitor, stopTrailingStopMonitor } from "./scheduler/trailingStopMonitor";
 // import { startStopLossMonitor, stopStopLossMonitor } from "./scheduler/stopLossMonitor";
 import { startContractMultiplierSync, stopContractMultiplierSync } from "./scheduler/contractMultiplierSync";
+import { startBinancePrecisionSync, stopBinancePrecisionSync } from "./scheduler/binancePrecisionSync";
 import { startCommunityReporter, stopCommunityReporter } from "./scheduler/communityReporter";
 import { initDatabase } from "./database/init";
 import { RISK_PARAMS } from "./config/riskParams.new";
@@ -53,6 +54,7 @@ const logger = createLogger({
 // 全局服务器实例
 let server: any = null;
 let contractMultiplierSyncTimer: NodeJS.Timeout | null = null;
+let binancePrecisionSyncTimer: NodeJS.Timeout | null = null;
 let communityReporterTask: ReturnType<typeof startCommunityReporter> | null = null;
 
 /**
@@ -124,6 +126,9 @@ async function main() {
   // 12. 启动合约乘数同步定时任务（每1小时执行一次）
   logger.info("启动合约乘数同步定时任务...");
   contractMultiplierSyncTimer = startContractMultiplierSync(1);
+
+  logger.info("启动 Binance 合约精度同步定时任务...");
+  binancePrecisionSyncTimer = startBinancePrecisionSync(1);
   
   const strategy = getTradingStrategy();
   const strategyLabel = getStrategyLabel(strategy);
@@ -168,6 +173,12 @@ async function gracefulShutdown(signal: string) {
       logger.info("正在停止合约乘数同步定时任务...");
       stopContractMultiplierSync(contractMultiplierSyncTimer);
       logger.info("合约乘数同步定时任务已停止");
+    }
+
+    if (binancePrecisionSyncTimer) {
+      logger.info("正在停止 Binance 合约精度同步定时任务...");
+      stopBinancePrecisionSync(binancePrecisionSyncTimer);
+      binancePrecisionSyncTimer = null;
     }
     
     // 移动止盈监控器已禁用，无需停止

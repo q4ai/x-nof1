@@ -42,21 +42,8 @@ export async function reloadRiskParams() {
   
   // 重置 OKX 客户端实例，使其使用新配置
   try {
-    const { resetOkxClient, createOkxClientWithConfig } = await import("../services/okxClient");
+    const { resetOkxClient } = await import("../services/okxClient");
     resetOkxClient();
-    
-    // 如果数据库中有新的API密钥，重新创建客户端
-    if (config && typeof config === 'object') {
-      const apiKey = config.OKX_API_KEY || process.env.OKX_API_KEY;
-      const apiSecret = config.OKX_API_SECRET || process.env.OKX_API_SECRET;
-      const passphrase = config.OKX_API_PASSPHRASE || process.env.OKX_API_PASSPHRASE;
-      const simulated = (config.OKX_USE_PAPER || process.env.OKX_USE_PAPER) === "true";
-      const proxyUrl = config.HTTP_PROXY_URL || process.env.HTTP_PROXY_URL;
-      
-      if (apiKey && apiSecret && passphrase) {
-        createOkxClientWithConfig(apiKey, apiSecret, passphrase, simulated, proxyUrl);
-      }
-    }
   } catch (error) {
     console.error("重置 OKX 客户端失败:", error);
   }

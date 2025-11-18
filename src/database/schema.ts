@@ -141,6 +141,19 @@ export interface ContractMultiplier {
   updated_at: string;
 }
 
+export interface BinanceContractPrecision {
+  id: number;
+  contract: string;
+  symbol: string;
+  step_size: string;
+  min_qty: string;
+  max_qty: string;
+  tick_size?: string;
+  min_notional?: string;
+  precision: number;
+  updated_at: string;
+}
+
 /**
  * SQL 建表语句
  */
@@ -276,6 +289,20 @@ CREATE TABLE IF NOT EXISTS contract_multipliers (
   updated_at TEXT NOT NULL
 );
 
+-- Binance 合约下单精度表
+CREATE TABLE IF NOT EXISTS binance_contract_precisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  contract TEXT NOT NULL UNIQUE,
+  symbol TEXT NOT NULL,
+  step_size TEXT NOT NULL,
+  min_qty TEXT NOT NULL,
+  max_qty TEXT NOT NULL,
+  tick_size TEXT,
+  min_notional TEXT,
+  precision INTEGER NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
@@ -285,5 +312,6 @@ CREATE INDEX IF NOT EXISTS idx_signals_symbol ON trading_signals(symbol);
 CREATE INDEX IF NOT EXISTS idx_history_timestamp ON account_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON agent_decisions(timestamp);
 CREATE INDEX IF NOT EXISTS idx_agent_request_logs_created_at ON agent_request_logs(created_at);
+CREATE INDEX IF NOT EXISTS idx_binance_contract_precisions_contract ON binance_contract_precisions(contract);
 `;
 

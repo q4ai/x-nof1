@@ -353,44 +353,86 @@
       <div class="modal-body" id="account-body">
         <form id="account-form" class="settings-form">
 
-          <!-- OKX API 配置 -->
+          <!-- 交易所配置 -->
           <div class="settings-section">
             <div class="section-header">
-              <h4 data-i18n-html="account.okx.sectionTitle">🔑 OKX API Setup</h4>
-              <a href="https://www.afibbjgrubxx.com/join/Q4AIX" target="_blank" class="register-link" data-i18n="account.okx.registerLink">Register OKX Rebate Account ↗</a>
+              <h4 data-i18n-html="account.exchange.sectionTitle">🔑 Exchange Configuration</h4>
             </div>
+
             <div class="form-group">
-              <label data-i18n-html="account.okx.apiKeyLabel">API Key <span class="required">*</span></label>
-              <div class="password-input">
-                <input type="password" name="OKX_API_KEY" placeholder="Enter OKX API Key" data-i18n-placeholder="account.okx.apiKeyPlaceholder" autocomplete="off" />
-                <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+              <label for="exchange-provider" data-i18n="account.exchange.label">Exchange Provider</label>
+              <select id="exchange-provider" name="EXCHANGE_PROVIDER">
+                <option value="okx" data-i18n="account.exchange.providers.okx">OKX Perpetual</option>
+                <option value="binance" data-i18n="account.exchange.providers.binance">Binance Futures</option>
+              </select>
+            </div>
+            <p class="form-help">
+              <a href="https://www.afibbjgrubxx.com/join/Q4AIX" target="_blank" class="register-link" data-i18n="account.okx.registerLink">注册 OKX 返佣账号 ↗</a>
+            </p>
+
+            <div class="exchange-panel is-active" data-exchange-panel="okx">
+              <div class="form-group">
+                <label data-i18n-html="account.okx.apiKeyLabel">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="OKX_API_KEY" placeholder="Enter OKX API Key" data-i18n-placeholder="account.okx.apiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="account.okx.apiSecretLabel">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="OKX_API_SECRET" placeholder="Enter OKX API Secret" data-i18n-placeholder="account.okx.apiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="account.okx.apiPassphraseLabel">API Passphrase <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="OKX_API_PASSPHRASE" placeholder="Enter OKX Passphrase" data-i18n-placeholder="account.okx.apiPassphrasePlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-row" style="align-items: center; margin-top: 12px;">
+                <div class="form-group" style="flex: 0 0 auto;">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="OKX_USE_PAPER" />
+                    <span data-i18n="account.okx.usePaper">Use Paper Trading (Sandbox)</span>
+                  </label>
+                </div>
+                <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
+                  <button type="button" class="btn-test" id="test-okx-api" data-i18n-html="account.okx.testButton">🔍 Test API Connection</button>
+                </div>
               </div>
             </div>
-            <div class="form-group">
-              <label data-i18n-html="account.okx.apiSecretLabel">API Secret <span class="required">*</span></label>
-              <div class="password-input">
-                <input type="password" name="OKX_API_SECRET" placeholder="Enter OKX API Secret" data-i18n-placeholder="account.okx.apiSecretPlaceholder" autocomplete="off" />
-                <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+
+            <div class="exchange-panel" data-exchange-panel="binance">
+              <div class="form-group">
+                <label data-i18n-html="account.binance.apiKeyLabel">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="BINANCE_API_KEY" placeholder="Enter Binance API Key" data-i18n-placeholder="account.binance.apiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="account.binance.apiSecretLabel">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="BINANCE_API_SECRET" placeholder="Enter Binance API Secret" data-i18n-placeholder="account.binance.apiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-row" style="align-items: center; margin-top: 12px;">
+                <div class="form-group" style="flex: 0 0 auto;">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="BINANCE_USE_TESTNET" />
+                    <span data-i18n="account.binance.useTestnet">Use Binance Futures Testnet</span>
+                  </label>
+                </div>
+                <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
+                  <button type="button" class="btn-test" id="test-binance-api" data-i18n-html="account.binance.testButton">🔍 Test Binance API</button>
+                </div>
               </div>
             </div>
-            <div class="form-group">
-              <label data-i18n-html="account.okx.apiPassphraseLabel">API Passphrase <span class="required">*</span></label>
-              <div class="password-input">
-                <input type="password" name="OKX_API_PASSPHRASE" placeholder="Enter OKX Passphrase" data-i18n-placeholder="account.okx.apiPassphrasePlaceholder" autocomplete="off" />
-                <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
-              </div>
-            </div>
-            <div class="form-row" style="align-items: center; margin-top: 12px;">
-              <div class="form-group" style="flex: 0 0 auto;">
-                <label class="checkbox-label">
-                  <input type="checkbox" name="OKX_USE_PAPER" />
-                  <span data-i18n="account.okx.usePaper">Use Paper Trading (Sandbox)</span>
-                </label>
-              </div>
-              <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
-                <button type="button" class="btn-test" id="test-okx-api" data-i18n-html="account.okx.testButton">🔍 Test API Connection</button>
-              </div>
-            </div>
+
             <div id="api-test-result" class="api-test-result" style="display: none;"></div>
           </div>
 

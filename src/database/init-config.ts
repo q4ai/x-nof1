@@ -52,11 +52,19 @@ const DEFAULT_CONFIG = {
   COMMUNITY_REPORT_ENABLED: process.env.COMMUNITY_REPORT_ENABLED || "true",
   COMMUNITY_SHARE_PROMPTS: process.env.COMMUNITY_SHARE_PROMPTS || "true",
   
+  // 交易所配置
+  EXCHANGE_PROVIDER: process.env.EXCHANGE_PROVIDER || "okx",
+
   // OKX 配置
   OKX_API_KEY: process.env.OKX_API_KEY || "",
   OKX_API_SECRET: process.env.OKX_API_SECRET || "",
   OKX_API_PASSPHRASE: process.env.OKX_API_PASSPHRASE || "",
   OKX_USE_PAPER: process.env.OKX_USE_PAPER || "false",
+
+  // Binance 配置
+  BINANCE_API_KEY: process.env.BINANCE_API_KEY || "",
+  BINANCE_API_SECRET: process.env.BINANCE_API_SECRET || "",
+  BINANCE_USE_TESTNET: process.env.BINANCE_USE_TESTNET || "false",
 
   // 策略提示词片段
   PROMPT_SECTION_ENTRY: DEFAULT_PROMPT_ENTRY,
@@ -150,10 +158,12 @@ export async function getAllConfigMasked(): Promise<Record<string, string>> {
     
     // 敏感字段列表（需要脱敏处理）
     const sensitiveKeys = [
-      'OKX_API_KEY',
-      'OKX_API_SECRET',
-      'OKX_API_PASSPHRASE',
-      'OPENAI_API_KEY',
+      "OKX_API_KEY",
+      "OKX_API_SECRET",
+      "OKX_API_PASSPHRASE",
+      "BINANCE_API_KEY",
+      "BINANCE_API_SECRET",
+      "OPENAI_API_KEY",
     ];
     
     const maskedConfig: Record<string, string> = {};

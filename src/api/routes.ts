@@ -21,13 +21,15 @@
  */
 import { Hono } from "hono";
 import type { MiddlewareHandler, Context } from "hono";
+import type { ContentfulStatusCode } from "hono/utils/http-status";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { getCookie, setCookie } from "hono/cookie";
 import { createClient } from "@libsql/client";
 import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 import { readFile } from "node:fs/promises";
-import { createOkxClient } from "../services/okxClient";
+import { createOkxClient, OkxClient } from "../services/okxClient";
+import { BinanceClient } from "../services/binanceClient";
 import { createLogger } from "../utils/loggerUtils";
 import { getQuantoMultiplier } from "../utils/contractUtils";
 import { executeClosePosition } from "../tools/trading";
@@ -82,12 +84,13 @@ const CONFIG_NUMERIC_KEYS = new Set([
   "ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT",
 ]);
 
-const CONFIG_BOOLEAN_KEYS = new Set(["OKX_USE_PAPER", "COMMUNITY_REPORT_ENABLED", "COMMUNITY_SHARE_PROMPTS"]);
+const CONFIG_BOOLEAN_KEYS = new Set(["OKX_USE_PAPER", "BINANCE_USE_TESTNET", "COMMUNITY_REPORT_ENABLED", "COMMUNITY_SHARE_PROMPTS"]);
 
 const CONFIG_ENUM_VALUES: Record<string, string[]> = {
   TRADING_STRATEGY: ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"],
   PROMPT_LANGUAGE: ["zh", "en", "ja"],
   TRADING_MARGIN_MODE: ["cross", "isolated"],
+  EXCHANGE_PROVIDER: ["okx", "binance"],
 };
 
 const CONFIG_ALLOWED_KEYS = new Set([
@@ -115,6 +118,10 @@ const CONFIG_ALLOWED_KEYS = new Set([
   "OKX_API_SECRET",
   "OKX_API_PASSPHRASE",
   "OKX_USE_PAPER",
+  "BINANCE_API_KEY",
+  "BINANCE_API_SECRET",
+  "BINANCE_USE_TESTNET",
+  "EXCHANGE_PROVIDER",
   "PROMPT_SECTION_ENTRY",
   "PROMPT_SECTION_EXIT",
   "PROMPT_SECTION_VARIABLES",
@@ -296,6 +303,82 @@ function sanitizeConfigPayload(raw: Record<string, unknown>): { ok: true; data: 
   }
 
   return { ok: true, data: sanitized };
+}
+
+type ExchangeTestPayload = {
+  exchange?: string;
+  apiKey?: string;
+  apiSecret?: string;
+  passphrase?: string;
+  usePaper?: boolean;
+  testnet?: boolean;
+  proxyUrl?: string;
+};
+
+type ExchangeTestResult =
+  | { success: true; exchange: "okx" | "binance"; balance?: string }
+  | { success: false; error: string; status?: number };
+
+function normalizeProxyUrl(raw: string | undefined): { ok: true; value: string } | { ok: false; error: string } {
+  const trimmed = (raw || "").trim();
+  if (!trimmed) {
+    return { ok: true, value: "" };
+  }
+  if (!isSafeHttpUrl(trimmed, { allowLocal: true })) {
+    return { ok: false, error: "代理地址不安全" };
+  }
+  return { ok: true, value: trimmed };
+}
+
+async function performExchangeConnectionTest(payload: ExchangeTestPayload): Promise<ExchangeTestResult> {
+  const exchange = (payload.exchange || "okx").toLowerCase();
+  const proxyCheck = normalizeProxyUrl(typeof payload.proxyUrl === "string" ? payload.proxyUrl : undefined);
+  if (!proxyCheck.ok) {
+    return { success: false, error: proxyCheck.error, status: 400 };
+  }
+  const proxyUrl = proxyCheck.value || undefined;
+
+  if (exchange === "binance") {
+    const apiKey = (payload.apiKey || "").trim();
+    const apiSecret = (payload.apiSecret || "").trim();
+    if (!apiKey || !apiSecret) {
+      return { success: false, error: "缺少必需的 API 凭证", status: 400 };
+    }
+    try {
+      const client = new BinanceClient(apiKey, apiSecret, payload.testnet === true, proxyUrl);
+      const account = await client.getFuturesAccount();
+      return { success: true, exchange: "binance", balance: account.total || "0" };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      return { success: false, error: message };
+    }
+  }
+
+  const apiKey = (payload.apiKey || "").trim();
+  const apiSecret = (payload.apiSecret || "").trim();
+  const passphrase = (payload.passphrase || "").trim();
+  if (!apiKey || !apiSecret || !passphrase) {
+    return { success: false, error: "缺少必需的 API 凭证", status: 400 };
+  }
+
+  try {
+    const client = new OkxClient(apiKey, apiSecret, passphrase, payload.usePaper === true, proxyUrl);
+    const account = await client.getFuturesAccount();
+    return { success: true, exchange: "okx", balance: account.total || "0" };
+  } catch (error: any) {
+    const message = error instanceof Error ? error.message : "未知错误";
+    let friendly = message;
+    if (message.includes("401") || message.includes("Unauthorized")) {
+      friendly = "API 密钥无效或权限不足";
+    } else if (message.includes("403")) {
+      friendly = "IP 地址未加入白名单";
+    } else if (/timeout|ETIMEDOUT/i.test(message)) {
+      friendly = "连接超时，请检查网络或代理设置";
+    } else if (/ECONNREFUSED/i.test(message)) {
+      friendly = "连接被拒绝，请检查代理设置";
+    }
+    return { success: false, error: friendly };
+  }
 }
 
 function asDbRows(rows: unknown[]): DbRow[] {
@@ -1615,64 +1698,45 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   /**
-   * 测试 OKX API 连接
+   * 测试任意交易所 API 连接
    */
-  app.post("/api/test-okx", requireAuthWithCsrf, async (c) => {
+  app.post("/api/test-exchange", requireAuthWithCsrf, async (c) => {
     try {
-      const body = await c.req.json<Record<string, unknown>>();
-      const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim() : "";
-      const apiSecret = typeof body.apiSecret === "string" ? body.apiSecret.trim() : "";
-      const passphrase = typeof body.passphrase === "string" ? body.passphrase.trim() : "";
-      const usePaper = body.usePaper === true;
-      const proxyUrlRaw = typeof body.proxyUrl === "string" ? body.proxyUrl.trim() : "";
-      
-      if (!apiKey || !apiSecret || !passphrase) {
-        return c.json({ success: false, error: "缺少必需的 API 凭证" }, 400);
+      const body = (await c.req.json().catch(() => ({}))) as ExchangeTestPayload;
+      const result = await performExchangeConnectionTest(body);
+      if (!result.success) {
+        const numericStatus = Number.isFinite(result.status) ? Number(result.status) : 500;
+        const status = Math.min(Math.max(numericStatus, 200), 599) as ContentfulStatusCode;
+        return c.json({ success: false, error: result.error }, status);
       }
-
-      let proxyUrl = "";
-      if (proxyUrlRaw) {
-        if (!isSafeHttpUrl(proxyUrlRaw, { allowLocal: true })) {
-          return c.json({ success: false, error: "代理地址不安全" }, 400);
-        }
-        proxyUrl = proxyUrlRaw;
-      }
-      
-      // 创建临时客户端实例（不影响全局实例）
-      const OkxClient = (await import("../services/okxClient")).OkxClient;
-      const testClient = new OkxClient(
-        apiKey,
-        apiSecret,
-        passphrase,
-        usePaper === true,
-        proxyUrl || undefined
-      );
-      
-      // 尝试获取账户信息
-      const account = await testClient.getFuturesAccount();
-      
       return c.json({
         success: true,
-        balance: account.total || "0",
-        message: "API 连接成功"
+        exchange: result.exchange,
+        balance: result.balance || "0",
+        message: "API 连接成功",
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
-      logger.error("测试 OKX API 失败:", error);
-      
-      // 返回友好的错误信息
-      let errorMsg = message;
-      if (message.includes("401") || message.includes("Unauthorized")) {
-        errorMsg = "API 密钥无效或权限不足";
-      } else if (message.includes("403") || message.includes("Forbidden")) {
-        errorMsg = "IP 地址未加入白名单";
-      } else if (message.includes("timeout") || message.includes("ETIMEDOUT")) {
-        errorMsg = "连接超时，请检查网络或代理设置";
-      } else if (message.includes("ECONNREFUSED")) {
-        errorMsg = "连接被拒绝，请检查代理设置";
+      logger.error("测试交易所 API 失败:", error);
+      return c.json({ success: false, error: message }, 500);
+    }
+  });
+
+  // 兼容旧接口：默认测试 OKX
+  app.post("/api/test-okx", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = (await c.req.json().catch(() => ({}))) as ExchangeTestPayload;
+      const result = await performExchangeConnectionTest({ ...body, exchange: "okx" });
+      if (!result.success) {
+        const numericStatus = Number.isFinite(result.status) ? Number(result.status) : 500;
+        const status = Math.min(Math.max(numericStatus, 200), 599) as ContentfulStatusCode;
+        return c.json({ success: false, error: result.error }, status);
       }
-      
-      return c.json({ success: false, error: errorMsg }, 500);
+      return c.json({ success: true, balance: result.balance || "0", message: "API 连接成功" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("测试 OKX API 失败:", error);
+      return c.json({ success: false, error: message }, 500);
     }
   });
 

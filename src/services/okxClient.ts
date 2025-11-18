@@ -1,5 +1,7 @@
 import { ProxyAgent, type Dispatcher } from "undici";
 import { createLogger } from "../utils/loggerUtils";
+import { getExchangeCredentials, getExchangeProxy } from "../config/exchange";
+import { BinanceClient } from "./binanceClient";
 
 type HttpMethod = "GET" | "POST" | "DELETE";
 
@@ -773,27 +775,34 @@ export class OkxClient {
   }
 }
 
-let clientInstance: OkxClient | null = null;
+type ExchangeHttpClient = OkxClient | BinanceClient;
 
-export function createOkxClient(): OkxClient {
+let clientInstance: ExchangeHttpClient | null = null;
+
+function buildExchangeClient(): ExchangeHttpClient {
+  const credentials = getExchangeCredentials();
+  const proxyUrl = getExchangeProxy() || undefined;
+
+  if (credentials.provider === "binance") {
+    if (!credentials.apiKey || !credentials.apiSecret) {
+      throw new Error("请在环境变量或数据库配置中设置 BINANCE_API_KEY / BINANCE_API_SECRET");
+    }
+    return new BinanceClient(credentials.apiKey, credentials.apiSecret, credentials.testnet, proxyUrl);
+  }
+
+  if (!credentials.apiKey || !credentials.apiSecret || !credentials.passphrase) {
+    throw new Error("请在环境变量或数据库配置中设置 OKX_API_KEY / OKX_API_SECRET / OKX_API_PASSPHRASE");
+  }
+
+  return new OkxClient(credentials.apiKey, credentials.apiSecret, credentials.passphrase, credentials.simulated, proxyUrl);
+}
+
+export function createOkxClient(): ExchangeHttpClient {
   if (clientInstance) {
     return clientInstance;
   }
 
-  const env: Record<string, string | undefined> = ((globalThis as any)?.process?.env) || {};
-
-  // 优先从环境变量读取（兼容旧方式）
-  const apiKey = env.OKX_API_KEY;
-  const apiSecret = env.OKX_API_SECRET;
-  const passphrase = env.OKX_API_PASSPHRASE;
-  const simulated = env.OKX_USE_PAPER === "true";
-  const proxyUrl = env.HTTP_PROXY_URL || env.EXCHANGE_HTTP_PROXY;
-
-  if (!apiKey || !apiSecret || !passphrase) {
-    throw new Error("请在环境变量或数据库配置中设置 OKX_API_KEY / OKX_API_SECRET / OKX_API_PASSPHRASE");
-  }
-
-  clientInstance = new OkxClient(apiKey, apiSecret, passphrase, simulated, proxyUrl);
+  clientInstance = buildExchangeClient();
   return clientInstance;
 }
 
@@ -802,7 +811,7 @@ export function createOkxClient(): OkxClient {
  */
 export function resetOkxClient(): void {
   clientInstance = null;
-  logger.info("OKX 客户端实例已重置");
+  logger.info("合约交易客户端实例已重置");
 }
 
 /**
@@ -814,7 +823,11 @@ export function createOkxClientWithConfig(
   passphrase: string,
   simulated: boolean,
   proxyUrl?: string
-): OkxClient {
+): ExchangeHttpClient {
   clientInstance = new OkxClient(apiKey, apiSecret, passphrase, simulated, proxyUrl);
   return clientInstance;
+}
+
+export function createExchangeClient() {
+  return createOkxClient();
 }

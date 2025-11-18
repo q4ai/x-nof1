@@ -96,6 +96,40 @@ function setLanguage(lang) {
   return lang;
 }
 
+async function syncLanguagePreferenceFromBackend() {
+  try {
+    const response = await fetch("/api/user/language", {
+      method: "GET",
+      cache: "no-store",
+      credentials: "include",
+    });
+
+    if (response.status === 401 || response.status === 403) {
+      return false;
+    }
+
+    if (!response.ok) {
+      console.warn(`[i18n] Failed to sync language preference: HTTP ${response.status}`);
+      return false;
+    }
+
+    const payload = await response.json().catch(() => null);
+    if (!payload || typeof payload.language !== "string" || payload.language.length === 0) {
+      return false;
+    }
+
+    const previous = getCurrentLanguage();
+    const normalized = setLanguage(payload.language);
+    if (normalized !== previous) {
+      console.log(`[i18n] Language preference synced from backend: ${previous} -> ${normalized}`);
+      return true;
+    }
+  } catch (error) {
+    console.warn("[i18n] Unable to sync language preference", error);
+  }
+  return false;
+}
+
 function getLanguageLabel(lang) {
   if (lang && Object.prototype.hasOwnProperty.call(LANGUAGE_LABELS, lang)) {
     return LANGUAGE_LABELS[lang];
@@ -249,10 +283,14 @@ const PRICE_REFRESH_INTERVAL = 10000;
 const DEFAULT_INTERVAL = "1m";
 const CANDLE_LIMIT = 200;
 const ACCOUNT_CONFIG_KEYS = [
+  "EXCHANGE_PROVIDER",
   "OKX_API_KEY",
   "OKX_API_SECRET",
   "OKX_API_PASSPHRASE",
   "OKX_USE_PAPER",
+  "BINANCE_API_KEY",
+  "BINANCE_API_SECRET",
+  "BINANCE_USE_TESTNET",
   "INITIAL_BALANCE",
   "ACCOUNT_STOP_LOSS_USDT",
   "ACCOUNT_TAKE_PROFIT_USDT",
@@ -417,7 +455,10 @@ class TradingMonitor {
     this.accountCancelBtn = document.getElementById("account-cancel");
     this.strategyCancelBtn = document.getElementById("strategy-cancel");
     this.settingsCancelBtn = document.getElementById("settings-cancel");
+    this.exchangeSelect = document.getElementById("exchange-provider");
+    this.exchangePanels = document.querySelectorAll("[data-exchange-panel]");
     this.testOkxBtn = document.getElementById("test-okx-api");
+    this.testBinanceBtn = document.getElementById("test-binance-api");
     this.testAiBtn = document.getElementById("test-ai-api");
     this.resetLiveDataBtn = document.getElementById("reset-live-data-btn");
   this.resetLiveDataConfirmContainer = document.getElementById("reset-live-data-confirm");
@@ -449,6 +490,7 @@ class TradingMonitor {
     this.renderSymbolList();
 
     this.bindSettingsForms();
+    this.bindExchangeControls();
     this.setupPrivacyControls();
   this.setupStrategyTabs();
   this.setupStrategyPromptEditors();
@@ -3791,7 +3833,14 @@ class TradingMonitor {
     if (this.testOkxBtn) {
       this.testOkxBtn.addEventListener("click", (event) => {
         event.preventDefault();
-        void this.testOkxConnection();
+        void this.testExchangeConnection("okx");
+      });
+    }
+
+    if (this.testBinanceBtn) {
+      this.testBinanceBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        void this.testExchangeConnection("binance");
       });
     }
 
@@ -3820,6 +3869,34 @@ class TradingMonitor {
       this.resetLiveDataConfirmBtn.addEventListener("click", (event) => {
         event.preventDefault();
         void this.handleResetLiveData();
+      });
+    }
+  }
+
+  bindExchangeControls() {
+    if (!this.exchangeSelect) {
+      return;
+    }
+    this.exchangeSelect.addEventListener("change", () => {
+      this.updateExchangePanelVisibility();
+    });
+    this.updateExchangePanelVisibility();
+  }
+
+  updateExchangePanelVisibility() {
+    if (!this.exchangeSelect) {
+      return;
+    }
+
+    const provider = this.exchangeSelect.value || "okx";
+    if (this.accountForm) {
+      this.accountForm.dataset.exchangeProvider = provider;
+    }
+
+    if (this.exchangePanels && typeof this.exchangePanels.forEach === "function") {
+      this.exchangePanels.forEach((panel) => {
+        const target = panel.getAttribute("data-exchange-panel") || "okx";
+        panel.classList.toggle("is-active", target === provider);
       });
     }
   }
@@ -3962,12 +4039,20 @@ class TradingMonitor {
       const status = await response.json();
       this.isAuthenticated = Boolean(status && status.authenticated);
 
+      if (this.isAuthenticated) {
+        const languageChanged = await syncLanguagePreferenceFromBackend();
+        if (languageChanged) {
+          window.location.reload();
+          return;
+        }
+      }
+
       if (this.isAuthenticated && status && typeof status.csrfToken === "string" && window.csrfManager && typeof window.csrfManager.setToken === "function") {
         window.csrfManager.setToken(status.csrfToken);
       }
 
       if (this.isAuthenticated) {
-        void this.fetchFullConfig();
+        void this.fetchFullConfig(true); // 强制刷新完整配置，覆盖公开配置缓存
         void this.fetchTradingLoopStatus();
       }
       // 未登录时不调用 updateAiOverlay()，保持 fetchPublicModelInfo() 设置的模型信息
@@ -4792,58 +4877,83 @@ class TradingMonitor {
     }
 
     this.populateForm(this.accountForm, config, ACCOUNT_CONFIG_KEYS);
+    this.updateExchangePanelVisibility();
     this.showModal(this.accountModal);
   }
 
   async openStrategyModal() {
     if (!this.ensureAuthenticated() || !this.strategyModal || !this.strategyForm) {
+      console.warn("[openStrategyModal] 前置条件不满足:", {
+        authenticated: this.isAuthenticated,
+        hasModal: !!this.strategyModal,
+        hasForm: !!this.strategyForm
+      });
       return;
     }
 
-    const config = await this.fetchFullConfig();
+    console.log("[openStrategyModal] 打开策略配置弹窗");
+    const config = await this.fetchFullConfig(true); // 强制刷新确保获取完整配置
     if (!config) {
-      this.showToast("error", "加载失败", "无法加载配置，请稍后重试。");
+      console.error("[openStrategyModal] 配置获取失败");
+      this.showToast("error", "加载失败", "无法加载配置,请稍后重试。");
       return;
     }
 
+    console.log("[openStrategyModal] 配置已获取，开始填充表单");
     this.populateForm(this.strategyForm, config, STRATEGY_CONFIG_KEYS);
     this.activateStrategyTab("basic");
     this.updateStrategyPreview();
     this.showModal(this.strategyModal);
+    console.log("[openStrategyModal] 弹窗已显示");
   }
 
   async openSettingsModal() {
     if (!this.ensureAuthenticated() || !this.settingsModal || !this.settingsForm) {
+      console.warn("[openSettingsModal] 前置条件不满足:", {
+        authenticated: this.isAuthenticated,
+        hasModal: !!this.settingsModal,
+        hasForm: !!this.settingsForm
+      });
       return;
     }
 
+    console.log("[openSettingsModal] 打开设置弹窗");
     this.hideResetConfirmation();
 
-    const config = await this.fetchFullConfig();
+    const config = await this.fetchFullConfig(true); // 强制刷新确保获取完整配置
     if (!config) {
+      console.error("[openSettingsModal] 配置获取失败");
       this.showToast("error", "加载失败", "无法加载配置，请稍后重试。");
       return;
     }
 
+    console.log("[openSettingsModal] 配置已获取，开始填充表单");
     this.populateForm(this.settingsForm, config, SETTINGS_CONFIG_KEYS);
     this.applyPrivacyDependencies();
     this.showModal(this.settingsModal);
+    console.log("[openSettingsModal] 弹窗已显示");
   }
 
   async fetchFullConfig(force = false) {
     if (!force && this.latestConfig) {
+      console.log("[fetchFullConfig] 使用缓存配置", Object.keys(this.latestConfig).length, "个键");
       this.updateAiOverlay(this.latestConfig);
       this.applyConfigSymbols(this.latestConfig);
       return this.latestConfig;
     }
 
+    console.log("[fetchFullConfig] 从 /api/config 获取配置");
     const response = await this.fetchJson("/api/config");
+    console.log("[fetchFullConfig] 响应:", response ? "有数据" : "null", response?.config ? `config有${Object.keys(response.config).length}个键` : "config为空");
+    
     if (!response || !response.config) {
+      console.warn("[fetchFullConfig] 配置获取失败");
       this.updateAiOverlay();
       return null;
     }
 
     this.latestConfig = response.config;
+    console.log("[fetchFullConfig] 已缓存配置:", Object.keys(this.latestConfig).slice(0, 5));
     this.applyConfigSymbols(this.latestConfig);
     this.updateAiOverlay(this.latestConfig);
     return this.latestConfig;
@@ -4961,11 +5071,22 @@ class TradingMonitor {
   }
 
   populateForm(form, config, keys) {
-    if (!form || !config) return;
+    if (!form || !config) {
+      console.warn("[populateForm] 参数缺失:", { hasForm: !!form, hasConfig: !!config, keysLength: keys?.length });
+      return;
+    }
+
+    console.log("[populateForm] 开始填充表单:", keys.length, "个键");
+    let filledCount = 0;
+    let missingCount = 0;
 
     keys.forEach((key) => {
       const field = form.querySelector(`[name="${key}"]`);
-      if (!field) return;
+      if (!field) {
+        missingCount++;
+        console.warn(`[populateForm] 字段不存在: ${key}`);
+        return;
+      }
 
       const value = config[key];
 
@@ -4974,19 +5095,23 @@ class TradingMonitor {
           ? value.trim().toLowerCase()
           : "cross";
         field.value = normalized === "isolated" ? "isolated" : "cross";
+        filledCount++;
         return;
       }
       if (field.type === "checkbox") {
         field.checked = String(value).toLowerCase() === "true";
+        filledCount++;
         return;
       }
 
       if (typeof value === "string") {
         if (key === "TRADING_SYMBOLS") {
           field.value = value;
+          filledCount++;
           return;
         }
         field.value = value;
+        filledCount++;
         return;
       }
 
@@ -4995,7 +5120,10 @@ class TradingMonitor {
       } else {
         field.value = String(value);
       }
+      filledCount++;
     });
+
+    console.log(`[populateForm] 填充完成: ${filledCount}个字段已填充, ${missingCount}个字段未找到`);
   }
 
   collectFormValues(form, keys) {
@@ -5227,9 +5355,14 @@ class TradingMonitor {
 
   async sendConfigUpdate(payload) {
     try {
+      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
       const response = await fetch("/api/config", {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        credentials: "same-origin",
         body: JSON.stringify(payload),
       });
 
@@ -5247,9 +5380,14 @@ class TradingMonitor {
 
   async triggerConfigReload() {
     try {
+      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
       const response = await fetch("/api/reload", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        credentials: "same-origin",
       });
 
       const result = await response.json().catch(() => ({}));
@@ -5336,9 +5474,14 @@ class TradingMonitor {
     primaryButton?.setAttribute("disabled", "disabled");
 
     try {
+      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
       const response = await fetch("/api/reset-live-data", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        credentials: "same-origin",
         body: JSON.stringify({ confirmation: confirmationCode }),
       });
 
@@ -5375,58 +5518,100 @@ class TradingMonitor {
     container.classList.add(status);
   }
 
-  async testOkxConnection() {
+  async testExchangeConnection(exchange) {
     if (!this.ensureAuthenticated() || !this.accountForm) {
       return;
     }
 
-    const apiKey = this.accountForm.querySelector('[name="OKX_API_KEY"]')?.value.trim() || "";
-    const apiSecret = this.accountForm.querySelector('[name="OKX_API_SECRET"]')?.value.trim() || "";
-    const passphrase = this.accountForm.querySelector('[name="OKX_API_PASSPHRASE"]')?.value.trim() || "";
-    const usePaper = this.accountForm.querySelector('[name="OKX_USE_PAPER"]')?.checked || false;
-
     const proxyInput = this.settingsForm?.querySelector('[name="HTTP_PROXY_URL"]');
-    const proxyValue = proxyInput ? proxyInput.value.trim() : this.latestConfig?.HTTP_PROXY_URL || "";
+    const proxyValue = (() => {
+      const formValue = proxyInput?.value?.trim?.() || "";
+      if (formValue) {
+        return formValue;
+      }
+      const configValue = typeof this.latestConfig?.HTTP_PROXY_URL === "string"
+        ? this.latestConfig.HTTP_PROXY_URL.trim()
+        : "";
+      return configValue;
+    })();
+    const target = typeof exchange === "string" ? exchange.toLowerCase() : "okx";
+    const namespace = target === "binance" ? "account.binance.testMessages" : "account.okx.testMessages";
+    const resolveMessage = (key, fallback) => {
+      const result = t(`${namespace}.${key}`);
+      if (typeof result === "string" && result !== `${namespace}.${key}`) {
+        return result;
+      }
+      return fallback;
+    };
 
-    if (!apiKey || !apiSecret || !passphrase) {
-      this.displayApiTestResult("api-test-result", "error", t("account.okx.testMessages.fillRequired"));
-      return;
+    const payload = { exchange: target, proxyUrl: proxyValue };
+
+    if (target === "binance") {
+      const apiKey = this.accountForm.querySelector('[name="BINANCE_API_KEY"]')?.value.trim() || "";
+      const apiSecret = this.accountForm.querySelector('[name="BINANCE_API_SECRET"]')?.value.trim() || "";
+      const useTestnet = this.accountForm.querySelector('[name="BINANCE_USE_TESTNET"]')?.checked || false;
+
+      if (!apiKey || !apiSecret) {
+        this.displayApiTestResult("api-test-result", "error", resolveMessage("fillRequired", "Please enter required credentials."));
+        return;
+      }
+
+      Object.assign(payload, {
+        apiKey,
+        apiSecret,
+        testnet: useTestnet,
+      });
+    } else {
+      const apiKey = this.accountForm.querySelector('[name="OKX_API_KEY"]')?.value.trim() || "";
+      const apiSecret = this.accountForm.querySelector('[name="OKX_API_SECRET"]')?.value.trim() || "";
+      const passphrase = this.accountForm.querySelector('[name="OKX_API_PASSPHRASE"]')?.value.trim() || "";
+      const usePaper = this.accountForm.querySelector('[name="OKX_USE_PAPER"]')?.checked || false;
+
+      if (!apiKey || !apiSecret || !passphrase) {
+        this.displayApiTestResult("api-test-result", "error", resolveMessage("fillRequired", "请填写所有必填字段"));
+        return;
+      }
+
+      Object.assign(payload, {
+        apiKey,
+        apiSecret,
+        passphrase,
+        usePaper,
+      });
     }
 
-    this.displayApiTestResult("api-test-result", "loading", t("account.okx.testMessages.testing"));
+    this.displayApiTestResult("api-test-result", "loading", resolveMessage("testing", "Testing connection..."));
 
     try {
-      const response = await fetch("/api/test-okx", {
+      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
+      const response = await fetch("/api/test-exchange", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          apiKey,
-          apiSecret,
-          passphrase,
-          usePaper,
-          proxyUrl: proxyValue,
-        }),
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        credentials: "same-origin",
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json().catch(() => ({}));
       if (response.ok && result.success) {
-        let message = t("account.okx.testMessages.success");
+        let message = resolveMessage("success", "Connection successful.");
         if (result.balance) {
-          const balanceSuffix = t("account.okx.testMessages.balanceLabel", { balance: result.balance });
-          if (balanceSuffix) {
-            message = `${message}${balanceSuffix}`;
-          }
+          const balanceLabel = resolveMessage("balanceLabel", " Balance: {{balance}}");
+          message = `${message}${balanceLabel.replace("{{balance}}", result.balance)}`;
         }
         this.displayApiTestResult("api-test-result", "success", message);
       } else {
         const detail = typeof result.error === "string" && result.error.trim()
           ? result.error.trim()
           : `HTTP ${response.status}`;
-        this.displayApiTestResult("api-test-result", "error", t("account.okx.testMessages.failure", { detail }));
+        const failure = resolveMessage("failure", "Connection failed: {{detail}}").replace("{{detail}}", detail);
+        this.displayApiTestResult("api-test-result", "error", failure);
       }
     } catch (error) {
-      console.error("[account] 测试 OKX API 失败", error);
-      this.displayApiTestResult("api-test-result", "error", t("account.okx.testMessages.networkError"));
+      console.error("[account] 测试交易所 API 失败", error);
+      this.displayApiTestResult("api-test-result", "error", resolveMessage("networkError", "Network error, please retry."));
     }
   }
 
@@ -5440,7 +5625,16 @@ class TradingMonitor {
     const modelName = this.settingsForm.querySelector('[name="AI_MODEL_NAME"]')?.value.trim() || "";
 
     const proxyInput = this.settingsForm.querySelector('[name="HTTP_PROXY_URL"]');
-    const proxyValue = proxyInput ? proxyInput.value.trim() : this.latestConfig?.HTTP_PROXY_URL || "";
+    const proxyValue = (() => {
+      const formValue = proxyInput?.value?.trim?.() || "";
+      if (formValue) {
+        return formValue;
+      }
+      const configValue = typeof this.latestConfig?.HTTP_PROXY_URL === "string"
+        ? this.latestConfig.HTTP_PROXY_URL.trim()
+        : "";
+      return configValue;
+    })();
 
     if (!apiKey || !baseUrl || !modelName) {
       this.displayApiTestResult("ai-test-result", "error", t("settings.ai.testMessages.fillRequired"));
@@ -5450,9 +5644,14 @@ class TradingMonitor {
     this.displayApiTestResult("ai-test-result", "loading", t("settings.ai.testMessages.testing"));
 
     try {
+      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
       const response = await fetch("/api/test-ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        credentials: "same-origin",
         body: JSON.stringify({
           apiKey,
           baseUrl,
@@ -5842,6 +6041,8 @@ async function loadContractMultipliers() {
 
 
 window.addEventListener("DOMContentLoaded", async () => {
+  await syncLanguagePreferenceFromBackend();
+
   try {
     await ensureLanguageResources();
   } catch (error) {

@@ -22,3 +22,4 @@
 - `public/monitor-script.js` 维护 `availableSymbols` 集合，`applyConfigSymbols()` 会用策略配置覆盖初始币种；新增币种来源时记得同步刷新该集合。
 - 日志统一调用 `src/utils/loggerUtils.ts` 的 `createLogger`（pino 封装），并在关键流程打印输入/输出以便复盘。
 - 提交代码或回答问题时，请使用中文说明思路与结论。
+- 使用高内聚、低耦合的思想设计所有代码

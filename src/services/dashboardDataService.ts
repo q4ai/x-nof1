@@ -8,7 +8,7 @@
 import { createClient } from "@libsql/client";
 import { getQuantoMultiplier } from "../utils/contractUtils";
 import { createLogger } from "../utils/loggerUtils";
-import { createOkxClient } from "./okxClient";
+import { createExchangeClient } from "./okxClient";
 
 const logger = createLogger({
 	name: "dashboard-data-service",
@@ -81,8 +81,8 @@ export interface CandlePoint {
 }
 
 export async function getCurrentPositions(): Promise<PositionSnapshot[]> {
-	const okxClient = createOkxClient();
-	const okxPositions = await okxClient.getPositions();
+	const exchangeClient = createExchangeClient();
+	const exchangePositions = await exchangeClient.getPositions();
 
 	const dbResult = await dbClient.execute(
 		"SELECT symbol, stop_loss, profit_target, opened_at FROM positions",
@@ -99,7 +99,7 @@ export async function getCurrentPositions(): Promise<PositionSnapshot[]> {
 
 	const tasks: MaybePromiseArray<PositionSnapshot> = [];
 
-	for (const position of okxPositions) {
+	for (const position of exchangePositions) {
 		const size = Number.parseFloat(position.size || "0");
 		if (size === 0) {
 			continue;
@@ -195,7 +195,7 @@ export async function getSymbolPrices(
 		return [];
 	}
 
-	const okxClient = createOkxClient();
+	const exchangeClient = createExchangeClient();
 	const uniqueSymbols = Array.from(
 		new Set(
 			symbols
@@ -212,7 +212,7 @@ export async function getSymbolPrices(
 		uniqueSymbols.map(async (symbol) => {
 			const contract = `${symbol}_USDT`;
 			try {
-				const ticker = await okxClient.getFuturesTicker(contract);
+				const ticker = await exchangeClient.getFuturesTicker(contract);
 				const last = Number.parseFloat(ticker.last || "0");
 				priceEntries.push({ symbol, price: Number.isFinite(last) ? last : 0 });
 			} catch (error) {
@@ -290,9 +290,9 @@ export async function getCandles(
 	interval: string,
 	limit: number,
 ): Promise<CandlePoint[]> {
-	const okxClient = createOkxClient();
+	const exchangeClient = createExchangeClient();
 	const contract = `${symbol}_USDT`;
-	const raw = await okxClient.getFuturesCandles(contract, interval, limit);
+	const raw = await exchangeClient.getFuturesCandles(contract, interval, limit);
 
 	return raw
 		.map((entry: unknown) => normalizeCandleEntry(entry))

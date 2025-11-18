@@ -167,7 +167,7 @@
 				"side": "方向",
 				"price": "価格",
 				"quantity": "数量",
-				"pnl": "損益",
+				"pnl": "純損益",
 				"time": "時間",
 				"fee": "手数料"
 			},
@@ -256,8 +256,17 @@
 	},
 	"account": {
 		"saveAndRestart": "保存して再起動",
+		"exchange": {
+			"sectionTitle": "🔑 取引所設定",
+			"label": "取引所",
+			"helper": "利用する取引所を選択してください。保存後にトレーディングループを再起動する必要があります。",
+			"providers": {
+				"okx": "OKX パーペチュアル",
+				"binance": "Binance 先物"
+			}
+		},
 		"okx": {
-			"sectionTitle": "🔑 OKX API 設定",
+			"panelLabel": "OKX API 設定",
 			"registerLink": "OKX リベートアカウント登録 ↗",
 			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
 			"apiKeyPlaceholder": "OKX API Key を入力",
@@ -270,6 +279,23 @@
 			"testMessages": {
 				"fillRequired": "先に OKX API 情報をすべて入力してください。",
 				"testing": "OKX API 接続をテスト中...",
+				"success": "接続に成功しました",
+				"balanceLabel": " (資産: {{balance}})",
+				"failure": "テストに失敗しました: {{detail}}",
+				"networkError": "リクエストに失敗しました。ネットワークまたはプロキシ設定を確認してください。"
+			}
+		},
+		"binance": {
+			"panelLabel": "Binance 先物 API",
+			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
+			"apiKeyPlaceholder": "Binance API Key を入力",
+			"apiSecretLabel": "API Secret <span class=\"required\">*</span>",
+			"apiSecretPlaceholder": "Binance API Secret を入力",
+			"useTestnet": "Binance Futures テストネットを使用",
+			"testButton": "🔍 Binance API をテスト",
+			"testMessages": {
+				"fillRequired": "まず Binance の API Key と Secret を入力してください。",
+				"testing": "Binance API 接続をテスト中...",
 				"success": "接続に成功しました",
 				"balanceLabel": " (資産: {{balance}})",
 				"failure": "テストに失敗しました: {{detail}}",

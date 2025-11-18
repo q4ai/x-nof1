@@ -167,7 +167,7 @@
 				"side": "方向",
 				"price": "价格",
 				"quantity": "数量",
-				"pnl": "盈亏",
+				"pnl": "净利",
 				"time": "时间",
 				"fee": "手续费"
 			},
@@ -256,8 +256,17 @@
 	},
 	"account": {
 		"saveAndRestart": "保存并重启",
+		"exchange": {
+			"sectionTitle": "🔑 交易所配置",
+			"label": "交易所选择",
+			"helper": "切换当前使用的交易所，保存后需重启交易循环才能生效。",
+			"providers": {
+				"okx": "OKX",
+				"binance": "Binance"
+			}
+		},
 		"okx": {
-			"sectionTitle": "🔑 OKX API 设置",
+			"panelLabel": "OKX API 设置",
 			"registerLink": "注册 OKX 返佣账号 ↗",
 			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
 			"apiKeyPlaceholder": "请输入 OKX API Key",
@@ -270,6 +279,23 @@
 			"testMessages": {
 				"fillRequired": "请先填写完整的 OKX API 凭证。",
 				"testing": "正在测试 OKX API 连接...",
+				"success": "测试成功",
+				"balanceLabel": "（账户权益：{{balance}}）",
+				"failure": "测试失败：{{detail}}",
+				"networkError": "请求失败，请检查网络或代理设置。"
+			}
+		},
+		"binance": {
+			"panelLabel": "Binance 合约 API",
+			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
+			"apiKeyPlaceholder": "请输入 Binance API Key",
+			"apiSecretLabel": "API Secret <span class=\"required\">*</span>",
+			"apiSecretPlaceholder": "请输入 Binance API Secret",
+			"useTestnet": "使用 Binance 模拟盘",
+			"testButton": "🔍 测试 Binance API",
+			"testMessages": {
+				"fillRequired": "请先填写 Binance API Key 与 Secret。",
+				"testing": "正在测试 Binance API 连接...",
 				"success": "测试成功",
 				"balanceLabel": "（账户权益：{{balance}}）",
 				"failure": "测试失败：{{detail}}",
