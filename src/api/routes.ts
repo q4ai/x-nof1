@@ -957,6 +957,126 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   /**
+   * 获取当前挂单
+   */
+  app.get("/api/open-orders", async (c) => {
+    try {
+      const { getConfigValue } = await import("../database/init-config");
+      const provider = (await getConfigValue("EXCHANGE_PROVIDER")) || "okx";
+      let orders: any[] = [];
+
+      if (provider === "okx") {
+        const okxClient = createOkxClient();
+        orders = await okxClient.getOpenOrders();
+        logger.info(`获取到 ${orders.length} 个 OKX 挂单`);
+      } else if (provider === "binance") {
+        // Binance 需要通过 OKX 客户端代理（因为系统主要用 OKX）
+        // 或者直接返回空数组，因为当前系统主要支持 OKX
+        logger.warn("Binance 挂单查询暂不支持");
+        orders = [];
+      }
+
+      // 统一格式化订单数据
+      const formattedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const inferredContractFromInstId = typeof order.instId === "string"
+            ? order.instId.replace(/-SWAP$/i, "").replace(/-/g, "_")
+            : "";
+          const rawContractCandidate = order.contract || inferredContractFromInstId;
+          const rawContract = rawContractCandidate?.includes("_USDT")
+            ? rawContractCandidate
+            : rawContractCandidate
+              ? `${rawContractCandidate}_USDT`
+              : "";
+          const symbol = (rawContract || String(order.symbol || "")).replace("_USDT", "").toUpperCase();
+          const side = (order.side || order.posSide || "").toLowerCase();
+          const orderType = (order.orderType || order.ordType || order.type || "").toUpperCase();
+          const price = Number.parseFloat(order.px || order.price || "0");
+          const quantityContracts = Number.parseFloat(order.sz || order.origQty || order.size || "0");
+          const filledContracts = Number.parseFloat(order.fillSz || order.executedQty || "0");
+          const remainingContracts = Math.max(quantityContracts - filledContracts, 0);
+          const createTime = order.cTime || order.time || order.updateTime || Date.now();
+
+          let multiplier = 1;
+          if (provider === "okx" && rawContract) {
+            multiplier = await getQuantoMultiplier(rawContract).catch((error: unknown) => {
+              const message = error instanceof Error ? error.message : String(error);
+              logger.warn(`获取 ${rawContract} 合约乘数失败: ${message}`);
+              return 1;
+            });
+          }
+
+          const convertSize = (value: number) => (Number.isFinite(value) ? value * multiplier : value);
+          const quantity = convertSize(quantityContracts);
+          const filled = convertSize(filledContracts);
+          const remaining = convertSize(remainingContracts);
+
+          const formatted = {
+            orderId: order.ordId || order.orderId?.toString() || order.clientOrderId,
+            symbol,
+            side,
+            orderType,
+            price,
+            quantity,
+            filled,
+            remaining,
+            createTime,
+            status: order.state || order.status,
+            contract: rawContract,
+            contracts: Number.isFinite(quantityContracts) ? quantityContracts : undefined,
+            filledContracts: Number.isFinite(filledContracts) ? filledContracts : undefined,
+            remainingContracts: Number.isFinite(remainingContracts) ? remainingContracts : undefined,
+          };
+
+          logger.debug(`格式化挂单: ${formatted.orderId} - ${formatted.symbol} ${formatted.side} ${formatted.orderType}`);
+          return formatted;
+        })
+      );
+
+      logger.info(`返回 ${formattedOrders.length} 个格式化后的挂单`);
+      return c.json({ orders: formattedOrders });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取挂单失败", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 取消订单
+   */
+  app.post("/api/cancel-order", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json<{ orderId: string; symbol: string }>();
+      const { orderId, symbol } = body;
+
+      if (!orderId || !symbol) {
+        return c.json({ success: false, error: "缺少订单 ID 或币种参数" }, 400);
+      }
+
+      const contract = `${symbol.toUpperCase()}_USDT`;
+      const { getConfigValue } = await import("../database/init-config");
+      const provider = (await getConfigValue("EXCHANGE_PROVIDER")) || "okx";
+      let result: any;
+
+      if (provider === "okx") {
+        const okxClient = createOkxClient();
+        result = await okxClient.cancelOrder(contract, orderId);
+      } else if (provider === "binance") {
+        logger.warn("Binance 取消订单暂不支持");
+        return c.json({ success: false, error: "当前交易所不支持此操作" }, 400);
+      }
+
+      logger.info(`取消订单 ${orderId} (${symbol})`, { result });
+      return c.json({ success: true, message: `订单 ${orderId} 已取消`, result });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("取消订单失败", error);
+      return c.json({ success: false, error: message, message: `取消订单失败: ${message}` }, 500);
+    }
+  });
+
+  /**
    * 获取账户价值历史（用于绘图）
    */
   app.get("/api/history", async (c) => {

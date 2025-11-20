@@ -21,6 +21,37 @@
 			"failure": "ログインに失敗しました。ユーザー名とパスワードを確認してください。",
 			"networkError": "ネットワークエラーです。しばらくしてから再試行してください。",
 			"statusError": "ログイン状態を確認できません。"
+		"openOrders": {
+			"empty": "現在の指値注文はありません",
+			"headers": {
+				"symbol": "銘柄",
+				"side": "方向",
+				"type": "タイプ",
+				"price": "注文価格",
+				"quantity": "数量",
+				"filled": "約定済み",
+				"remaining": "残量",
+				"createdAt": "注文時間",
+				"actions": "操作"
+			},
+			"types": {
+				"market": "成行",
+				"limit": "指値",
+				"postOnly": "ポストオンリー",
+				"ioc": "IOC",
+				"fok": "FOK",
+				"conditional": "条件注文"
+			},
+			"actions": {
+				"cancel": "取消",
+				"cancelling": "取消中...",
+				"confirm": "注文 {{orderId}} をキャンセルしますか？",
+				"cancelSuccessTitle": "キャンセル成功",
+				"cancelSuccessMessage": "注文 {{orderId}} をキャンセルしました。",
+				"cancelErrorTitle": "キャンセル失敗",
+				"cancelErrorMessage": "注文をキャンセルできませんでした。再試行してください。"
+			}
+		},
 		}
 	},
 	"navigation": {

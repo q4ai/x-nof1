@@ -67,6 +67,7 @@
 		"dashboard": "监控面板",
 		"manualTrade": "手动下单",
 		"positions": "当前持仓",
+		"openOrders": "当前挂单",
 		"trades": "交易历史",
 		"logs": "交易日志",
 		"decisionLogs": "决策日志"
@@ -183,6 +184,37 @@
 			"types": {
 				"open": "开仓",
 				"close": "平仓"
+			}
+		},
+		"openOrders": {
+			"empty": "暂无挂单",
+			"headers": {
+				"symbol": "币种",
+				"side": "方向",
+				"type": "类型",
+				"price": "委托价",
+				"quantity": "数量",
+				"filled": "已成交",
+				"remaining": "剩余",
+				"createdAt": "委托时间",
+				"actions": "操作"
+			},
+			"types": {
+				"market": "市价",
+				"limit": "限价",
+				"postOnly": "仅挂单",
+				"ioc": "立即成交或取消",
+				"fok": "全部成交或取消",
+				"conditional": "条件单"
+			},
+			"actions": {
+				"cancel": "取消",
+				"cancelling": "取消中...",
+				"confirm": "确定取消订单 {{orderId}}？",
+				"cancelSuccessTitle": "订单已取消",
+				"cancelSuccessMessage": "订单 {{orderId}} 已成功取消",
+				"cancelErrorTitle": "取消失败",
+				"cancelErrorMessage": "取消订单失败，请稍后重试"
 			}
 		},
 		"logs": {

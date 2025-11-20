@@ -270,6 +270,7 @@
     <footer class="bottom-tabs">
       <nav class="tab-nav" id="tab-nav">
   <button class="tab-btn active" data-tab="positions" data-i18n="tabs.positions">Positions</button>
+  <button class="tab-btn" data-tab="open-orders" data-i18n="tabs.openOrders">Open Orders</button>
   <button class="tab-btn" data-tab="trades" data-i18n="tabs.trades">Trade History</button>
   <button class="tab-btn" data-tab="logs" data-i18n="tabs.logs">Trade Logs</button>
   <button class="tab-btn" data-tab="decision-logs" data-i18n="tabs.decisionLogs">Decision Logs</button>
@@ -277,6 +278,11 @@
       <div class="tab-content">
         <div class="tab-panel active" id="tab-positions">
           <div class="table-container" id="positions-container">
+            <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-open-orders">
+          <div class="table-container" id="open-orders-container">
             <p class="loading" data-i18n="loading">Loading...</p>
           </div>
         </div>

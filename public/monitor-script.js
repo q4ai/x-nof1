@@ -391,7 +391,22 @@ class TradingMonitor {
     this.decisionUpdatedEl = document.getElementById("decision-updated");
     this.positionsContainerEl = document.getElementById("positions-container");
     this.positionsUpdatedEl = document.getElementById("positions-updated");
+    this.openOrdersContainerEl = document.getElementById("open-orders-container");
     this.pendingPositionClosures = new Set();
+    
+    // 手动交易设置缓存（按币种）
+    this.manualTradeSettings = new Map();
+    this.restoreManualTradeSettings();
+    this.availableBalance = 0;
+    this.manualTradeControlsInitialized = false;
+    this.manualSymbolSelectorBound = false;
+    this.marginModeSelectorBound = false;
+    this.orderTypeToggleBound = false;
+    this.amountUnitToggleBound = false;
+    this.actionToggleBound = false;
+    this.manualTradeButtonsBound = false;
+    this.leverageInputBound = false;
+    
     this.activeCloseConfirmationSymbol = null;
     this.handleCloseConfirmationOutsideClick = (event) => this.onDocumentClickForCloseConfirmation(event);
     this.handleCloseConfirmationKeydown = (event) => {
@@ -489,6 +504,7 @@ class TradingMonitor {
     this.setupRecordsControls();
     this.setupIntervalSelector();
     this.renderSymbolList();
+    this.initManualTradeControls();
 
     this.bindSettingsForms();
     this.bindExchangeControls();
@@ -498,11 +514,9 @@ class TradingMonitor {
     this.initAiModelOverlay();
     void this.fetchPublicModelInfo();
     
-    // 延迟初始化图表，确保容器已渲染
-    setTimeout(() => {
-      this.initChart();
-      this.initEquityChart();
-    }, 100);
+    // 立即初始化图表，确保在数据加载前就准备好
+    this.initChart();
+    this.initEquityChart();
     
     this.refreshAll()
       .catch((error) => {
@@ -518,6 +532,7 @@ class TradingMonitor {
     await Promise.all([
       this.loadAccountSummary(),
       this.loadPositions(),
+      this.loadOpenOrders(),
       this.loadTrades(),
       this.loadTradeLogs(),
       this.loadDecisions(),
@@ -533,6 +548,8 @@ class TradingMonitor {
 
     this.dataTimer = setInterval(() => {
       void this.loadAccountSummary();
+      void this.loadPositions();
+      void this.loadOpenOrders();
       void this.loadTrades();
       void this.loadTradeLogs();
       void this.loadDecisions();
@@ -632,23 +649,30 @@ class TradingMonitor {
   }
 
   initManualTradeControls() {
-    // 初始化交易对选择
     this.setupSymbolSelector();
-    
-    // 初始化保证金模式选择
+
+    if (this.manualTradeControlsInitialized) {
+      return;
+    }
+
     this.setupMarginModeSelector();
-    
-    // 初始化订单类型切换
     this.setupOrderTypeToggle();
-    
-    // 初始化金额单位切换
     this.setupAmountUnitToggle();
-    
-    // 初始化开平仓切换
     this.setupActionToggle();
-    
-    // 初始化下单按钮
     this.setupTradeButtons();
+
+    const leverageInput = document.getElementById("manual-leverage");
+    if (leverageInput && !this.leverageInputBound) {
+      this.leverageInputBound = true;
+      leverageInput.addEventListener("change", () => {
+        const symbolSelect = document.getElementById("manual-symbol");
+        if (symbolSelect && symbolSelect.value) {
+          this.saveManualTradeSettings(symbolSelect.value);
+        }
+      });
+    }
+
+    this.manualTradeControlsInitialized = true;
   }
 
   setupSymbolSelector() {
@@ -658,53 +682,67 @@ class TradingMonitor {
     
     if (!trigger || !menu || !select) return;
 
-    // 清空并填充币种选项
-    menu.innerHTML = "";
-    select.innerHTML = "";
-    const symbols = Array.from(this.availableSymbols || []);
-    symbols.forEach((symbol) => {
-      // 创建自定义下拉选项
-      const option = document.createElement("div");
-      option.className = "manual-select-option";
-      option.textContent = symbol;
-      option.setAttribute("role", "option");
-      option.setAttribute("data-value", symbol);
-      
-      option.addEventListener("click", () => {
-        const label = trigger.querySelector(".manual-select-label");
-        if (label) label.textContent = symbol;
-        select.value = symbol;
-        menu.classList.remove("is-open");
-        trigger.setAttribute("aria-expanded", "false");
-        
-        // 如果当前是限价单模式，自动更新价格
-        this.updateLimitOrderPrice(symbol);
+    const populateOptions = () => {
+      menu.innerHTML = "";
+      select.innerHTML = "";
+      const symbols = Array.from(this.availableSymbols || []);
+      symbols.forEach((symbol) => {
+        const option = document.createElement("div");
+        option.className = "manual-select-option";
+        option.textContent = symbol;
+        option.setAttribute("role", "option");
+        option.setAttribute("data-value", symbol);
+
+        option.addEventListener("click", () => {
+          if (this.activeSymbol) {
+            this.saveManualTradeSettings(this.activeSymbol);
+          }
+          menu.classList.remove("is-open");
+          trigger.setAttribute("aria-expanded", "false");
+          this.switchToSymbol(symbol);
+        });
+
+        menu.appendChild(option);
+
+        const nativeOption = document.createElement("option");
+        nativeOption.value = symbol;
+        nativeOption.textContent = symbol;
+        select.appendChild(nativeOption);
       });
-      
-      menu.appendChild(option);
-      
-      // 同时为原生 select 添加 option
-      const nativeOption = document.createElement("option");
-      nativeOption.value = symbol;
-      nativeOption.textContent = symbol;
-      select.appendChild(nativeOption);
+
+      if (symbols.length > 0) {
+        const initialSymbol = symbols.includes(this.activeSymbol) ? this.activeSymbol : symbols[0];
+        const label = trigger.querySelector(".manual-select-label");
+        if (label) label.textContent = initialSymbol;
+        select.value = initialSymbol;
+        this.loadManualTradeSettings(initialSymbol);
+      }
+    };
+
+    populateOptions();
+
+    if (this.manualSymbolSelectorBound) {
+      return;
+    }
+    this.manualSymbolSelectorBound = true;
+
+    select.addEventListener("change", () => {
+      const selectedSymbol = select.value;
+      if (!selectedSymbol) {
+        return;
+      }
+      if (this.activeSymbol) {
+        this.saveManualTradeSettings(this.activeSymbol);
+      }
+      this.switchToSymbol(selectedSymbol);
     });
 
-    // 设置默认值
-    if (symbols.length > 0) {
-      const label = trigger.querySelector(".manual-select-label");
-      if (label) label.textContent = symbols[0];
-      select.value = symbols[0];
-    }
-
-    // 点击触发器切换菜单
     trigger.addEventListener("click", (e) => {
       e.stopPropagation();
       const isExpanded = menu.classList.toggle("is-open");
       trigger.setAttribute("aria-expanded", String(isExpanded));
     });
 
-    // 点击外部关闭菜单
     document.addEventListener("click", (e) => {
       if (!trigger.contains(e.target) && !menu.contains(e.target)) {
         menu.classList.remove("is-open");
@@ -720,52 +758,60 @@ class TradingMonitor {
     
     if (!trigger || !menu || !select) return;
 
-    // 清空并填充保证金模式选项
-    menu.innerHTML = "";
-    select.innerHTML = "";
-    const modes = [
-      { value: "cross", label: t("trade.cross") },
-      { value: "isolated", label: t("trade.isolated") }
-    ];
-    
-    modes.forEach((mode) => {
-      // 创建自定义下拉选项
-      const option = document.createElement("div");
-      option.className = "manual-select-option";
-      option.textContent = mode.label;
-      option.setAttribute("role", "option");
-      option.setAttribute("data-value", mode.value);
-      
-      option.addEventListener("click", () => {
-        const label = trigger.querySelector(".manual-select-label");
-        if (label) label.textContent = mode.label;
-        select.value = mode.value;
-        menu.classList.remove("is-open");
-        trigger.setAttribute("aria-expanded", "false");
+    const populateOptions = () => {
+      menu.innerHTML = "";
+      select.innerHTML = "";
+      const modes = [
+        { value: "cross", label: t("trade.cross") },
+        { value: "isolated", label: t("trade.isolated") }
+      ];
+
+      modes.forEach((mode) => {
+        const option = document.createElement("div");
+        option.className = "manual-select-option";
+        option.textContent = mode.label;
+        option.setAttribute("role", "option");
+        option.setAttribute("data-value", mode.value);
+
+        option.addEventListener("click", () => {
+          const label = trigger.querySelector(".manual-select-label");
+          if (label) label.textContent = mode.label;
+          select.value = mode.value;
+          menu.classList.remove("is-open");
+          trigger.setAttribute("aria-expanded", "false");
+
+          const symbolSelect = document.getElementById("manual-symbol");
+          if (symbolSelect && symbolSelect.value) {
+            this.saveManualTradeSettings(symbolSelect.value);
+          }
+        });
+
+        menu.appendChild(option);
+
+        const nativeOption = document.createElement("option");
+        nativeOption.value = mode.value;
+        nativeOption.textContent = mode.label;
+        select.appendChild(nativeOption);
       });
-      
-      menu.appendChild(option);
-      
-      // 同时为原生 select 添加 option
-      const nativeOption = document.createElement("option");
-      nativeOption.value = mode.value;
-      nativeOption.textContent = mode.label;
-      select.appendChild(nativeOption);
-    });
 
-    // 设置默认值（全仓）
-    const defaultLabel = trigger.querySelector(".manual-select-label");
-    if (defaultLabel) defaultLabel.textContent = t("trade.cross");
-    select.value = "cross";
+      const defaultLabel = trigger.querySelector(".manual-select-label");
+      if (defaultLabel) defaultLabel.textContent = t("trade.cross");
+      select.value = "cross";
+    };
 
-    // 点击触发器切换菜单
+    populateOptions();
+
+    if (this.marginModeSelectorBound) {
+      return;
+    }
+    this.marginModeSelectorBound = true;
+
     trigger.addEventListener("click", (e) => {
       e.stopPropagation();
       const isExpanded = menu.classList.toggle("is-open");
       trigger.setAttribute("aria-expanded", String(isExpanded));
     });
 
-    // 点击外部关闭菜单
     document.addEventListener("click", (e) => {
       if (!trigger.contains(e.target) && !menu.contains(e.target)) {
         menu.classList.remove("is-open");
@@ -775,6 +821,7 @@ class TradingMonitor {
   }
 
   setupOrderTypeToggle() {
+    if (this.orderTypeToggleBound) return;
     const buttons = document.querySelectorAll("[data-order-type]");
     const priceInput = document.getElementById("manual-price");
     
@@ -803,8 +850,16 @@ class TradingMonitor {
             this.updateLimitOrderPrice(symbolSelect.value);
           }
         }
+        
+        // 保存设置
+        const symbolSelect = document.getElementById("manual-symbol");
+        if (symbolSelect && symbolSelect.value) {
+          this.saveManualTradeSettings(symbolSelect.value);
+        }
       });
     });
+
+    this.orderTypeToggleBound = true;
   }
 
   updateLimitOrderPrice(symbol) {
@@ -830,6 +885,7 @@ class TradingMonitor {
   }
 
   setupAmountUnitToggle() {
+    if (this.amountUnitToggleBound) return;
     const buttons = document.querySelectorAll("[data-amount-unit]");
     const amountInput = document.getElementById("manual-amount");
     
@@ -851,9 +907,12 @@ class TradingMonitor {
         }
       });
     });
+
+    this.amountUnitToggleBound = true;
   }
 
   setupActionToggle() {
+    if (this.actionToggleBound) return;
     const radios = document.querySelectorAll('input[name="manual-action"]');
     const openActions = document.getElementById("manual-open-actions");
     const closeActions = document.getElementById("manual-close-actions");
@@ -873,9 +932,12 @@ class TradingMonitor {
         }
       });
     });
+
+    this.actionToggleBound = true;
   }
 
   setupTradeButtons() {
+    if (this.manualTradeButtonsBound) return;
     const buttons = document.querySelectorAll("[data-manual-action-btn]");
     
     if (!buttons.length) return;
@@ -888,6 +950,8 @@ class TradingMonitor {
         await this.executeManualTrade(action, direction, btn);
       });
     });
+
+    this.manualTradeButtonsBound = true;
   }
 
   async executeManualTrade(action, direction, clickedButton) {
@@ -930,12 +994,10 @@ class TradingMonitor {
 
     // 所有验证通过后，才禁用按钮并设置加载状态
     const allTradeButtons = document.querySelectorAll("[data-manual-action-btn]");
-    const originalButtonText = clickedButton ? clickedButton.textContent : "";
     
     allTradeButtons.forEach((btn) => {
       btn.disabled = true;
       if (btn === clickedButton) {
-        btn.textContent = "提交中...";
         btn.classList.add("loading");
       }
     });
@@ -974,6 +1036,7 @@ class TradingMonitor {
       // 刷新数据
       setTimeout(() => {
         void this.loadPositions();
+        void this.loadOpenOrders();
         void this.loadTrades();
       }, 1000);
 
@@ -985,7 +1048,6 @@ class TradingMonitor {
       allTradeButtons.forEach((btn) => {
         btn.disabled = false;
         if (btn === clickedButton) {
-          btn.textContent = originalButtonText;
           btn.classList.remove("loading");
         }
       });
@@ -1912,6 +1974,12 @@ class TradingMonitor {
     
     if (!trigger || !select) return;
     
+    // 保存当前币种的设置
+    const currentSymbol = select.value;
+    if (currentSymbol && currentSymbol !== symbol) {
+      this.saveManualTradeSettings(currentSymbol);
+    }
+    
     const label = trigger.querySelector(".manual-select-label");
     if (label) {
       label.textContent = symbol;
@@ -1919,8 +1987,157 @@ class TradingMonitor {
     
     select.value = symbol;
     
+    // 加载新币种的设置
+    this.loadManualTradeSettings(symbol);
+    
     // 如果当前是限价单模式，自动更新价格
     this.updateLimitOrderPrice(symbol);
+  }
+
+  saveManualTradeSettings(symbol) {
+    if (!symbol) return;
+    const normalizedSymbol = symbol.toUpperCase();
+    
+    const leverageInput = document.getElementById("manual-leverage");
+    const marginSelect = document.getElementById("manual-margin-mode");
+    const orderTypeButtons = document.querySelectorAll("[data-order-type].active");
+    
+    const settings = {
+      leverage: leverageInput ? Number(leverageInput.value) : 10,
+      marginMode: marginSelect ? marginSelect.value : "cross",
+      orderType: orderTypeButtons[0]?.getAttribute("data-order-type") || "market",
+    };
+    
+    this.manualTradeSettings.set(normalizedSymbol, settings);
+    this.persistManualTradeSettings();
+    console.log(`[Manual Trade] 保存 ${normalizedSymbol} 设置:`, settings);
+  }
+
+  loadManualTradeSettings(symbol) {
+    if (!symbol) return;
+    const normalizedSymbol = symbol.toUpperCase();
+    
+    const settings = this.manualTradeSettings.get(normalizedSymbol);
+    if (!settings) {
+      console.log(`[Manual Trade] ${normalizedSymbol} 没有保存的设置，使用默认值`);
+      this.applyManualTradeDefaultSettings();
+      return;
+    }
+    
+    console.log(`[Manual Trade] 加载 ${normalizedSymbol} 设置:`, settings);
+    
+    // 恢复杠杆
+    const leverageInput = document.getElementById("manual-leverage");
+    if (leverageInput) {
+      leverageInput.value = settings.leverage || 10;
+    }
+    
+    // 恢复保证金模式
+    const marginTrigger = document.getElementById("manual-margin-trigger");
+    const marginSelect = document.getElementById("manual-margin-mode");
+    if (marginTrigger && marginSelect) {
+      const label = marginTrigger.querySelector(".manual-select-label");
+      if (label) {
+        label.textContent = settings.marginMode === "cross" ? t("trade.cross") : t("trade.isolated");
+      }
+      marginSelect.value = settings.marginMode || "cross";
+    }
+    
+    // 恢复订单类型
+    const orderTypeButtons = document.querySelectorAll("[data-order-type]");
+    const priceInput = document.getElementById("manual-price");
+    orderTypeButtons.forEach((btn) => {
+      const orderType = btn.getAttribute("data-order-type");
+      if (orderType === settings.orderType) {
+        btn.classList.add("active");
+        
+        // 更新价格输入框状态
+        if (priceInput) {
+          if (orderType === "market") {
+            priceInput.disabled = true;
+            priceInput.placeholder = t("trade.market") + " " + t("trade.price");
+            priceInput.value = "";
+          } else {
+            priceInput.disabled = false;
+            priceInput.placeholder = t("trade.pricePlaceholder");
+            this.updateLimitOrderPrice(normalizedSymbol);
+          }
+        }
+      } else {
+        btn.classList.remove("active");
+      }
+    });
+  }
+
+  applyManualTradeDefaultSettings() {
+    const leverageInput = document.getElementById("manual-leverage");
+    if (leverageInput) {
+      leverageInput.value = 10;
+    }
+    const marginTrigger = document.getElementById("manual-margin-trigger");
+    const marginSelect = document.getElementById("manual-margin-mode");
+    if (marginTrigger && marginSelect) {
+      const label = marginTrigger.querySelector(".manual-select-label");
+      if (label) {
+        label.textContent = t("trade.cross");
+      }
+      marginSelect.value = "cross";
+    }
+    const orderTypeButtons = document.querySelectorAll("[data-order-type]");
+    const priceInput = document.getElementById("manual-price");
+    orderTypeButtons.forEach((btn) => {
+      const orderType = btn.getAttribute("data-order-type");
+      const isDefault = orderType === "market";
+      btn.classList.toggle("active", isDefault);
+    });
+    if (priceInput) {
+      priceInput.disabled = true;
+      priceInput.placeholder = t("trade.market") + " " + t("trade.price");
+      priceInput.value = "";
+    }
+  }
+
+  persistManualTradeSettings() {
+    try {
+      if (!window?.localStorage) return;
+      const payload = {};
+      this.manualTradeSettings.forEach((value, key) => {
+        payload[key] = value;
+      });
+      window.localStorage.setItem("manualTradeSettings", JSON.stringify(payload));
+    } catch (error) {
+      console.warn("[Manual Trade] 保存设置到本地失败", error);
+    }
+  }
+
+  restoreManualTradeSettings() {
+    try {
+      if (!window?.localStorage) return;
+      const raw = window.localStorage.getItem("manualTradeSettings");
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object") return;
+      Object.entries(parsed).forEach(([symbol, settings]) => {
+        if (!symbol || typeof settings !== "object") return;
+        const normalizedSymbol = symbol.toString().toUpperCase();
+        const safeSettings = {
+          leverage: Number(settings.leverage) || 10,
+          marginMode: settings.marginMode === "isolated" ? "isolated" : "cross",
+          orderType: settings.orderType === "limit" ? "limit" : "market",
+        };
+        this.manualTradeSettings.set(normalizedSymbol, safeSettings);
+      });
+      console.log(`[Manual Trade] 已从本地加载 ${this.manualTradeSettings.size} 条设置`);
+    } catch (error) {
+      console.warn("[Manual Trade] 读取本地设置失败", error);
+    }
+  }
+
+  updateManualTradeBalance() {
+    const balanceEl = document.getElementById("manual-available-balance");
+    if (balanceEl) {
+      balanceEl.textContent = this.formatCurrency(this.availableBalance);
+    }
   }
 
   initChart() {
@@ -2041,6 +2258,8 @@ class TradingMonitor {
     if (!data) return;
 
     const totalEq = data.totalBalance + data.unrealisedPnl;
+    this.availableBalance = data.availableBalance || 0;
+    
     this.setText("metric-total", this.formatCurrency(totalEq));
     this.setText("metric-available", this.formatCurrency(data.availableBalance));
     this.setText("metric-unrealised", this.formatCurrency(data.unrealisedPnl, 2, true));
@@ -2048,6 +2267,9 @@ class TradingMonitor {
     // 胜率和最大回撤不显示正负号
     this.setText("metric-winrate", `${(data.winRate || 0).toFixed(2)}%`);
     this.setText("metric-maxdrawdown", `${(data.maxDrawdown || 0).toFixed(2)}%`);
+
+    // 更新手动交易面板的可用余额
+    this.updateManualTradeBalance();
 
     const returnClass = data.returnPercent >= 0 ? "positive" : "negative";
     const returnEl = document.getElementById("metric-return");
@@ -2241,6 +2463,163 @@ class TradingMonitor {
         }
       });
     });
+  }
+
+  async loadOpenOrders() {
+    const data = await this.fetchJson("/api/open-orders");
+    if (!data) {
+      console.warn("[loadOpenOrders] 获取挂单数据失败");
+      return;
+    }
+
+    const { orders = [] } = data;
+    console.log(`[loadOpenOrders] 加载了 ${orders.length} 个挂单`, orders);
+    this.applyOpenOrdersData(orders);
+  }
+
+  applyOpenOrdersData(orders) {
+    if (!this.openOrdersContainerEl) {
+      return;
+    }
+
+    if (!orders.length) {
+      const emptyLabel = this.escapeHtml(t("tables.openOrders.empty"));
+      this.openOrdersContainerEl.innerHTML = `<p class="empty-state">${emptyLabel}</p>`;
+      return;
+    }
+
+    const showActions = Boolean(this.isAuthenticated);
+    const headerLabels = {
+      symbol: this.escapeHtml(t("tables.openOrders.headers.symbol")),
+      side: this.escapeHtml(t("tables.openOrders.headers.side")),
+      type: this.escapeHtml(t("tables.openOrders.headers.type")),
+      price: this.escapeHtml(t("tables.openOrders.headers.price")),
+      quantity: this.escapeHtml(t("tables.openOrders.headers.quantity")),
+      filled: this.escapeHtml(t("tables.openOrders.headers.filled")),
+      remaining: this.escapeHtml(t("tables.openOrders.headers.remaining")),
+      createdAt: this.escapeHtml(t("tables.openOrders.headers.createdAt")),
+      actions: this.escapeHtml(t("tables.openOrders.headers.actions")),
+    };
+    const rawCancelLabel = t("tables.openOrders.actions.cancel");
+    const cancelLabel = this.escapeHtml(
+      rawCancelLabel && rawCancelLabel !== "tables.openOrders.actions.cancel"
+        ? rawCancelLabel
+        : t("common.cancel") || "Cancel"
+    );
+
+    const rows = orders
+      .map((order) => {
+        const symbol = (order.symbol || "--").toUpperCase();
+        const safeSymbol = this.escapeHtml(symbol);
+        const side = (order.side || "").toLowerCase();
+        const sideLabel = side === "buy" || side === "long"
+          ? t("long")
+          : side === "sell" || side === "short"
+            ? t("short")
+            : "--";
+        const sideClass = side === "buy" || side === "long"
+          ? "positive"
+          : side === "sell" || side === "short"
+            ? "negative"
+            : "";
+        const orderTypeRaw = order.orderType || "";
+        const orderTypeLabel = this.escapeHtml(this.getOrderTypeLabel(orderTypeRaw));
+        const priceLabel = this.escapeHtml(this.formatPrice(order.price));
+        const quantityCell = this.renderOrderQuantityCell(symbol, Number(order.quantity), Number(order.contracts));
+        const filledCell = this.renderOrderQuantityCell(symbol, Number(order.filled), Number(order.filledContracts));
+        const remainingCell = this.renderOrderQuantityCell(symbol, Number(order.remaining), Number(order.remainingContracts));
+        const createTime = order.createTime ? this.escapeHtml(this.formatTime(order.createTime)) : "--";
+        const orderId = order.orderId || "";
+        const actionCell = showActions
+          ? `<td><button type="button" class="btn-ghost btn-ghost-danger cancel-order-btn" data-order-id="${this.escapeHtml(orderId)}" data-symbol="${safeSymbol}">${cancelLabel}</button></td>`
+          : "";
+
+        return `
+          <tr>
+            <td class="text-primary">${safeSymbol}</td>
+            <td><span class="${sideClass}">${this.escapeHtml(sideLabel)}</span></td>
+            <td>${orderTypeLabel}</td>
+            <td>${priceLabel}</td>
+            <td>${quantityCell}</td>
+            <td>${filledCell}</td>
+            <td>${remainingCell}</td>
+            <td>${createTime}</td>
+            ${actionCell}
+          </tr>
+        `;
+      })
+      .join("");
+
+    this.openOrdersContainerEl.innerHTML = `
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>${headerLabels.symbol}</th>
+            <th>${headerLabels.side}</th>
+            <th>${headerLabels.type}</th>
+            <th>${headerLabels.price}</th>
+            <th>${headerLabels.quantity}</th>
+            <th>${headerLabels.filled}</th>
+            <th>${headerLabels.remaining}</th>
+            <th>${headerLabels.createdAt}</th>
+            ${showActions ? `<th>${headerLabels.actions}</th>` : ""}
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+
+    // 添加取消订单按钮点击事件
+    this.openOrdersContainerEl.querySelectorAll(".cancel-order-btn").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const orderId = btn.dataset.orderId;
+        const symbol = btn.dataset.symbol;
+        
+        btn.disabled = true;
+        const cancellingLabel = t("tables.openOrders.actions.cancelling") || "Cancelling...";
+        btn.textContent = cancellingLabel;
+
+        try {
+          await this.cancelOrder(orderId, symbol);
+          this.showToast(
+            "success",
+            t("tables.openOrders.actions.cancelSuccessTitle"),
+            t("tables.openOrders.actions.cancelSuccessMessage", { orderId })
+          );
+          // 刷新挂单列表
+          await this.loadOpenOrders();
+        } catch (error) {
+          console.error("[cancel-order] 取消订单失败:", error);
+          this.showToast(
+            "error",
+            t("tables.openOrders.actions.cancelErrorTitle") || t("notifications.loadFailedTitle"),
+            error?.message || t("tables.openOrders.actions.cancelErrorMessage")
+          );
+          btn.disabled = false;
+          btn.textContent = t("tables.openOrders.actions.cancel") || "Cancel";
+        }
+      });
+    });
+  }
+
+  async cancelOrder(orderId, symbol) {
+    const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
+    const response = await fetch("/api/cancel-order", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-csrf-token": csrfToken,
+      },
+      credentials: "same-origin",
+      body: JSON.stringify({ orderId, symbol }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.error || `HTTP ${response.status}`);
+    }
+
+    return await response.json();
   }
 
   renderPositionActions(symbol, sideRaw) {
@@ -4117,6 +4496,49 @@ class TradingMonitor {
     
     const multiplier = CONTRACT_MULTIPLIERS[symbol.toUpperCase()] || 1;
     return contracts * multiplier;
+  }
+
+  renderOrderQuantityCell(symbol, amount, contracts) {
+    if (!symbol || !Number.isFinite(amount)) {
+      return "--";
+    }
+    const absValue = Math.abs(amount);
+    const quantityLabel = t("tables.common.quantityWithSymbol", {
+      value: this.formatQuantity(absValue),
+      symbol,
+    });
+    const safeQuantity = this.escapeHtml(quantityLabel);
+    const tooltip = Number.isFinite(contracts) && Math.abs(contracts) > 0
+      ? this.escapeHtml(
+          t("tables.common.contractsWithUnit", { value: this.formatQuantity(Math.abs(contracts)) })
+        )
+      : "";
+    return tooltip ? `<span title="${tooltip}">${safeQuantity}</span>` : safeQuantity;
+  }
+
+  getOrderTypeLabel(orderType) {
+    if (!orderType) {
+      return "--";
+    }
+    const normalized = String(orderType).toLowerCase().replace(/-/g, "_");
+    const typeKeyMap = {
+      market: "tables.openOrders.types.market",
+      limit: "tables.openOrders.types.limit",
+      post_only: "tables.openOrders.types.postOnly",
+      postonly: "tables.openOrders.types.postOnly",
+      fok: "tables.openOrders.types.fok",
+      ioc: "tables.openOrders.types.ioc",
+      conditional: "tables.openOrders.types.conditional",
+      trigger: "tables.openOrders.types.conditional",
+    };
+    const key = typeKeyMap[normalized];
+    if (key) {
+      const translated = t(key);
+      if (translated && translated !== key) {
+        return translated;
+      }
+    }
+    return String(orderType).toUpperCase();
   }
 
   getMarginModeLabel(mode) {

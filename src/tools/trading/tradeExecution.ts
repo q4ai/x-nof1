@@ -211,6 +211,8 @@ export async function executeOpenPosition({
   const contract = `${normalizedSymbol}_USDT`;
   const toolInput = { symbol: normalizedSymbol, side, leverage, amount: effectiveAmount, amountUnit, isNotional, marginMode, orderType, price } as const;
   
+  logger.info(`🚀 [开仓请求] ${normalizedSymbol} ${side} | 金额: ${effectiveAmount} ${amountUnit} | 杠杆: ${leverage}x | 订单类型: ${orderType} | 是否面值: ${isNotional}`);
+  
   const finalize = async (result: {
     success: boolean;
     message: string;
@@ -259,7 +261,10 @@ export async function executeOpenPosition({
     const ticker = await client.getFuturesTicker(contract);
     const currentPrice = Number.parseFloat(ticker.last || "0");
     const contractInfo = await client.getContractInfo(contract);
-    const quantoMultiplier = await getQuantoMultiplier(contract);
+    const infoMultiplier = Number.parseFloat(String(contractInfo?.quantoMultiplier ?? ""));
+    const quantoMultiplier = Number.isFinite(infoMultiplier) && infoMultiplier > 0
+      ? infoMultiplier
+      : await getQuantoMultiplier(contract);
 
     if (!currentPrice || currentPrice <= 0) {
         return fail(`无法获取当前价格: ${contract}`);
@@ -367,31 +372,19 @@ export async function executeOpenPosition({
     
     // ====== 流动性保护检查 ======
     
-    // 1. 检查交易时段（UTC时间）
+    // 1. 检查交易时段（UTC时间）- 仅警告，不强制调整
     const now = new Date();
     const hourUTC = now.getUTCHours();
     const dayOfWeek = now.getUTCDay(); // 0=周日，6=周六
     
-    let reductionFactor = 1.0;
-
     // 低流动性时段警告（UTC 2:00-6:00，亚洲时段凌晨）
     if (hourUTC >= 2 && hourUTC <= 6) {
       logger.warn(`⚠️  当前处于低流动性时段 (UTC ${hourUTC}:00)，建议谨慎交易`);
-      // 在低流动性时段降低仓位
-      reductionFactor = Math.min(reductionFactor, 0.7);
     }
     
     // 周末流动性检查
     if ((dayOfWeek === 5 && hourUTC >= 22) || dayOfWeek === 6 || (dayOfWeek === 0 && hourUTC < 20)) {
       logger.warn(`⚠️  当前处于周末时段，流动性可能较低`);
-      reductionFactor = Math.min(reductionFactor, 0.8);
-    }
-
-    if (reductionFactor < 1.0) {
-        logger.info(`📉 应用流动性调整系数: ${reductionFactor}`);
-        quantity = quantity * reductionFactor;
-        marginUsdt = marginUsdt * reductionFactor;
-        notionalUsdt = notionalUsdt * reductionFactor;
     }
     
     // 2. 检查订单簿深度（确保有足够流动性）

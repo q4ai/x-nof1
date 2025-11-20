@@ -178,6 +178,37 @@
 				"close": "Close"
 			}
 		},
+		"openOrders": {
+			"empty": "No open orders",
+			"headers": {
+				"symbol": "Symbol",
+				"side": "Side",
+				"type": "Type",
+				"price": "Price",
+				"quantity": "Quantity",
+				"filled": "Filled",
+				"remaining": "Remaining",
+				"createdAt": "Created At",
+				"actions": "Actions"
+			},
+			"types": {
+				"market": "Market",
+				"limit": "Limit",
+				"postOnly": "Post Only",
+				"ioc": "Immediate or Cancel",
+				"fok": "Fill or Kill",
+				"conditional": "Conditional"
+			},
+			"actions": {
+				"cancel": "Cancel",
+				"cancelling": "Cancelling...",
+				"confirm": "Cancel order {{orderId}}?",
+				"cancelSuccessTitle": "Order cancelled",
+				"cancelSuccessMessage": "Order {{orderId}} has been cancelled.",
+				"cancelErrorTitle": "Cancel failed",
+				"cancelErrorMessage": "Unable to cancel the order. Please retry."
+			}
+		},
 		"logs": {
 			"empty": "No trade logs",
 			"headers": {

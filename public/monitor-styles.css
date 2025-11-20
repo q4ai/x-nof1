@@ -1001,15 +1001,22 @@ a:hover {
 }
 
 .manual-actions .btn-action {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0;
 }
 
 .btn-action {
-  padding: 8px 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
   border-radius: 6px;
   font-size: 13px;
   font-weight: 600;
   border: none;
+  height: 40px;
+  width: 100%;
+  box-sizing: border-box;
   transition: transform 0.1s ease, box-shadow 0.2s ease, filter 0.2s ease;
 }
 
@@ -1020,8 +1027,8 @@ a:hover {
 
 .btn-action.loading {
   position: relative;
-  color: transparent;
   pointer-events: none;
+  color: transparent !important;
 }
 
 .btn-action.loading::after {
