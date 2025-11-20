@@ -31,8 +31,9 @@ import { readFile } from "node:fs/promises";
 import { createOkxClient, OkxClient } from "../services/okxClient";
 import { BinanceClient } from "../services/binanceClient";
 import { createLogger } from "../utils/loggerUtils";
+import { getChinaTimeISO } from "../utils/timeUtils";
 import { getQuantoMultiplier } from "../utils/contractUtils";
-import { executeClosePosition } from "../tools/trading";
+import { executeClosePosition, executeOpenPosition } from "../tools/trading";
 import type { AdminAuthConfig } from "../utils/adminAuth";
 import type { TradingStrategy } from "../config/strategyTypes";
 import { getStrategyPromptDefaultSections, getTradingStrategy } from "../agents/tradingAgent";
@@ -112,6 +113,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   "OPENAI_API_KEY",
   "OPENAI_BASE_URL",
   "HTTP_PROXY_URL",
+  "EMERGENCY_NOTICE_URL",
   "COMMUNITY_REPORT_ENABLED",
   "COMMUNITY_SHARE_PROMPTS",
   "OKX_API_KEY",
@@ -279,6 +281,18 @@ function sanitizeConfigPayload(raw: Record<string, unknown>): { ok: true; data: 
       continue;
     }
 
+    if (key === "EMERGENCY_NOTICE_URL") {
+      if (typeof value !== "string" || value.trim() === "") {
+        sanitized[key] = "";
+        continue;
+      }
+      if (!isSafeHttpUrl(value)) {
+        return { ok: false, error: `${key} 的地址不安全` };
+      }
+      sanitized[key] = value.trim();
+      continue;
+    }
+
     if (key === "OPENAI_BASE_URL") {
       if (typeof value !== "string" || value.trim() === "") {
         sanitized[key] = "";
@@ -426,7 +440,6 @@ async function loadLanguageResource(lang: string): Promise<Record<string, unknow
 }
 
 export function createApiRoutes(adminAuth: AdminAuthConfig) {
-  const app = new Hono();
   type SessionRecord = {
     id: string;
     username: string;
@@ -434,7 +447,16 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     expiresAt: number;
   };
 
-  const sessions = new Map<string, SessionRecord>();
+  type ApiEnv = {
+    Variables: {
+      session?: SessionRecord;
+    };
+  };
+
+  const app = new Hono<ApiEnv>();
+
+  // Session 内存缓存（提升性能，避免每次请求都查数据库）
+  const sessionCache = new Map<string, SessionRecord>();
   const SESSION_COOKIE = "q4ai_session";
   const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12小时会话
 
@@ -449,21 +471,88 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     return cachedLoginTemplate;
   };
 
-  const refreshSession = (session: SessionRecord): SessionRecord => {
+  // 从数据库加载 session
+  const loadSessionFromDb = async (sessionId: string): Promise<SessionRecord | null> => {
+    try {
+      const result = await dbClient.execute({
+        sql: "SELECT id, username, csrf_token, expires_at FROM sessions WHERE id = ? AND expires_at > ?",
+        args: [sessionId, Date.now()],
+      });
+      
+      if (!result.rows || result.rows.length === 0) {
+        return null;
+      }
+      
+      const row = result.rows[0] as any;
+      return {
+        id: String(row.id),
+        username: String(row.username),
+        csrfToken: String(row.csrf_token),
+        expiresAt: Number(row.expires_at),
+      };
+    } catch (error) {
+      logger.error("从数据库加载 session 失败:", error);
+      return null;
+    }
+  };
+
+  // 保存 session 到数据库
+  const saveSessionToDb = async (session: SessionRecord): Promise<void> => {
+    try {
+      const now = getChinaTimeISO();
+      await dbClient.execute({
+        sql: `INSERT INTO sessions (id, username, csrf_token, expires_at, created_at, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?)
+              ON CONFLICT(id) DO UPDATE SET
+                expires_at = excluded.expires_at,
+                updated_at = excluded.updated_at`,
+        args: [session.id, session.username, session.csrfToken, session.expiresAt, now, now],
+      });
+    } catch (error) {
+      logger.error("保存 session 到数据库失败:", error);
+    }
+  };
+
+  // 从数据库删除 session
+  const deleteSessionFromDb = async (sessionId: string): Promise<void> => {
+    try {
+      await dbClient.execute({
+        sql: "DELETE FROM sessions WHERE id = ?",
+        args: [sessionId],
+      });
+    } catch (error) {
+      logger.error("从数据库删除 session 失败:", error);
+    }
+  };
+
+  const refreshSession = async (session: SessionRecord): Promise<SessionRecord> => {
     session.expiresAt = Date.now() + SESSION_TTL_MS;
-    sessions.set(session.id, session);
+    sessionCache.set(session.id, session);
+    await saveSessionToDb(session);
     return session;
   };
 
-  const getSessionFromRequest = (c: Context): SessionRecord | null => {
+  const getSessionFromRequest = async (c: Context<ApiEnv>): Promise<SessionRecord | null> => {
     const sessionId = getCookie(c, SESSION_COOKIE);
     if (!sessionId) return null;
-    const record = sessions.get(sessionId);
-    if (!record) return null;
+    
+    // 先从缓存查找
+    let record: SessionRecord | null | undefined = sessionCache.get(sessionId);
+    
+    // 缓存未命中，从数据库加载
+    if (!record) {
+      record = await loadSessionFromDb(sessionId);
+      if (!record) return null;
+      sessionCache.set(sessionId, record);
+    }
+    
+    // 检查是否过期
     if (record.expiresAt <= Date.now()) {
-      sessions.delete(sessionId);
+      sessionCache.delete(sessionId);
+      await deleteSessionFromDb(sessionId);
       return null;
     }
+    
     return refreshSession(record);
   };
 
@@ -478,8 +567,9 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     };
   };
 
-  const attachSessionCookie = (c: Context, session: SessionRecord) => {
-    sessions.set(session.id, session);
+  const attachSessionCookie = async (c: Context<ApiEnv>, session: SessionRecord) => {
+    sessionCache.set(session.id, session);
+    await saveSessionToDb(session);
     setCookie(c, SESSION_COOKIE, session.id, {
       httpOnly: true,
       sameSite: "Lax",
@@ -489,10 +579,11 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     });
   };
 
-  const clearSessionCookie = (c: Context) => {
+  const clearSessionCookie = async (c: Context<ApiEnv>) => {
     const sessionId = getCookie(c, SESSION_COOKIE);
     if (sessionId) {
-      sessions.delete(sessionId);
+      sessionCache.delete(sessionId);
+      await deleteSessionFromDb(sessionId);
     }
     setCookie(c, SESSION_COOKIE, "", {
       path: "/",
@@ -502,8 +593,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     });
   };
 
-  const requireAuth: MiddlewareHandler = async (c, next) => {
-    const session = getSessionFromRequest(c);
+  const requireAuth: MiddlewareHandler<ApiEnv> = async (c, next) => {
+    const session = await getSessionFromRequest(c);
     if (!session) {
       return c.json({ error: "未登录或会话已过期" }, 401);
     }
@@ -511,8 +602,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     return next();
   };
 
-  const requireAuthWithCsrf: MiddlewareHandler = async (c, next) => {
-    const session = getSessionFromRequest(c);
+  const requireAuthWithCsrf: MiddlewareHandler<ApiEnv> = async (c, next) => {
+    const session = await getSessionFromRequest(c);
     if (!session) {
       return c.json({ error: "未登录或会话已过期" }, 401);
     }
@@ -524,8 +615,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     return next();
   };
 
-  const renderLoginPage = async (c: Context) => {
-    const session = getSessionFromRequest(c);
+  const renderLoginPage = async (c: Context<ApiEnv>) => {
+    const session = await getSessionFromRequest(c);
     if (session) {
       return c.redirect("/");
     }
@@ -548,7 +639,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       }
 
       const session = createSession();
-      attachSessionCookie(c, session);
+      await attachSessionCookie(c, session);
 
       return c.json({ success: true, csrfToken: session.csrfToken });
     } catch (error: unknown) {
@@ -557,17 +648,37 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   app.post("/api/auth/logout", requireAuthWithCsrf, async (c) => {
-    clearSessionCookie(c);
+    await clearSessionCookie(c);
     return c.json({ success: true });
   });
 
   app.get("/api/auth/status", async (c) => {
-    const session = getSessionFromRequest(c);
+    const session = await getSessionFromRequest(c);
     if (!session) {
       return c.json({ authenticated: false });
     }
     return c.json({ authenticated: true, username: session.username, csrfToken: session.csrfToken });
   });
+
+  // 定期清理过期的 session（每小时执行一次）
+  const cleanupExpiredSessions = async () => {
+    try {
+      const result = await dbClient.execute({
+        sql: "DELETE FROM sessions WHERE expires_at <= ?",
+        args: [Date.now()],
+      });
+      if (result.rowsAffected > 0) {
+        logger.info(`清理了 ${result.rowsAffected} 个过期的 session`);
+      }
+    } catch (error) {
+      logger.error("清理过期 session 失败:", error);
+    }
+  };
+
+  // 启动定期清理任务
+  setInterval(cleanupExpiredSessions, 60 * 60 * 1000); // 每小时清理一次
+  // 程序启动时立即清理一次
+  cleanupExpiredSessions().catch((error) => logger.error("初始清理 session 失败:", error));
 
   app.get("/api/public-config", async (c) => {
     try {
@@ -1846,6 +1957,125 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       }
       
       return c.json({ success: false, error: errorMsg }, 500);
+    }
+  });
+
+  /**
+   * 测试紧急通知端点
+   */
+  app.post("/api/test-emergency-notice", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json<Record<string, unknown>>();
+      const url = typeof body.url === "string" ? body.url.trim() : "";
+      
+      if (!url) {
+        return c.json({ success: false, error: "缺少紧急通知 URL" }, 400);
+      }
+
+      if (!isSafeHttpUrl(url)) {
+        return c.json({ success: false, error: "紧急通知 URL 不安全" }, 400);
+      }
+
+      // 构造测试参数
+      const testParams = new URLSearchParams({
+        reason: "测试通知 / Test Notification / テスト通知",
+        severity: "low",
+        details: "这是一条测试紧急通知，用于验证配置是否正确 / This is a test emergency notice to verify configuration / これはテストの緊急通知です",
+        timestamp: new Date().toISOString(),
+      });
+
+      const fullUrl = `${url}${url.includes("?") ? "&" : "?"}${testParams.toString()}`;
+      
+      // 发送测试请求
+      const response = await fetch(fullUrl, {
+        method: "GET",
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => response.statusText);
+        return c.json({ 
+          success: false, 
+          error: `HTTP ${response.status}: ${errorText || response.statusText}` 
+        }, 500);
+      }
+
+      return c.json({ success: true });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("测试紧急通知失败:", error);
+      
+      let errorMsg = message;
+      if (message.includes("timeout") || message.includes("ETIMEDOUT")) {
+        errorMsg = "连接超时，请检查 URL 是否可达";
+      } else if (message.includes("ECONNREFUSED")) {
+        errorMsg = "连接被拒绝，请检查 URL";
+      } else if (message.includes("ENOTFOUND")) {
+        errorMsg = "无法解析域名，请检查 URL";
+      }
+      
+      return c.json({ success: false, error: errorMsg }, 500);
+    }
+  });
+
+  /**
+   * 手动下单接口
+   */
+  app.post("/api/trading/manual", requireAuthWithCsrf, async (c) => {
+    const session = c.get("session");
+    if (!session) {
+      return c.json({ success: false, error: "未登录或会话已过期" }, 401);
+    }
+
+    try {
+      const body = await c.req.json();
+      const { action, symbol, leverage, amount, direction, marginMode, amountUnit, orderType, price } = body;
+
+      if (!symbol) return c.json({ success: false, error: "缺少币种参数" }, 400);
+
+      const normalizedSymbol = symbol.toUpperCase();
+      let result;
+
+      if (action === "open") {
+        if (!amount || !leverage) {
+          return c.json({ success: false, error: "开仓需要金额和杠杆参数" }, 400);
+        }
+        
+        // executeOpenPosition handles the logic
+        result = await executeOpenPosition({
+          symbol: normalizedSymbol,
+          side: direction || "long",
+          leverage: Number(leverage),
+          amount: Number(amount),
+          amountUnit: amountUnit === "coin" ? "coin" : "usdt",
+          isNotional: amountUnit !== "coin", // Manual trade USDT is Notional
+          marginMode: marginMode || "cross",
+          orderType: orderType === "limit" ? "limit" : "market",
+          price: orderType === "limit" ? Number(price) : undefined,
+        });
+
+      } else if (action === "close") {
+        // executeClosePosition handles the logic
+        // Default to 100% close if not specified, or handle partial close if UI supports it
+        // For now, the UI button says "Close Position", implying full close.
+        result = await executeClosePosition({
+          symbol: normalizedSymbol,
+          percentage: 100,
+          skipGuards: true, // Manual close skips minimum holding time guards
+        });
+      } else {
+        return c.json({ success: false, error: "无效的操作类型" }, 400);
+      }
+
+      if (result.success) {
+        return c.json({ success: true, data: result });
+      } else {
+        return c.json({ success: false, error: result.message }, 400);
+      }
+
+    } catch (error: any) {
+      logger.error("手动交易执行失败", error);
+      return c.json({ success: false, error: error.message || "执行失败" }, 500);
     }
   });
 

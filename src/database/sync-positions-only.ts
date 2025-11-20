@@ -24,13 +24,14 @@ import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
 import { createOkxTradingClient } from "../services/okxTradingClient";
+import { fileURLToPath } from 'node:url';
 
 const logger = createLogger({
   name: "sync-positions",
   level: "info",
 });
 
-async function syncPositionsOnly() {
+export async function syncPositionsFromOkx() {
   try {
   logger.info("🔄 从 OKX 同步持仓...");
     
@@ -134,10 +135,17 @@ async function syncPositionsOnly() {
     
   } catch (error) {
     logger.error("❌ 同步失败:", error);
-    process.exit(1);
+    // Only exit if running as script
+    if (process.argv[1] === fileURLToPath(import.meta.url)) {
+      process.exit(1);
+    } else {
+      throw error;
+    }
   }
 }
 
 // 执行同步
-syncPositionsOnly();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  syncPositionsFromOkx();
+}
 

@@ -28,6 +28,7 @@
 - 持仓管理：openPosition、closePosition、cancelOrder、getPositions、syncPositions
 - 账户监控：getAccountBalance、getOpenOrders、checkOrderStatus
 - 风险评估：calculateRisk
+- 紧急通知：sendEmergencyNotice
 
 【行动准则】
 - 坚持数据驱动决策，并结合专业经验快速执行。

@@ -37,6 +37,7 @@
 1. 既存ポジションの管理 → 必要に応じて closePosition / calculateRisk を呼び出す
 2. 新規エントリー機会の発見 → 機会があれば openPosition を呼び出す
 3. リスクとポジションサイズの評価 → getAccountBalance / getPositions で確認する
+4. 繰り返しトレード失敗時に緊急通知送信 → sendEmergencyNotice を呼び出す
 
 重要: 分析だけで終わらせず、必ずツール呼び出しによって執行してください。
 

@@ -388,13 +388,18 @@ export class OkxClient {
     const data = await this.request<any[]>("GET", "/api/v5/account/balance", { ccy: "USDT" });
     const first = data?.[0];
     const detail = first?.details?.[0] ?? {};
-    const total = safeNumber(first?.totalEq, 0);
+    const totalEq = safeNumber(first?.totalEq, 0); // 账户总权益（包含未实现盈亏）
     const available = safeNumber(detail.availBal ?? first?.availEq, 0);
     const unrealised = safeNumber(detail.upl ?? first?.uPnl, 0);
-    const positionMargin = Math.max(total - available, 0);
+    const positionMargin = Math.max(totalEq - available, 0);
+
+    // 为了兼容 Binance 的逻辑（totalWalletBalance 不含未实现盈亏），
+    // 这里我们将 OKX 的 totalEq 减去 unrealisedPnl，还原出“钱包余额”。
+    // 这样前端统一执行 totalBalance + unrealisedPnl 就不会重复计算了。
+    const walletBalance = totalEq - unrealised;
 
     return {
-      total: String(total),
+      total: String(walletBalance),
       available: String(available),
       positionMargin: String(positionMargin),
       unrealisedPnl: String(unrealised),
@@ -586,6 +591,7 @@ export class OkxClient {
 
     const result = {
       id: order.ordId,
+      clientOrderId: order.clOrdId,
       status: order.state ?? "live",
       size: String(sizeAbs),
       price: order.px ?? null,
@@ -605,7 +611,7 @@ export class OkxClient {
     };
   }
 
-  async getOrder(orderId: string, contract?: string) {
+  async getOrder(orderId: string, contract?: string, _clientOrderId?: string) {
     const resolvedContract = contract || (await this.resolveContractForOrder(orderId));
     if (!resolvedContract) {
       throw new Error(`无法确定订单 ${orderId} 对应的合约`);

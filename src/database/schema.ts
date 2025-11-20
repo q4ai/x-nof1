@@ -194,7 +194,7 @@ CREATE TABLE IF NOT EXISTS trade_logs (
 -- 持仓表
 CREATE TABLE IF NOT EXISTS positions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  symbol TEXT NOT NULL UNIQUE,
+  symbol TEXT NOT NULL,
   quantity REAL NOT NULL,
   entry_price REAL NOT NULL,
   current_price REAL NOT NULL,
@@ -211,7 +211,8 @@ CREATE TABLE IF NOT EXISTS positions (
   confidence REAL,
   risk_usd REAL,
   peak_pnl_percent REAL DEFAULT 0,
-  partial_close_percentage REAL DEFAULT 0
+  partial_close_percentage REAL DEFAULT 0,
+  UNIQUE(symbol, side)
 );
 
 -- 账户历史表
@@ -303,6 +304,16 @@ CREATE TABLE IF NOT EXISTS binance_contract_precisions (
   updated_at TEXT NOT NULL
 );
 
+-- 用户会话表（持久化登录状态）
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  username TEXT NOT NULL,
+  csrf_token TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
@@ -313,5 +324,6 @@ CREATE INDEX IF NOT EXISTS idx_history_timestamp ON account_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON agent_decisions(timestamp);
 CREATE INDEX IF NOT EXISTS idx_agent_request_logs_created_at ON agent_request_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_binance_contract_precisions_contract ON binance_contract_precisions(contract);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `;
 

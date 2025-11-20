@@ -108,53 +108,159 @@
         </div>
       </section>
 
-      <!-- 右侧：资产曲线 + AI 决策 -->
+      <!-- 右侧：资产曲线 + AI 决策 / 手动交易 -->
       <aside class="info-sidebar">
-        <!-- 资产曲线 -->
-        <div class="equity-section">
-          <div class="section-header">
-            <h4 data-i18n="accountStats">Account Stats</h4>
-            <a href="#" class="stats-detail-link" id="stats-detail-btn" data-i18n="statsDetail">Details</a>
+        <div class="sidebar-tabs main-tabs">
+          <button type="button" class="tab-btn active" data-tab="view-stats" data-i18n="tabs.dashboard">Dashboard</button>
+          <button type="button" class="tab-btn" data-tab="view-manual" data-i18n="tabs.manualTrade">Manual Trade</button>
+        </div>
+
+        <div class="sidebar-view active" id="view-stats">
+          <!-- 资产曲线 -->
+          <div class="equity-section">
+            <div class="section-header">
+              <h4 data-i18n="accountStats">Account Stats</h4>
+              <a href="#" class="stats-detail-link" id="stats-detail-btn" data-i18n="statsDetail">Details</a>
+            </div>
+            <div class="equity-metrics">
+              <div class="metric-item">
+                <span class="label" data-i18n="totalEquity">Total Equity</span>
+                <span class="value" id="metric-total">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="availableBalance">Available</span>
+                <span class="value" id="metric-available">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="unrealizedPnL">Unrealized</span>
+                <span class="value" id="metric-unrealised">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="totalReturn">Return</span>
+                <span class="value" id="metric-return">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="winRate">Win Rate</span>
+                <span class="value" id="metric-winrate">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="maxDrawdown">Max Drawdown</span>
+                <span class="value" id="metric-maxdrawdown">--</span>
+              </div>
+            </div>
+            <div class="equity-chart">
+              <canvas id="equity-canvas"></canvas>
+            </div>
           </div>
-          <div class="equity-metrics">
-            <div class="metric-item">
-              <span class="label" data-i18n="totalEquity">Total Equity</span>
-              <span class="value" id="metric-total">--</span>
+
+          <!-- AI 决策列表 -->
+          <div class="decision-section">
+            <div class="section-header">
+              <h4 data-i18n="decision.title">AI Decisions</h4>
+              <span class="update-time" id="decision-updated">--</span>
             </div>
-            <div class="metric-item">
-              <span class="label" data-i18n="availableBalance">Available</span>
-              <span class="value" id="metric-available">--</span>
+            <div class="decision-list" id="decision-list">
+              <p class="loading" data-i18n="loading">Loading...</p>
             </div>
-            <div class="metric-item">
-              <span class="label" data-i18n="unrealizedPnL">Unrealized</span>
-              <span class="value" id="metric-unrealised">--</span>
-            </div>
-            <div class="metric-item">
-              <span class="label" data-i18n="totalReturn">Return</span>
-              <span class="value" id="metric-return">--</span>
-            </div>
-            <div class="metric-item">
-              <span class="label" data-i18n="winRate">Win Rate</span>
-              <span class="value" id="metric-winrate">--</span>
-            </div>
-            <div class="metric-item">
-              <span class="label" data-i18n="maxDrawdown">Max Drawdown</span>
-              <span class="value" id="metric-maxdrawdown">--</span>
-            </div>
-          </div>
-          <div class="equity-chart">
-            <canvas id="equity-canvas"></canvas>
           </div>
         </div>
 
-        <!-- AI 决策列表 -->
-        <div class="decision-section">
-          <div class="section-header">
-            <h4 data-i18n="decision.title">AI Decisions</h4>
-            <span class="update-time" id="decision-updated">--</span>
-          </div>
-          <div class="decision-list" id="decision-list">
-            <p class="loading" data-i18n="loading">Loading...</p>
+        <div class="sidebar-view" id="view-manual">
+          <div class="manual-trade-card">
+            <div class="manual-header">
+              <h4 data-i18n="tabs.manualTrade">Manual Trade</h4>
+              <div class="manual-balance">
+                <span class="label" data-i18n="trade.available">Available</span>
+                <span class="value" id="manual-available-balance">--</span>
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label data-i18n="trade.action">Action</label>
+              <div class="manual-segmented manual-action-tabs" role="group">
+                <label class="manual-segmented-option manual-action-open">
+                  <input type="radio" name="manual-action" value="open" checked>
+                  <span data-i18n="trade.open">Open</span>
+                </label>
+                <label class="manual-segmented-option manual-action-close">
+                  <input type="radio" name="manual-action" value="close">
+                  <span data-i18n="trade.close">Close</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label for="manual-symbol" data-i18n="trade.symbol">Symbol</label>
+              <div class="manual-select" id="manual-symbol-select">
+                <button type="button" class="manual-select-trigger" id="manual-symbol-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="manual-select-label">--</span>
+                  <span class="select-caret" aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+                <div class="manual-select-menu" id="manual-symbol-menu" role="listbox"></div>
+                <select id="manual-symbol" class="manual-select-native" tabindex="-1" aria-hidden="true"></select>
+              </div>
+            </div>
+
+            <div class="manual-inline-fields manual-margin-row">
+              <div class="manual-field flex-1">
+                <label data-i18n="trade.marginMode">Margin Mode</label>
+                <div class="manual-select" id="manual-margin-select">
+                  <button type="button" class="manual-select-trigger" id="manual-margin-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="manual-select-label" data-i18n="trade.cross">Cross</span>
+                    <span class="select-caret" aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </span>
+                  </button>
+                  <div class="manual-select-menu" id="manual-margin-menu" role="listbox"></div>
+                  <select id="manual-margin-mode" class="manual-select-native" tabindex="-1" aria-hidden="true">
+                    <option value="cross" selected data-i18n="trade.cross">Cross</option>
+                    <option value="isolated" data-i18n="trade.isolated">Isolated</option>
+                  </select>
+                </div>
+              </div>
+              <div class="manual-field manual-leverage-field">
+                <label for="manual-leverage" data-i18n="trade.leverage">Leverage (x)</label>
+                <input type="number" id="manual-leverage" min="1" step="1" value="1" />
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label data-i18n="trade.orderType">Order Type</label>
+              <div class="manual-amount-row">
+                <div class="manual-unit-toggle" role="group" aria-label="Order type">
+                  <button type="button" class="unit-btn active" data-order-type="market" data-i18n="trade.market">Market</button>
+                  <button type="button" class="unit-btn" data-order-type="limit" data-i18n="trade.limit">Limit</button>
+                </div>
+                <input type="number" id="manual-price" min="0" step="0.0001" placeholder="Market Price" disabled />
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label for="manual-amount" data-i18n="trade.amount">Amount</label>
+              <div class="manual-amount-row">
+                <div class="manual-unit-toggle" role="group" aria-label="Amount unit">
+                  <button type="button" class="unit-btn active" data-amount-unit="usdt" data-i18n="trade.amountUnitUsdt">USDT</button>
+                  <button type="button" class="unit-btn" data-amount-unit="coin" data-i18n="trade.amountUnitCoin">Coin</button>
+                </div>
+                <input type="number" id="manual-amount" min="0" step="0.0001" placeholder="100" />
+              </div>
+            </div>
+
+            <div class="manual-actions" id="manual-open-actions">
+              <button type="button" class="btn-action btn-long" data-manual-action-btn data-action="open" data-direction="long" data-i18n="trade.longOpen">Long</button>
+              <button type="button" class="btn-action btn-short" data-manual-action-btn data-action="open" data-direction="short" data-i18n="trade.shortOpen">Short</button>
+            </div>
+
+            <div class="manual-actions hidden" id="manual-close-actions">
+              <button type="button" class="btn-action btn-long" data-manual-action-btn data-action="close" data-direction="long" data-i18n="trade.longClose">Close Long</button>
+              <button type="button" class="btn-action btn-short" data-manual-action-btn data-action="close" data-direction="short" data-i18n="trade.shortClose">Close Short</button>
+            </div>
           </div>
         </div>
       </aside>

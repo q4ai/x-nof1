@@ -483,6 +483,7 @@ class TradingMonitor {
 
     this.setupTabSwitching();
     this.setupModals();
+    this.setupSidebarTabs();
     this.connectWebSocket();
     this.initViewAllControls();
     this.setupRecordsControls();
@@ -594,6 +595,399 @@ class TradingMonitor {
       this.statsDetailBtn.addEventListener("click", (e) => {
         e.preventDefault();
         void this.showStatisticsModal();
+      });
+    }
+  }
+
+  setupSidebarTabs() {
+    const tabButtons = document.querySelectorAll(".info-sidebar .main-tabs .tab-btn");
+    const sidebarViews = document.querySelectorAll(".info-sidebar .sidebar-view");
+
+    if (!tabButtons.length || !sidebarViews.length) {
+      return;
+    }
+
+    tabButtons.forEach((btn) => {
+      btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        const targetView = btn.getAttribute("data-tab");
+        if (!targetView) return;
+
+        // 切换按钮激活状态
+        tabButtons.forEach((tab) => tab.classList.toggle("active", tab === btn));
+
+        // 切换视图显示
+        sidebarViews.forEach((view) => {
+          view.classList.toggle("active", view.id === targetView);
+        });
+
+        // 如果切换到手动交易，初始化控件
+        if (targetView === "view-manual") {
+          this.initManualTradeControls();
+        }
+
+        console.log(`[Sidebar] 切换到: ${targetView}`);
+      });
+    });
+  }
+
+  initManualTradeControls() {
+    // 初始化交易对选择
+    this.setupSymbolSelector();
+    
+    // 初始化保证金模式选择
+    this.setupMarginModeSelector();
+    
+    // 初始化订单类型切换
+    this.setupOrderTypeToggle();
+    
+    // 初始化金额单位切换
+    this.setupAmountUnitToggle();
+    
+    // 初始化开平仓切换
+    this.setupActionToggle();
+    
+    // 初始化下单按钮
+    this.setupTradeButtons();
+  }
+
+  setupSymbolSelector() {
+    const trigger = document.getElementById("manual-symbol-trigger");
+    const menu = document.getElementById("manual-symbol-menu");
+    const select = document.getElementById("manual-symbol");
+    
+    if (!trigger || !menu || !select) return;
+
+    // 清空并填充币种选项
+    menu.innerHTML = "";
+    select.innerHTML = "";
+    const symbols = Array.from(this.availableSymbols || []);
+    symbols.forEach((symbol) => {
+      // 创建自定义下拉选项
+      const option = document.createElement("div");
+      option.className = "manual-select-option";
+      option.textContent = symbol;
+      option.setAttribute("role", "option");
+      option.setAttribute("data-value", symbol);
+      
+      option.addEventListener("click", () => {
+        const label = trigger.querySelector(".manual-select-label");
+        if (label) label.textContent = symbol;
+        select.value = symbol;
+        menu.classList.remove("is-open");
+        trigger.setAttribute("aria-expanded", "false");
+        
+        // 如果当前是限价单模式，自动更新价格
+        this.updateLimitOrderPrice(symbol);
+      });
+      
+      menu.appendChild(option);
+      
+      // 同时为原生 select 添加 option
+      const nativeOption = document.createElement("option");
+      nativeOption.value = symbol;
+      nativeOption.textContent = symbol;
+      select.appendChild(nativeOption);
+    });
+
+    // 设置默认值
+    if (symbols.length > 0) {
+      const label = trigger.querySelector(".manual-select-label");
+      if (label) label.textContent = symbols[0];
+      select.value = symbols[0];
+    }
+
+    // 点击触发器切换菜单
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isExpanded = menu.classList.toggle("is-open");
+      trigger.setAttribute("aria-expanded", String(isExpanded));
+    });
+
+    // 点击外部关闭菜单
+    document.addEventListener("click", (e) => {
+      if (!trigger.contains(e.target) && !menu.contains(e.target)) {
+        menu.classList.remove("is-open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  setupMarginModeSelector() {
+    const trigger = document.getElementById("manual-margin-trigger");
+    const menu = document.getElementById("manual-margin-menu");
+    const select = document.getElementById("manual-margin-mode");
+    
+    if (!trigger || !menu || !select) return;
+
+    // 清空并填充保证金模式选项
+    menu.innerHTML = "";
+    select.innerHTML = "";
+    const modes = [
+      { value: "cross", label: t("trade.cross") },
+      { value: "isolated", label: t("trade.isolated") }
+    ];
+    
+    modes.forEach((mode) => {
+      // 创建自定义下拉选项
+      const option = document.createElement("div");
+      option.className = "manual-select-option";
+      option.textContent = mode.label;
+      option.setAttribute("role", "option");
+      option.setAttribute("data-value", mode.value);
+      
+      option.addEventListener("click", () => {
+        const label = trigger.querySelector(".manual-select-label");
+        if (label) label.textContent = mode.label;
+        select.value = mode.value;
+        menu.classList.remove("is-open");
+        trigger.setAttribute("aria-expanded", "false");
+      });
+      
+      menu.appendChild(option);
+      
+      // 同时为原生 select 添加 option
+      const nativeOption = document.createElement("option");
+      nativeOption.value = mode.value;
+      nativeOption.textContent = mode.label;
+      select.appendChild(nativeOption);
+    });
+
+    // 设置默认值（全仓）
+    const defaultLabel = trigger.querySelector(".manual-select-label");
+    if (defaultLabel) defaultLabel.textContent = t("trade.cross");
+    select.value = "cross";
+
+    // 点击触发器切换菜单
+    trigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const isExpanded = menu.classList.toggle("is-open");
+      trigger.setAttribute("aria-expanded", String(isExpanded));
+    });
+
+    // 点击外部关闭菜单
+    document.addEventListener("click", (e) => {
+      if (!trigger.contains(e.target) && !menu.contains(e.target)) {
+        menu.classList.remove("is-open");
+        trigger.setAttribute("aria-expanded", "false");
+      }
+    });
+  }
+
+  setupOrderTypeToggle() {
+    const buttons = document.querySelectorAll("[data-order-type]");
+    const priceInput = document.getElementById("manual-price");
+    
+    if (!buttons.length || !priceInput) return;
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const orderType = btn.getAttribute("data-order-type");
+        
+        // 更新按钮状态
+        buttons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        // 根据订单类型启用/禁用价格输入
+        if (orderType === "market") {
+          priceInput.disabled = true;
+          priceInput.placeholder = t("trade.market") + " " + t("trade.price");
+          priceInput.value = "";
+        } else {
+          priceInput.disabled = false;
+          priceInput.placeholder = t("trade.pricePlaceholder");
+          
+          // 自动填充当前币种的最新价格
+          const symbolSelect = document.getElementById("manual-symbol");
+          if (symbolSelect && symbolSelect.value) {
+            this.updateLimitOrderPrice(symbolSelect.value);
+          }
+        }
+      });
+    });
+  }
+
+  updateLimitOrderPrice(symbol) {
+    // 检查是否为限价单模式
+    const activeOrderType = document.querySelector("[data-order-type].active");
+    if (!activeOrderType || activeOrderType.getAttribute("data-order-type") !== "limit") {
+      return;
+    }
+
+    const priceInput = document.getElementById("manual-price");
+    if (!priceInput || priceInput.disabled) {
+      return;
+    }
+
+    // 从价格缓存中获取最新价格
+    const price = this.prices.get(symbol);
+    if (price && Number.isFinite(price)) {
+      priceInput.value = price.toFixed(4);
+      console.log(`[Manual Trade] 已自动填充 ${symbol} 价格: ${price.toFixed(4)}`);
+    } else {
+      console.warn(`[Manual Trade] 无法获取 ${symbol} 的价格`);
+    }
+  }
+
+  setupAmountUnitToggle() {
+    const buttons = document.querySelectorAll("[data-amount-unit]");
+    const amountInput = document.getElementById("manual-amount");
+    
+    if (!buttons.length || !amountInput) return;
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const unit = btn.getAttribute("data-amount-unit");
+        
+        // 更新按钮状态
+        buttons.forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        
+        // 更新输入框占位符
+        if (unit === "usdt") {
+          amountInput.placeholder = "100";
+        } else {
+          amountInput.placeholder = "0.01";
+        }
+      });
+    });
+  }
+
+  setupActionToggle() {
+    const radios = document.querySelectorAll('input[name="manual-action"]');
+    const openActions = document.getElementById("manual-open-actions");
+    const closeActions = document.getElementById("manual-close-actions");
+    
+    if (!radios.length || !openActions || !closeActions) return;
+
+    radios.forEach((radio) => {
+      radio.addEventListener("change", () => {
+        const action = radio.value;
+        
+        if (action === "open") {
+          openActions.classList.remove("hidden");
+          closeActions.classList.add("hidden");
+        } else {
+          openActions.classList.add("hidden");
+          closeActions.classList.remove("hidden");
+        }
+      });
+    });
+  }
+
+  setupTradeButtons() {
+    const buttons = document.querySelectorAll("[data-manual-action-btn]");
+    
+    if (!buttons.length) return;
+
+    buttons.forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        const action = btn.getAttribute("data-action");
+        const direction = btn.getAttribute("data-direction");
+        
+        await this.executeManualTrade(action, direction, btn);
+      });
+    });
+  }
+
+  async executeManualTrade(action, direction, clickedButton) {
+    if (!this.isAuthenticated) {
+      this.showToast("warning", "未登录", "请先登录后台才能进行手动交易");
+      return;
+    }
+
+    const symbolSelect = document.getElementById("manual-symbol");
+    const marginSelect = document.getElementById("manual-margin-mode");
+    const leverageInput = document.getElementById("manual-leverage");
+    const amountInput = document.getElementById("manual-amount");
+    const priceInput = document.getElementById("manual-price");
+    const orderTypeButtons = document.querySelectorAll("[data-order-type].active");
+    const amountUnitButtons = document.querySelectorAll("[data-amount-unit].active");
+
+    if (!symbolSelect || !marginSelect || !leverageInput || !amountInput) return;
+
+    const symbol = symbolSelect.value;
+    const marginMode = marginSelect.value;
+    const leverage = Number(leverageInput.value);
+    const amount = Number(amountInput.value);
+    const orderType = orderTypeButtons[0]?.getAttribute("data-order-type") || "market";
+    const amountUnit = amountUnitButtons[0]?.getAttribute("data-amount-unit") || "usdt";
+    const price = orderType === "limit" ? Number(priceInput.value) : undefined;
+
+    // 验证输入（在禁用按钮之前）
+    if (!symbol) {
+      this.showToast("warning", "参数错误", "请选择交易对");
+      return;
+    }
+    if (!amount || amount <= 0) {
+      this.showToast("warning", "参数错误", "请输入有效金额");
+      return;
+    }
+    if (orderType === "limit" && (!price || price <= 0)) {
+      this.showToast("warning", "参数错误", "限价单需要输入有效价格");
+      return;
+    }
+
+    // 所有验证通过后，才禁用按钮并设置加载状态
+    const allTradeButtons = document.querySelectorAll("[data-manual-action-btn]");
+    const originalButtonText = clickedButton ? clickedButton.textContent : "";
+    
+    allTradeButtons.forEach((btn) => {
+      btn.disabled = true;
+      if (btn === clickedButton) {
+        btn.textContent = "提交中...";
+        btn.classList.add("loading");
+      }
+    });
+
+    try {
+      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
+      const response = await fetch("/api/trading/manual", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({
+          action,
+          direction,
+          symbol,
+          marginMode,
+          leverage,
+          amount,
+          amountUnit,
+          orderType,
+          price,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      this.showToast("success", "交易成功", result.message || "订单已提交");
+      
+      // 刷新数据
+      setTimeout(() => {
+        void this.loadPositions();
+        void this.loadTrades();
+      }, 1000);
+
+    } catch (error) {
+      console.error("[manual-trade] 手动交易失败:", error);
+      this.showToast("error", "交易失败", error.message || "提交订单失败");
+    } finally {
+      // 恢复所有按钮状态
+      allTradeButtons.forEach((btn) => {
+        btn.disabled = false;
+        if (btn === clickedButton) {
+          btn.textContent = originalButtonText;
+          btn.classList.remove("loading");
+        }
       });
     }
   }
@@ -1482,11 +1876,8 @@ class TradingMonitor {
     this.symbolListEl.querySelectorAll(".symbol-item").forEach((item) => {
       item.addEventListener("click", () => {
         const symbol = item.dataset.symbol;
-        if (symbol && symbol !== this.activeSymbol) {
-          this.activeSymbol = symbol;
-          this.renderSymbolList();
-          this.updateChartTitle();
-          void this.loadCandles(symbol);
+        if (symbol) {
+          this.switchToSymbol(symbol);
         }
       });
     });
@@ -1496,6 +1887,40 @@ class TradingMonitor {
     if (this.chartTitleEl) {
       this.chartTitleEl.textContent = `${this.activeSymbol}/USDT`;
     }
+  }
+
+  switchToSymbol(symbol) {
+    if (!symbol || symbol === this.activeSymbol) return;
+    
+    const normalizedSymbol = symbol.toUpperCase();
+    
+    // 更新左侧币种列表的选中状态
+    this.activeSymbol = normalizedSymbol;
+    this.renderSymbolList();
+    
+    // 更新中间K线图
+    this.updateChartTitle();
+    void this.loadCandles(normalizedSymbol);
+    
+    // 更新右侧手动交易面板的交易对选择器
+    this.updateManualTradeSymbol(normalizedSymbol);
+  }
+
+  updateManualTradeSymbol(symbol) {
+    const trigger = document.getElementById("manual-symbol-trigger");
+    const select = document.getElementById("manual-symbol");
+    
+    if (!trigger || !select) return;
+    
+    const label = trigger.querySelector(".manual-select-label");
+    if (label) {
+      label.textContent = symbol;
+    }
+    
+    select.value = symbol;
+    
+    // 如果当前是限价单模式，自动更新价格
+    this.updateLimitOrderPrice(symbol);
   }
 
   initChart() {
@@ -1765,7 +2190,7 @@ class TradingMonitor {
           : "";
 
         return `
-          <tr>
+          <tr class="position-row" data-symbol="${symbol}">
             <td class="text-primary">${symbolDisplay}</td>
             <td><span class="${sideClass}">${sideLabel}</span></td>
             <td${contractsLabel ? ` title="${contractsLabel}"` : ""}>${quantityCell}</td>
@@ -1803,6 +2228,19 @@ class TradingMonitor {
     if (newSymbolAdded) {
       this.schedulePriceSubscriptionUpdate();
     }
+
+    // 添加持仓行点击事件
+    this.positionsContainerEl.querySelectorAll(".position-row").forEach((row) => {
+      row.addEventListener("click", (e) => {
+        // 如果点击的是操作按钮区域，不触发切换
+        if (e.target.closest(".position-action-cell")) return;
+        
+        const symbol = row.dataset.symbol;
+        if (symbol && symbol !== "--") {
+          this.switchToSymbol(symbol);
+        }
+      });
+    });
   }
 
   renderPositionActions(symbol, sideRaw) {

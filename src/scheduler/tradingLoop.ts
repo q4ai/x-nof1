@@ -1046,52 +1046,64 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
   
   try {
     // 如果提供了缓存数据，使用缓存；否则重新获取
-  const okxPositions = cachedPositions || await okxClient.getPositions();
-    const dbResult = await dbClient.execute("SELECT symbol, sl_order_id, tp_order_id, stop_loss, profit_target, entry_order_id, opened_at, peak_pnl_percent, partial_close_percentage FROM positions");
+    const okxPositions = cachedPositions || await okxClient.getPositions();
+    const dbResult = await dbClient.execute("SELECT symbol, side, sl_order_id, tp_order_id, stop_loss, profit_target, entry_order_id, opened_at, peak_pnl_percent, partial_close_percentage FROM positions");
+    // 双向持仓：用 symbol+side 组合作为唯一键
     const dbPositionsMap = new Map(
-      dbResult.rows.map((row: any) => [row.symbol, row])
+      dbResult.rows.map((row: any) => [`${row.symbol}_${row.side}`, row])
     );
     
-  // 检查 OKX 是否有持仓（可能 API 有延迟）
-  const activeOkxPositions = okxPositions.filter((p: any) => Math.abs(Number.parseFloat(p.size || "0")) > 1e-8);
+    // 检查交易所是否有持仓（可能 API 有延迟）
+    const activeOkxPositions = okxPositions.filter((p: any) => Math.abs(Number.parseFloat(p.size || "0")) > 1e-8);
     
-  // 如果 OKX 返回0个持仓但数据库有持仓，可能是 API 延迟，不清空数据库
+    // 如果交易所返回0个持仓但数据库有持仓，可能是 API 延迟，不清空数据库
     if (activeOkxPositions.length === 0 && dbResult.rows.length > 0) {
-      logger.warn(`OKX 返回0个持仓，但数据库有 ${dbResult.rows.length} 个持仓，可能是 API 延迟，跳过同步`);
+      logger.warn(`交易所返回0个持仓，但数据库有 ${dbResult.rows.length} 个持仓，可能是 API 延迟，跳过同步`);
       return;
     }
     
     await dbClient.execute("DELETE FROM positions");
     
-    // 去重：如果 OKX 返回同一合约的多条记录，保留张数绝对值更大的那一条
+    // 双向持仓模式：同一 symbol 可能同时有 LONG 和 SHORT 两条记录
+    // 用 symbol+posSide 组合去重
     const mergedPositions = new Map<string, any>();
     for (const rawPos of okxPositions) {
-  const rawSize = Number.parseFloat(rawPos.size || "0");
-  if (!Number.isFinite(rawSize) || Math.abs(rawSize) < 1e-8) continue;
+      const rawSize = Number.parseFloat(rawPos.size || "0");
+      if (!Number.isFinite(rawSize) || Math.abs(rawSize) < 1e-8) continue;
       const symbol = rawPos.contract.replace("_USDT", "");
-      const existing = mergedPositions.get(symbol);
+      const posSide = rawPos.posSide || (rawSize > 0 ? "long" : "short");
+      const posKey = `${symbol}_${posSide}`;
+      
+      const existing = mergedPositions.get(posKey);
       if (existing) {
         const existingSize = Math.abs(Number.parseFloat(existing.size || "0"));
         if (Math.abs(rawSize) > existingSize) {
-          mergedPositions.set(symbol, rawPos);
+          mergedPositions.set(posKey, rawPos);
         } else {
-          logger.warn(`检测到 ${symbol} 重复持仓记录，保留张数较大的记录`);
+          logger.warn(`检测到 ${symbol} ${posSide} 重复持仓记录，保留张数较大的记录`);
         }
       } else {
-        mergedPositions.set(symbol, rawPos);
+        mergedPositions.set(posKey, rawPos);
       }
     }
 
     let syncedCount = 0;
 
-  for (const [symbol, pos] of mergedPositions.entries()) {
-  const size = Number.parseFloat(pos.size || "0");
-  if (!Number.isFinite(size) || Math.abs(size) < 1e-8) continue;
+    for (const [posKey, pos] of mergedPositions.entries()) {
+      const size = Number.parseFloat(pos.size || "0");
+      if (!Number.isFinite(size) || Math.abs(size) < 1e-8) continue;
       
       let entryPrice = Number.parseFloat(pos.entryPrice || "0");
       let currentPrice = Number.parseFloat(pos.markPrice || "0");
-  const leverage = Number.parseFloat(pos.leverage || "1");
-      const side = size > 0 ? "long" : "short";
+      const leverage = Number.parseFloat(pos.leverage || "1");
+      
+      // Determine side correctly handling Net/Hedge modes
+      let side = pos.posSide;
+      if (!side || side === "net") {
+         side = size >= 0 ? "long" : "short";
+      }
+      
+      const symbol = pos.contract.replace("_USDT", "");
       const quantity = Math.abs(size);
       const unrealizedPnl = Number.parseFloat(pos.unrealisedPnl || "0");
       let liquidationPrice = Number.parseFloat(pos.liqPrice || "0");
@@ -1116,10 +1128,10 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
           : entryPrice * (1 + 0.9 / leverage);
       }
       
-  const dbPos = dbPositionsMap.get(symbol);
+      const dbPos = dbPositionsMap.get(posKey);
       
       // 保留原有的 entry_order_id，不要覆盖
-      const entryOrderId = dbPos?.entry_order_id || `synced-${symbol}-${Date.now()}`;
+      const entryOrderId = dbPos?.entry_order_id || `synced-${symbol}-${side}-${Date.now()}`;
       
       await dbClient.execute({
         sql: `INSERT INTO positions 
@@ -1149,9 +1161,9 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
       syncedCount++;
     }
     
-  const activeOkxPositionsCount = Array.from(mergedPositions.values()).filter((p: any) => Math.abs(Number.parseFloat(p.size || "0")) > 1e-8).length;
+    const activeOkxPositionsCount = Array.from(mergedPositions.values()).filter((p: any) => Math.abs(Number.parseFloat(p.size || "0")) > 1e-8).length;
     if (activeOkxPositionsCount > 0 && syncedCount === 0) {
-      logger.error(`OKX 有 ${activeOkxPositionsCount} 个持仓，但数据库同步失败！`);
+      logger.error(`交易所有 ${activeOkxPositionsCount} 个持仓，但数据库同步失败！`);
     }
     
   } catch (error) {
@@ -1164,21 +1176,43 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
  * @param cachedPositions 可选，已获取的原始 OKX 持仓数据，避免重复调用 API
  * @returns 格式化后的持仓数据
  */
-async function getPositions(cachedPositions?: any[]) {
+interface GetPositionsOptions {
+  fallbackToDb?: boolean;
+}
+
+function normalizeDbNumber(value: unknown, fallback = 0): number {
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : fallback;
+  }
+  if (typeof value === "bigint") {
+    return Number(value);
+  }
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return fallback;
+    }
+    const parsed = Number.parseFloat(trimmed);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  return fallback;
+}
+
+async function getPositions(cachedPositions?: any[], options: GetPositionsOptions = {}) {
+  const { fallbackToDb = false } = options;
   const okxClient = createOkxClient();
 
   try {
     const rawPositions = cachedPositions || await okxClient.getPositions();
 
-    const dbResult = await dbClient.execute("SELECT symbol, opened_at, peak_pnl_percent FROM positions");
-    const dbDataMap = new Map(
-      dbResult.rows.map((row: any) => [row.symbol, {
-        opened_at: row.opened_at,
-        peak_pnl_percent: Number.parseFloat(row.peak_pnl_percent as string || "0"),
-      }])
+    const dbResult = await dbClient.execute(
+      "SELECT symbol, opened_at, peak_pnl_percent, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, leverage, side FROM positions"
+    );
+    const dbDataMap = new Map<string, any>(
+      dbResult.rows.map((row: any) => [row.symbol, row])
     );
 
-    return rawPositions
+    const formattedPositions = rawPositions
       .filter((p: any) => Math.abs(Number.parseFloat(p.size || "0")) > 1e-8)
       .map((p: any) => {
         const size = Number.parseFloat(p.size || "0");
@@ -1186,7 +1220,7 @@ async function getPositions(cachedPositions?: any[]) {
         const dbData = dbDataMap.get(symbol);
 
         let openedAt = dbData?.opened_at;
-        const peakPnlPercent = dbData?.peak_pnl_percent || 0;
+        const peakPnlPercent = normalizeDbNumber(dbData?.peak_pnl_percent, 0);
 
         if (!openedAt && p.create_time) {
           if (typeof p.create_time === "number") {
@@ -1205,7 +1239,7 @@ async function getPositions(cachedPositions?: any[]) {
           symbol,
           contract: p.contract,
           quantity: Math.abs(size),
-          side: size > 0 ? "long" : "short",
+          side: (p.posSide === "short") ? "short" : (p.posSide === "long" ? "long" : (size >= 0 ? "long" : "short")),
           entry_price: Number.parseFloat(p.entryPrice || "0"),
           current_price: Number.parseFloat(p.markPrice || "0"),
           liquidation_price: Number.parseFloat(p.liqPrice || "0"),
@@ -1216,8 +1250,62 @@ async function getPositions(cachedPositions?: any[]) {
           peak_pnl_percent: peakPnlPercent,
         };
       });
+
+    if (formattedPositions.length === 0 && fallbackToDb && dbResult.rows.length > 0) {
+      logger.warn(`交易所返回 0 个持仓，使用数据库中的 ${dbResult.rows.length} 个持仓作为兜底`);
+      return dbResult.rows.map((row: any) => {
+        const quantity = normalizeDbNumber(row.quantity, 0);
+        const entryPrice = normalizeDbNumber(row.entry_price, 0);
+        const currentPrice = normalizeDbNumber(row.current_price, entryPrice);
+        return {
+          symbol: row.symbol,
+          contract: `${row.symbol}_USDT`,
+          quantity: Math.abs(quantity),
+          side: (row.side === "short") ? "short" : (row.side === "long" ? "long" : (quantity >= 0 ? "long" : "short")),
+          entry_price: entryPrice,
+          current_price: currentPrice,
+          liquidation_price: normalizeDbNumber(row.liquidation_price, 0),
+          unrealized_pnl: normalizeDbNumber(row.unrealized_pnl, 0),
+          leverage: normalizeDbNumber(row.leverage, 1),
+          margin: 0,
+          opened_at: row.opened_at || getChinaTimeISO(),
+          peak_pnl_percent: normalizeDbNumber(row.peak_pnl_percent, 0),
+        };
+      });
+    }
+
+    return formattedPositions;
   } catch (error) {
     logger.error("获取持仓失败:", error as any);
+
+    if (fallbackToDb) {
+      const fallbackResult = await dbClient.execute(
+        "SELECT symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, leverage, side, opened_at, peak_pnl_percent FROM positions"
+      );
+      if (fallbackResult.rows.length > 0) {
+        logger.warn(`实时接口获取持仓失败，使用数据库中的 ${fallbackResult.rows.length} 个持仓作为兜底`);
+        return fallbackResult.rows.map((row: any) => {
+          const quantity = normalizeDbNumber(row.quantity, 0);
+          const entryPrice = normalizeDbNumber(row.entry_price, 0);
+          const currentPrice = normalizeDbNumber(row.current_price, entryPrice);
+          return {
+            symbol: row.symbol,
+            contract: `${row.symbol}_USDT`,
+            quantity: Math.abs(quantity),
+            side: (row.side === "short") ? "short" : (row.side === "long" ? "long" : (quantity >= 0 ? "long" : "short")),
+            entry_price: entryPrice,
+            current_price: currentPrice,
+            liquidation_price: normalizeDbNumber(row.liquidation_price, 0),
+            unrealized_pnl: normalizeDbNumber(row.unrealized_pnl, 0),
+            leverage: normalizeDbNumber(row.leverage, 1),
+            margin: 0,
+            opened_at: row.opened_at || getChinaTimeISO(),
+            peak_pnl_percent: normalizeDbNumber(row.peak_pnl_percent, 0),
+          };
+        });
+      }
+    }
+
     return [];
   }
 }
@@ -1450,22 +1538,46 @@ async function closeAllPositions(reason: string): Promise<void> {
     }
     
     for (const pos of activePositions) {
-      const size = Number.parseFloat(pos.size || "0");
-      if (!Number.isFinite(size) || Math.abs(size) < 1e-8) continue;
+      const rawSize = Number.parseFloat(pos.size || "0");
+      if (!Number.isFinite(rawSize) || Math.abs(rawSize) < 1e-8) continue;
+      
       const contract = pos.contract;
       const symbol = contract.replace("_USDT", "");
-      const positionSide = size > 0 ? "long" : "short";
+      const quantity = Math.abs(rawSize);
+      
+      // Determine position mode and side
+      let positionSide: "long" | "short" | "net" = "long";
+      let isReduceOnly = false;
+      
+      if (pos.posSide === "net") {
+        positionSide = "net";
+        isReduceOnly = true;
+      } else if (pos.posSide === "short") {
+        positionSide = "short";
+      } else {
+        positionSide = "long";
+      }
+      
+      // Determine order size (direction)
+      let orderSize = 0;
+      if (positionSide === "net") {
+        orderSize = -rawSize; // Reverse the position
+      } else if (positionSide === "long") {
+        orderSize = -quantity; // Sell to close long
+      } else {
+        orderSize = quantity; // Buy to close short
+      }
       
       try {
-  await okxClient.placeOrder({
+        await okxClient.placeOrder({
           contract,
-          size: -size,
-          price: 0, // 市价单必须传 price: 0
-          reduceOnly: true, // 只减仓，不开新仓
+          size: orderSize,
+          price: 0, // 市价单
           positionSide,
+          reduceOnly: isReduceOnly
         });
         
-  logger.info(`已平仓: ${symbol} ${Math.abs(size)}张`);
+        logger.info(`已平仓: ${symbol} ${quantity}张 (Mode: ${positionSide})`);
       } catch (error) {
         logger.error(`平仓失败: ${symbol}`, error as any);
       }
@@ -1602,18 +1714,44 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     }
     
     // 3. 同步持仓信息（优化：只调用一次API，避免重复）
+    // 币安 API 可能有延迟，增加重试机制确保获取到最新持仓
     try {
       const okxClient = createOkxClient();
-      const rawPositions = await okxClient.getPositions();
+      let rawPositions: any[] = [];
+      let retries = 3;
       
-      positions = await getPositions(rawPositions);
+      // 重试获取持仓（部分交易所 API 可能有延迟）
+      while (retries > 0) {
+        rawPositions = await okxClient.getPositions();
+        
+        // 检查数据库中是否有持仓记录
+        const dbPositions = await dbClient.execute("SELECT COUNT(*) as count FROM positions");
+        const dbCount = (dbPositions.rows[0] as any).count;
+        
+        // 如果数据库有持仓但 API 返回空，说明可能是 API 延迟，等待后重试
+        if (dbCount > 0 && rawPositions.length === 0) {
+          logger.warn(`数据库有 ${dbCount} 个持仓，但交易所返回 0 个持仓，可能是 API 延迟，等待 2 秒后重试（剩余 ${retries - 1} 次）`);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+          retries--;
+          continue;
+        }
+        
+        // 数据一致或 API 有持仓数据，停止重试
+        break;
+      }
+      
+      logger.info(`获取到 ${rawPositions.length} 个持仓（原始数据）`);
+      
+      positions = await getPositions(rawPositions, { fallbackToDb: true });
       await syncPositionsFromOkx(rawPositions);
       
       const dbPositions = await dbClient.execute("SELECT COUNT(*) as count FROM positions");
       const dbCount = (dbPositions.rows[0] as any).count;
       
+      logger.info(`持仓状态: API=${positions.length}, DB=${dbCount}`);
+      
       if (positions.length !== dbCount) {
-        logger.warn(`持仓同步不一致: OKX=${positions.length}, DB=${dbCount}`);
+        logger.warn(`持仓同步不一致: API=${positions.length}, DB=${dbCount}，重新同步`);
         await syncPositionsFromOkx(rawPositions);
       }
     } catch (error) {
@@ -1720,7 +1858,6 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
             contract,
             size,
             price: 0,
-            reduceOnly: true,
             positionSide,
           });
           
@@ -1921,6 +2058,12 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     logger.info("=".repeat(80));
     logger.info(prompt);
     logger.info("=".repeat(80) + "\n");
+
+    // Debug: Log positions passed to AI
+    logger.info(`【调试】传递给 AI 的持仓数量: ${positions.length}`);
+    if (positions.length > 0) {
+      logger.info(`【调试】持仓详情: ${JSON.stringify(positions.map(p => ({ symbol: p.symbol, side: p.side, quantity: p.quantity, pnl: p.unrealized_pnl })))}`);
+    }
     
     // 推送状态：分析市场 (等待2秒)
     await pushStatusWithDelay("analyzing", "Analyzing market data...", trigger);
@@ -2037,6 +2180,13 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       
       const decisionTimestamp = getChinaTimeISO();
       const actionsTakenRecords = await getTradeActionsBetween(executionStartedAt, decisionTimestamp);
+      
+      // Debug: Log captured actions
+      logger.info(`【调试】捕获到的交易动作 (${executionStartedAt} - ${decisionTimestamp}): ${actionsTakenRecords.length} 条`);
+      if (actionsTakenRecords.length > 0) {
+        logger.info(`【调试】动作详情: ${JSON.stringify(actionsTakenRecords)}`);
+      }
+
       if (actionsTakenRecords.length > 0) {
         logger.info(`捕获到 ${actionsTakenRecords.length} 条实际交易动作，将写入决策记录`);
       }
@@ -2058,6 +2208,8 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       const positionsCountForSql = Number.isFinite(positions.length)
         ? positions.length
         : 0;
+
+      logger.info(`📊 即将保存决策记录: positions_count=${positionsCountForSql}, account_value=${accountValueForSql.toFixed(2)}`);
 
       await dbClient.execute({
         sql: `INSERT INTO agent_decisions 
@@ -2173,6 +2325,13 @@ export async function initTradingSystem() {
   await ensureAgentDecisionExecutionColumn(dbClient);
   await ensureAgentRequestLogsTable(dbClient);
   
+  // 确保 positions 表支持双向持仓
+  const { ensureDualPositionSupport, ensureSessionsTable } = await import("../database/migrations");
+  await ensureDualPositionSupport(dbClient);
+  
+  // 确保 sessions 表存在（用于持久化登录状态）
+  await ensureSessionsTable(dbClient);
+  
   // 1. 加载配置
   accountRiskConfig = await getAccountRiskConfig();
   logger.info(`环境变量配置: 止损线=${accountRiskConfig.stopLossUsdt} USDT, 止盈线=${accountRiskConfig.takeProfitUsdt} USDT`);
@@ -2189,6 +2348,19 @@ export async function initTradingSystem() {
   logger.info(`交易循环默认状态: ${tradingLoopEnabled ? "启用" : "停用"}`);
   
   logger.info(`最终配置: 止损线=${accountRiskConfig.stopLossUsdt} USDT, 止盈线=${accountRiskConfig.takeProfitUsdt} USDT`);
+  
+  // 3. 如果是 Binance，设置为双向持仓模式
+  const exchangeProvider = process.env.EXCHANGE_PROVIDER || "okx";
+  if (exchangeProvider.toLowerCase() === "binance") {
+    try {
+      const client = createOkxClient(); // 实际返回 BinanceClient
+      if (typeof (client as any).setPositionMode === "function") {
+        await (client as any).setPositionMode(true); // 启用双向持仓（Hedge Mode）
+      }
+    } catch (error) {
+      logger.error("设置 Binance 双向持仓模式失败:", error as any);
+    }
+  }
 }
 
 /**

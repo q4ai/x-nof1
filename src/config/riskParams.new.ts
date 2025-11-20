@@ -141,6 +141,11 @@ export const RISK_PARAMS = {
     const normalized = getConfig("TRADING_MARGIN_MODE", "cross").toLowerCase();
     return normalized === "isolated" ? "isolated" : "cross";
   },
+  
+  // 紧急通知 URL（GET 请求）
+  get EMERGENCY_NOTICE_URL(): string {
+    return getConfig("EMERGENCY_NOTICE_URL", "");
+  },
 } as const;
 
 /**

@@ -64,6 +64,8 @@
 	"aiAnalyzing": "Analyzing",
 	"aiDecisionMaking": "Decision Making",
 	"tabs": {
+		"dashboard": "Dashboard",
+		"manualTrade": "Manual Trade",
 		"positions": "Positions",
 		"trades": "Trade History",
 		"logs": "Trade Logs",
@@ -184,6 +186,12 @@
 				"action": "Action",
 				"status": "Status",
 				"summary": "Summary"
+			},
+			"actions": {
+				"open": "Open",
+				"close": "Close",
+				"cancel": "Cancel",
+				"adjust": "Adjust"
 			},
 			"status": {
 				"success": "Success",
@@ -437,6 +445,20 @@
 			"httpProxy": "HTTP Proxy (optional)",
 			"httpProxyPlaceholder": "http://127.0.0.1:7890"
 		},
+		"emergency": {
+			"sectionTitle": "🚨 Emergency Notification",
+			"noticeUrl": "Emergency Notice URL (GET request)",
+			"noticeUrlPlaceholder": "https://your-webhook-url.com/notify?key=xxx",
+			"noticeUrlHint": "AI will call this URL when critical situations occur (e.g., repeated trading failures). Leave empty to disable.",
+			"testButton": "🔔 Test Emergency Notice",
+			"testMessages": {
+				"fillRequired": "Please enter the emergency notice URL",
+				"testing": "Testing emergency notice...",
+				"success": "✅ Emergency notice sent successfully!",
+				"failure": "❌ Failed to send emergency notice: {{detail}}",
+				"networkError": "❌ Network error, please check your connection"
+			}
+		},
 		"privacy": {
 			"sectionTitle": "🔒 Privacy Settings",
 			"description": "Control how this node participates in the community competition.",
@@ -446,7 +468,7 @@
 			"sharePromptsHint": "Prompt details are only sent if leaderboard reporting is enabled."
 		},
 		"reset": {
-			"sectionTitle": "⚠️ Reset Live Environment",
+			"sectionTitle": "⚠️ Reset Live Trading Data",
 			"hint": "This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.",
 			"trigger": "Reset Live Data",
 			"confirmHint": "Type <code>RESET</code> to confirm.",
@@ -473,6 +495,51 @@
 			"closeWithPnl": "Close {{pnl}}",
 			"closeWithPnlPercent": "Close {{pnl}} ({{percent}}%)"
 		}
+	},
+	"trade": {
+		"available": "Available",
+		"action": "Action",
+		"open": "Open",
+		"close": "Close",
+		"symbol": "Symbol",
+		"direction": "Direction",
+		"long": "Long",
+		"short": "Short",
+		"longOpen": "Long",
+		"shortOpen": "Short",
+		"longClose": "Close Long",
+		"shortClose": "Close Short",
+		"leverage": "Leverage (x)",
+		"orderType": "Order Type",
+		"market": "Market",
+		"limit": "Limit",
+		"price": "Price",
+		"pricePlaceholder": "Enter Price",
+		"amount": "Amount",
+		"amountLabelUsdt": "Amount (USDT)",
+		"amountLabelCoin": "Quantity (Coin)",
+		"amountUnitUsdt": "USDT",
+		"amountUnitCoin": "Coin",
+		"amountPlaceholderUsdt": "Amount in USDT",
+		"amountPlaceholderCoin": "Amount in coin",
+		"marginMode": "Margin Mode",
+		"cross": "Cross",
+		"isolated": "Isolated",
+		"openBtn": "Open Position",
+		"closeBtn": "Close Position",
+		"processing": "Processing...",
+		"manualOpenSuccess": "Open order sent",
+		"manualCloseSuccess": "Close order sent",
+		"errors": {
+			"invalidAmount": "Please enter a valid amount",
+			"invalidLeverage": "Please enter leverage",
+			"priceUnavailable": "Unable to fetch latest price. Please try again."
+		}
+	},
+	"guestView": {
+		"title": "Login required",
+		"description": "Sign in via the admin console to view the monitoring dashboard and place manual trades.",
+		"hint": "Use the secure admin path configured for your deployment."
 	},
 	"notifications": {
 		"loadFailedTitle": "Load failed",
@@ -504,6 +571,9 @@
 		"executingMessage": "An AI decision is already running. Please wait...",
 		"triggerFailedTitle": "Trigger failed",
 		"triggerFailedMessage": "Unable to trigger AI decision. Please check your network connection."
+	},
+	"errors": {
+		"authRequired": "Please log in before using manual trading."
 	},
 	"aiOverlay": {
 		"status": {

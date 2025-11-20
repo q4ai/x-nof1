@@ -1,25 +1,95 @@
 # Copilot 指南
 
-## 架构速览
-- 启动入口 `src/index.ts`：依序执行 `initConfig()` ➜ `loadRiskParams()`（从数据库载入配置并回落到 `.env`）➜ `initTradingSystem()` ➜ 启动 Hono API、WebSocket、交易循环、账户记录器以及止盈/移动止盈监控器。
-- 核心交易决策在 `src/scheduler/tradingLoop.ts`：负责锁机制、状态推送、提示词生成、AI Agent 调用、交易执行和结果写库。
-- AI 决策管线由 `src/agents/tradingAgent.ts` 驱动，调用 `src/tools/trading/**`（open/close/account/marketData 等工具），受 `src/config/riskParams.new.ts` 的动态参数约束。
-- 所有 OKX 交互透过 `src/services/okxClient.ts` 的单例客户端；行情多周期聚合集中在 `src/services/multiTimeframeAnalysis.ts`。
-- 持久化使用 LibSQL（SQLite 模式），模式定义在 `src/database/schema.ts`，初始化与迁移脚本在 `src/database/**` 与 `scripts/` 下。
-- Web 前端位于 `public/`：`monitor-script.js` 负责仪表盘逻辑、策略表单提交、WebSocket 状态渲染；`monitor-styles.css` 定义面板样式。
+## 1. 核心架构
 
-## 运行与调试
-- Node 20.19+；安装依赖后可用 `npm run dev`（ts-node 监控 + API）或 `npm run trading:start`（仅交易循环）。生产构建：`npm run build && npm run start`（tsdown 输出到 `dist/`）。
-- 初始化数据库：`npm run db:init`；重置：`npm run db:reset`、`scripts/close-reset-and-start.sh` 等。
-- 常用质量检查：`npm run lint` / `npm run lint:fix`（Biome），`npm run typecheck`（tsc），`npm run test` 当前为空但预留。
-- 配置更新流程：前端通过 `/api/config` 保存后需调用 `/api/reload`（`monitor-script.js` 已自动发起），随后必须手动重启交易循环或进程，新的调度间隔才生效。
+### 启动与生命周期
+- **入口**: `src/index.ts`
+  - 流程: `initConfig()` (DB/Env) ➜ `loadRiskParams()` ➜ `initTradingSystem()`。
+  - 启动组件: Hono API Server, WebSocket Service, Trading Loop (Cron), Account Recorder, Trailing Stop Monitor.
+- **配置管理**:
+  - 核心配置通过 `src/config/riskParams.new.ts` 中的 `RISK_PARAMS` Getter 访问。
+  - 优先读取数据库 `system_config` 表，无记录时回落到 `.env`。
+  - **禁止**直接在业务代码中使用 `process.env` 读取交易参数。
+  - 更新配置需调用 `/api/reload` 并重启交易循环。
 
-## 关键约定
-- 所有环境/策略参数通过 `RISK_PARAMS` Getter 读取，内部先读数据库缓存，无记录时回落 `.env`，不要直接访问 `process.env`（已有遗留操作需谨慎处理）。
-- 需要 OKX 客户端统一使用 `createOkxClient()` / `createOkxClientWithConfig()`，避免自建实例遗漏 Proxy、Simulated 环境或密钥校验。
-- 交易循环的 WebSocket 状态通过 `src/services/websocketService.ts` 广播，前端 `handleTradingStatusUpdate` 直接展示 `message` 字段；新增状态时要同步定义枚举与前端映射。
-- `src/scheduler/tradingLoop.ts` 的数据库写入使用 `SQLite`，只能绑定 string/number/bigint/buffer/null，先确保序列化值（例如 `JSON.stringify`）。
-- `public/monitor-script.js` 维护 `availableSymbols` 集合，`applyConfigSymbols()` 会用策略配置覆盖初始币种；新增币种来源时记得同步刷新该集合。
-- 日志统一调用 `src/utils/loggerUtils.ts` 的 `createLogger`（pino 封装），并在关键流程打印输入/输出以便复盘。
-- 提交代码或回答问题时，请使用中文说明思路与结论。
-- 使用高内聚、低耦合的思想设计所有代码
+### 交易系统 (`src/scheduler/tradingLoop.ts`)
+- **调度**: 基于 `node-cron` 或 `setInterval` 的循环机制。
+- **流程**:
+  1. 获取全局锁 (`isExecuting`)。
+  2. 广播状态 (`processing`)。
+  3. 生成 Prompt (`src/agents/tradingAgent.ts`)。
+  4. 调用 AI Agent 获取决策。
+  5. 执行工具 (`src/tools/trading/**`)。
+  6. 记录结果 (`trades`, `agent_request_logs` 表)。
+  7. 广播完成状态。
+
+### AI Agent & Tools
+- **Agent**: `src/agents/tradingAgent.ts` 负责构建上下文（行情、持仓、新闻）并解析 LLM 响应。
+- **Tools** (`src/tools/trading/`):
+  - `tradeExecution.ts`: 核心下单逻辑。
+    - `executeOpenPosition`: 支持 **USDT 面值 (Notional)** 和 **币数量 (Coin Quantity)** 两种模式。
+    - `executeClosePosition`: 平仓逻辑。
+  - `marketData.ts`: K线、订单簿、资金费率。
+  - `accountManagement.ts`: 余额、持仓查询。
+
+### 数据服务
+- **OKX 客户端**: `src/services/okxClient.ts` (单例模式，自动处理模拟盘/实盘切换)。
+- **行情分析**: `src/services/multiTimeframeAnalysis.ts` (多周期聚合)。
+- **WebSocket**: `src/services/websocketService.ts` (向前端广播状态、日志、价格)。
+
+## 2. 数据库与持久化
+- **引擎**: LibSQL (SQLite 模式)。
+- **Schema**: `src/database/schema.ts`。
+- **关键表**:
+  - `system_config`: 动态配置。
+  - `trades`: 交易历史。
+  - `positions`: 当前持仓快照。
+  - `agent_request_logs`: AI 决策日志。
+  - `account_history`: 权益曲线记录。
+- **迁移**: `src/database/migrations.ts` 及 `scripts/` 目录下的工具脚本。
+
+## 3. 前端架构 (`public/`)
+- **技术栈**: 原生 HTML/CSS/JS (无框架)。
+- **核心文件**:
+  - `monitor-script.js`: 业务逻辑、WebSocket 处理、图表渲染 (Chart.js/Lightweight Charts)。
+  - `monitor-styles.css`: 样式定义。
+- **权限控制**:
+  - **未登录 (Guest)**: 仅展示 Dashboard (账户统计 + AI 决策 + K线)，**隐藏** 顶部导航 Tabs 和 手动交易面板。
+  - **已登录 (User)**: 展示完整功能，包括 Manual Trade, Settings 等。
+  - 鉴权逻辑在 `monitor-script.js` 的 `updateSidebarAuthVisibility()` 中实现。
+- **手动交易 (Manual Trade)**:
+  - 接口: `POST /api/trading/manual` (需 Session + CSRF)。
+  - **输入模式**:
+    - **Amount (USDT)**: 视为 **总面值 (Notional Value)**。后端计算: `张数 = 面值 / (乘数 * 价格)`。
+    - **Quantity (Coin)**: 视为 **币的数量**。后端计算: `张数 = 数量 / 乘数`。
+  - **订单类型**:
+    - **Market**: 市价单，价格字段无效（后端自动获取当前价）。
+    - **Limit**: 限价单，需指定 `price`。
+
+## 4. 开发与调试
+- **运行**:
+  - 开发: `npm run dev` (ts-node 监控)。
+  - 生产: `npm run build && npm run start`。
+  - 仅交易循环: `npm run trading:start`。
+- **数据库操作**:
+  - 初始化: `npm run db:init`。
+  - 重置: `npm run db:reset` 或 `scripts/close-reset-and-start.sh`。
+- **代码质量**:
+  - Lint: `npm run lint` / `npm run lint:fix` (Biome)。
+  - Typecheck: `npm run typecheck` (TypeScript)。
+
+## 5. 编码规范 (Copilot 必读)
+1.  **语言**: 代码注释、提交信息、回答问题均使用 **中文**。
+2.  **类型安全**: 严禁使用 `any`，必须定义清晰的 Interface/Type。
+3.  **错误处理**: 所有 API 调用必须包含 `try-catch`，并使用 `logger.error` 记录堆栈。
+4.  **工具使用**:
+    - 修改文件优先使用 `replace_string_in_file`。
+    - 涉及数据库变更必须同步更新 `schema.ts` 和迁移脚本。
+5.  **OKX 交互**: 必须使用 `createOkxClient()` 获取实例，禁止手动实例化 `OkxClient` 类。
+6.  **日志**: 使用 `src/utils/loggerUtils.ts`，关键路径必须打点。
+7.  **设计原则**: 高内聚、低耦合。业务逻辑尽量封装在 `src/services` 或 `src/tools` 中，Controller 层保持轻量。
+
+## 6. 最近更新
+- **手动交易升级**: 支持 **市价 (Market)** 和 **限价 (Limit)** 两种订单类型。限价单支持指定价格，后端逻辑已适配（包括张数计算和下单参数）。
+- **手动交易单位**: 明确区分 USDT (Notional) 和 Coin (Quantity) 两种下单模式，后端 `executeOpenPosition` 已适配。
+- **访客模式**: 前端已移除遮罩层，改为通过 CSS/JS 隐藏敏感操作区域。

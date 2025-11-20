@@ -140,25 +140,56 @@ async function closeAllPositions(): Promise<void> {
     logger.warn(`⚠️  发现 ${activePositions.length} 个持仓，开始平仓...`);
     
     for (const pos of activePositions) {
-      const size = Number.parseInt(pos.size || "0");
+      const rawSize = Number.parseFloat(pos.size || "0");
+      if (!Number.isFinite(rawSize) || Math.abs(rawSize) < 1e-8) continue;
+      
       const contract = pos.contract;
       const symbol = contract.replace("_USDT", "");
-      const side = size > 0 ? "多头" : "空头";
-      const quantity = Math.abs(size);
-      const positionSide = size > 0 ? "long" : "short";
+      const quantity = Math.abs(rawSize);
+      
+      // Determine position mode and side
+      let positionSide: "long" | "short" | "net" = "long";
+      let isReduceOnly = false;
+      
+      if (pos.posSide === "net") {
+        positionSide = "net";
+        isReduceOnly = true;
+      } else if (pos.posSide === "short") {
+        positionSide = "short";
+      } else {
+        positionSide = "long";
+      }
+      
+      // Determine order size (direction)
+      // If Net mode: rawSize > 0 means Long, so we Sell (-). rawSize < 0 means Short, so we Buy (+).
+      // If Hedge mode: rawSize is absolute. 
+      //   If posSide=long, we Sell (-).
+      //   If posSide=short, we Buy (+).
+      let orderSize = 0;
+      if (positionSide === "net") {
+        orderSize = -rawSize; // Reverse the position
+      } else if (positionSide === "long") {
+        orderSize = -quantity; // Sell to close long
+      } else {
+        orderSize = quantity; // Buy to close short
+      }
+      
+      const sideLabel = positionSide === "net" 
+        ? (rawSize > 0 ? "净多头" : "净空头")
+        : (positionSide === "long" ? "多头" : "空头");
       
       try {
-        logger.info(`🔄 平仓中: ${symbol} ${side} ${quantity}张`);
+        logger.info(`🔄 平仓中: ${symbol} ${sideLabel} ${quantity}张 (Mode: ${positionSide})`);
         
-  await okxClient.placeOrder({
+        await okxClient.placeOrder({
           contract,
-          size: -size, // 反向平仓
+          size: orderSize,
           price: 0, // 市价单
-          reduceOnly: true, // 只减仓，不开新仓
           positionSide,
+          reduceOnly: isReduceOnly
         });
         
-        logger.info(`✅ 已平仓: ${symbol} ${side} ${quantity}张`);
+        logger.info(`✅ 已平仓: ${symbol} ${sideLabel} ${quantity}张`);
       } catch (error: any) {
         logger.error(`❌ 平仓失败: ${symbol} - ${error.message}`);
       }

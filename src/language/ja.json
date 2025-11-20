@@ -64,12 +64,18 @@
 	"aiAnalyzing": "分析中",
 	"aiDecisionMaking": "意思決定中",
 	"tabs": {
+		"dashboard": "ダッシュボード",
+		"manualTrade": "手動取引",
 		"positions": "ポジション",
 		"trades": "取引履歴",
 		"logs": "取引ログ",
 		"decisionLogs": "意思決定ログ"
 	},
 	"decision": {
+		"longOpen": "ロング",
+		"shortOpen": "ショート",
+		"longClose": "ロング決済",
+		"shortClose": "ショート決済",
 		"title": "AI 判断",
 		"empty": "AI の判断はまだありません"
 	},
@@ -114,20 +120,27 @@
 		"account": {
 			"title": "アカウント設定"
 		},
-		"strategy": {
-			"title": "ストラテジー設定"
-		},
-		"settings": {
-			"title": "システム設定"
-		}
-	},
-	"tables": {
-		"common": {
-			"quantityWithSymbol": "{{value}} {{symbol}}",
-			"contractsWithUnit": "{{value}} 枚",
-			"contracts": "枚",
-			"total": "合計",
-			"noContent": "表示できる内容がありません",
+		"trade": {
+			"available": "利用可能",
+			"action": "操作",
+			"open": "新規",
+			"close": "決済",
+			"symbol": "銘柄",
+			"direction": "方向",
+			"long": "ロング",
+			"short": "ショート",
+			"longOpen": "ロング",
+			"shortOpen": "ショート",
+			"longClose": "ロング決済",
+			"shortClose": "ショート決済",
+			"leverage": "レバレッジ (倍)",
+			"amount": "注文金額 (USDT)",
+			"marginMode": "証拠金モード",
+			"cross": "クロス",
+			"isolated": "分離",
+			"openBtn": "新規建て",
+			"closeBtn": "決済",
+			"processing": "処理中...",
 			"viewAll": "すべて表示"
 		},
 		"positions": {
@@ -161,6 +174,9 @@
 		},
 		"trades": {
 			"empty": "取引履歴はありません",
+			"action": "アクション",
+			"open": "新規建て",
+			"close": "決済",
 			"headers": {
 				"contract": "銘柄",
 				"type": "種別",
@@ -177,13 +193,19 @@
 			}
 		},
 		"logs": {
-			"empty": "取引ログはありません",
+			"empty": "取引ログなし",
 			"headers": {
-				"time": "時間",
+				"time": "時刻",
 				"contract": "銘柄",
-				"action": "アクション",
+				"action": "操作",
 				"status": "状態",
-				"summary": "サマリー"
+				"summary": "概要"
+			},
+			"actions": {
+				"open": "新規",
+				"close": "決済",
+				"cancel": "取消",
+				"adjust": "調整"
 			},
 			"status": {
 				"success": "成功",
@@ -434,8 +456,22 @@
 		},
 		"network": {
 			"sectionTitle": "🌐 ネットワーク設定",
-			"httpProxy": "HTTP プロキシ (任意)",
+			"httpProxy": "HTTP プロキシ（任意）",
 			"httpProxyPlaceholder": "http://127.0.0.1:7890"
+		},
+		"emergency": {
+			"sectionTitle": "🚨 緊急通知",
+			"noticeUrl": "緊急通知 URL（GET リクエスト）",
+			"noticeUrlPlaceholder": "https://your-webhook-url.com/notify?key=xxx",
+			"noticeUrlHint": "クリティカルな状況（例：繰り返し取引失敗）が発生したとき、AI がこの URL に通知を送信します。空欄で無効化。",
+			"testButton": "🔔 緊急通知テスト",
+			"testMessages": {
+				"fillRequired": "緊急通知 URL を入力してください",
+				"testing": "緊急通知をテスト中...",
+				"success": "✅ 緊急通知の送信に成功しました！",
+				"failure": "❌ 緊急通知の送信に失敗しました：{{detail}}",
+				"networkError": "❌ ネットワークエラーです。接続を確認してください"
+			}
 		},
 		"privacy": {
 			"sectionTitle": "🔒 プライバシー設定",
@@ -474,6 +510,51 @@
 			"closeWithPnlPercent": "決済 {{pnl}} ({{percent}}%)"
 		}
 	},
+	"trade": {
+		"available": "利用可能残高",
+		"action": "操作",
+		"open": "新規",
+		"close": "決済",
+		"symbol": "銘柄",
+		"direction": "方向",
+		"long": "ロング",
+		"short": "ショート",
+		"longOpen": "ロング",
+		"shortOpen": "ショート",
+		"longClose": "ロング決済",
+		"shortClose": "ショート決済",
+		"leverage": "レバレッジ (x)",
+		"orderType": "注文タイプ",
+		"market": "成行",
+		"limit": "指値",
+		"price": "価格",
+		"pricePlaceholder": "価格を入力",
+		"amount": "数量",
+		"amountLabelUsdt": "注文額 (USDT)",
+		"amountLabelCoin": "注文数 (コイン)",
+		"amountUnitUsdt": "USDT",
+		"amountUnitCoin": "コイン",
+		"amountPlaceholderUsdt": "USDT建て数量",
+		"amountPlaceholderCoin": "コイン数量",
+		"marginMode": "証拠金モード",
+		"cross": "クロス",
+		"isolated": "アイソレート",
+		"openBtn": "ポジションを開く",
+		"closeBtn": "ポジションを閉じる",
+		"processing": "処理中...",
+		"manualOpenSuccess": "建玉リクエストを送信しました",
+		"manualCloseSuccess": "決済リクエストを送信しました",
+		"errors": {
+			"invalidAmount": "有効な数量を入力してください",
+			"invalidLeverage": "レバレッジを入力してください",
+			"priceUnavailable": "最新価格を取得できません。少し待って再試行してください。"
+		}
+	},
+	"guestView": {
+		"title": "ログインが必要です",
+		"description": "監視ダッシュボードと手動取引ツールを利用するには、まず管理画面にログインしてください。",
+		"hint": "デプロイ時に案内された安全な管理ポータルから認証してください。"
+	},
 	"notifications": {
 		"loadFailedTitle": "読み込みに失敗しました",
 		"loadFailedDefault": "戦略テンプレートを取得できませんでした。しばらくしてから再試行してください。",
@@ -504,6 +585,9 @@
 		"executingMessage": "AI 判断を実行中です。しばらくお待ちください...",
 		"triggerFailedTitle": "トリガーに失敗しました",
 		"triggerFailedMessage": "AI 判断を実行できませんでした。ネットワーク接続を確認してください。"
+	},
+	"errors": {
+		"authRequired": "手動注文を行う前にログインしてください。"
 	},
 	"aiOverlay": {
 		"status": {

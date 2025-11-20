@@ -35,6 +35,7 @@ export {
   closePositionTool,
   cancelOrderTool,
   executeClosePosition,
+  executeOpenPosition,
 } from "./tradeExecution";
 
 // 账户管理工具
@@ -46,4 +47,7 @@ export {
   calculateRiskTool,
   syncPositionsTool,
 } from "./accountManagement";
+
+// 紧急通知工具
+export { sendEmergencyNoticeTool } from "./emergencyNotice";
 

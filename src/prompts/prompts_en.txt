@@ -37,6 +37,7 @@ Act directly on the data above, no need to re-fetch:
 1. Manage existing positions → call closePosition / calculateRisk as needed
 2. Identify new trade opportunities → call openPosition to execute
 3. Evaluate risk and sizing → call getAccountBalance / getPositions to confirm
+4. Send emergency notification if repeated trading failures → call sendEmergencyNotice
 
 Critical: You must execute via tools. Do not stop at analysis.
 

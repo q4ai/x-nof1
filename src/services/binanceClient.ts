@@ -220,18 +220,34 @@ export class BinanceClient {
   }
 
   async getPositions() {
-    const account = await this.request<any>("GET", "/fapi/v2/account", undefined, true);
-    const positions: any[] = account.positions || [];
+    // 使用 positionRisk 接口获取更完整的持仓信息（包含 markPrice 和 liquidationPrice）
+    const positions = await this.request<any[]>("GET", "/fapi/v2/positionRisk", undefined, true);
 
     return positions
-      .filter((pos) => Number.parseFloat(pos.positionAmt || "0") !== 0)
+      .filter((pos) => Math.abs(Number.parseFloat(pos.positionAmt || "0")) > 1e-8)
       .map((pos) => {
         const symbol = pos.symbol as string;
         const contract = symbolToContract(symbol);
-        const size = toFixedString(pos.positionAmt);
+        const positionAmt = Number.parseFloat(pos.positionAmt || "0");
         const marginMode = (pos.marginType || "cross").toLowerCase() === "isolated" ? "isolated" : "cross";
-        const posSide = (pos.positionSide || "both").toLowerCase();
-        const direction = Number.parseFloat(size) >= 0 ? "long" : "short";
+        const rawPosSide = (pos.positionSide || "BOTH").toUpperCase();
+        
+        // 双向持仓模式：LONG/SHORT 由 positionSide 明确指定
+        // 单向持仓模式：BOTH，方向由 positionAmt 正负判断
+        let posSide: string;
+        let size: string;
+        
+        if (rawPosSide === "LONG") {
+          posSide = "long";
+          size = Math.abs(positionAmt).toString();
+        } else if (rawPosSide === "SHORT") {
+          posSide = "short";
+          size = Math.abs(positionAmt).toString();
+        } else {
+          // BOTH 模式（单向持仓）：设置为 net，数量保留正负
+          posSide = "net";
+          size = toFixedString(pos.positionAmt);
+        }
 
         return {
           instId: `${symbol}-SWAP`,
@@ -239,11 +255,11 @@ export class BinanceClient {
           size,
           entryPrice: toFixedString(pos.entryPrice),
           markPrice: toFixedString(pos.markPrice),
-          leverage: toFixedString(pos.leverage ?? account.leverage),
+          leverage: toFixedString(pos.leverage),
           margin: toFixedString(pos.isolatedMargin),
-          unrealisedPnl: toFixedString(pos.unrealizedProfit),
+          unrealisedPnl: toFixedString(pos.unRealizedProfit || pos.unrealizedProfit), // positionRisk 使用 unRealizedProfit
           liqPrice: toFixedString(pos.liquidationPrice),
-          posSide: posSide === "both" ? direction : posSide,
+          posSide,
           createTime: pos.updateTime ? new Date(Number(pos.updateTime)).toISOString() : undefined,
           updateTime: pos.updateTime ? new Date(Number(pos.updateTime)).toISOString() : undefined,
           marginMode,
@@ -306,6 +322,22 @@ export class BinanceClient {
     }));
   }
 
+  async setPositionMode(dualSidePosition: boolean) {
+    try {
+      await this.request("POST", "/fapi/v1/positionSide/dual", { dualSidePosition }, true);
+      logger.info(`Binance 持仓模式已设置为: ${dualSidePosition ? '双向持仓(Hedge Mode)' : '单向持仓(One-way Mode)'}`);
+      return true;
+    } catch (error: any) {
+      const message = error?.message || "";
+      if (message.includes("No need to change position side")) {
+        logger.info(`Binance 持仓模式已经是: ${dualSidePosition ? '双向持仓' : '单向持仓'}`);
+        return true;
+      }
+      logger.error(`设置 Binance 持仓模式失败: ${message}`);
+      throw error;
+    }
+  }
+
   async setLeverage(contract: string, leverage: number, marginMode: "cross" | "isolated" = "cross") {
     const symbol = contractToSymbol(contract);
     const body: RequestParams = {
@@ -358,14 +390,24 @@ export class BinanceClient {
       newClientOrderId: clientOrderId,
     };
 
+    // 双向持仓模式：必须指定 positionSide
+    if (params.positionSide) {
+      const binancePosSide = params.positionSide === "long" ? "LONG" : params.positionSide === "short" ? "SHORT" : "BOTH";
+      body.positionSide = binancePosSide;
+    }
+
     if (params.price && params.price > 0) {
       body.price = params.price;
       body.timeInForce = params.tif?.toUpperCase() || "GTC";
     }
 
-    if (params.reduceOnly) {
-      body.reduceOnly = true;
+    // 双向持仓模式下不使用 reduceOnly，通过 positionSide 控制平仓
+    // 单向持仓模式才需要 reduceOnly
+    if (params.reduceOnly && (params.positionSide === "net" || !params.positionSide)) {
+      body.reduceOnly = "true";
     }
+
+    logger.info(`Binance Order Request: ${JSON.stringify(body)}`); // Add this log
 
     const order = await this.request<any>("POST", "/fapi/v1/order", body, true);
     return {
@@ -388,26 +430,76 @@ export class BinanceClient {
     };
   }
 
-  async getOrder(orderId: string, contract?: string) {
+  async getOrder(orderId: string, contract?: string, clientOrderId?: string) {
     const symbol = contract ? contractToSymbol(contract) : undefined;
-    const response = await this.request<any>("GET", "/fapi/v1/order", {
+    const baseParams: RequestParams = {
       symbol,
       orderId,
-    }, true);
-
-    return {
-      id: response.orderId?.toString() ?? orderId,
-      status: response.status ?? "NEW",
-      size: response.origQty ?? "0",
-      left: response.executedQty ? (Number.parseFloat(response.origQty ?? "0") - Number.parseFloat(response.executedQty)).toString() : response.origQty ?? "0",
-      fill_price: response.avgPrice ?? null,
-      price: response.price ?? null,
-      contract: contract ?? symbolToContract(response.symbol),
-      side: response.side,
-      posSide: response.positionSide,
-      create_time: response.updateTime?.toString(),
-      finish_time: response.updateTime?.toString(),
     };
+
+    const invoke = async (params: RequestParams) => this.request<any>("GET", "/fapi/v1/order", params, true);
+
+    try {
+      const response = await invoke(baseParams);
+      
+      // 解析 avgPrice，币安可能返回 "0" 或 "0.00000000"
+      const avgPriceNum = response.avgPrice ? Number.parseFloat(response.avgPrice) : 0;
+      const avgPriceValue = avgPriceNum > 0 ? response.avgPrice : null;
+      
+      // 解析 price
+      const priceNum = response.price ? Number.parseFloat(response.price) : 0;
+      const priceValue = priceNum > 0 ? response.price : null;
+      
+      return {
+        id: response.orderId?.toString() ?? orderId,
+        status: response.status ?? "NEW",
+        size: response.origQty ?? "0",
+        left: response.executedQty ? (Number.parseFloat(response.origQty ?? "0") - Number.parseFloat(response.executedQty)).toString() : response.origQty ?? "0",
+        fill_price: avgPriceValue,
+        price: priceValue,
+        contract: contract ?? symbolToContract(response.symbol),
+        side: response.side,
+        posSide: response.positionSide,
+        create_time: response.updateTime?.toString(),
+        finish_time: response.updateTime?.toString(),
+      };
+    } catch (error: any) {
+      const message = typeof error?.message === "string" ? error.message : "";
+      const shouldRetryWithClientId = clientOrderId && message.includes("-2013");
+
+      if (!shouldRetryWithClientId) {
+        throw error;
+      }
+
+      const retryParams: RequestParams = {
+        symbol,
+        origClientOrderId: clientOrderId,
+      };
+
+      const response = await invoke(retryParams);
+      
+      // 解析 avgPrice
+      const avgPriceNum = response.avgPrice ? Number.parseFloat(response.avgPrice) : 0;
+      const avgPriceValue = avgPriceNum > 0 ? response.avgPrice : null;
+      
+      // 解析 price
+      const priceNum = response.price ? Number.parseFloat(response.price) : 0;
+      const priceValue = priceNum > 0 ? response.price : null;
+      
+      return {
+        id: response.orderId?.toString() ?? orderId ?? clientOrderId,
+        status: response.status ?? "NEW",
+        size: response.origQty ?? "0",
+        left: response.executedQty ? (Number.parseFloat(response.origQty ?? "0") - Number.parseFloat(response.executedQty)).toString() : response.origQty ?? "0",
+        fill_price: avgPriceValue,
+        price: priceValue,
+        contract: contract ?? symbolToContract(response.symbol),
+        side: response.side,
+        posSide: response.positionSide,
+        create_time: response.updateTime?.toString(),
+        finish_time: response.updateTime?.toString(),
+      };
+    }
   }
 
   async cancelOrder(contract: string, orderId: string) {

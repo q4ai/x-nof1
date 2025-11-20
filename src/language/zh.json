@@ -64,12 +64,18 @@
 	"aiAnalyzing": "分析中",
 	"aiDecisionMaking": "决策中",
 	"tabs": {
+		"dashboard": "监控面板",
+		"manualTrade": "手动下单",
 		"positions": "当前持仓",
 		"trades": "交易历史",
 		"logs": "交易日志",
 		"decisionLogs": "决策日志"
 	},
 	"decision": {
+		"longOpen": "做多",
+		"shortOpen": "做空",
+		"longClose": "平多",
+		"shortClose": "平空",
 		"title": "AI 决策",
 		"empty": "暂无 AI 决策记录"
 	},
@@ -161,6 +167,9 @@
 		},
 		"trades": {
 			"empty": "暂无交易记录",
+			"action": "操作",
+			"open": "开仓",
+			"close": "平仓",
 			"headers": {
 				"contract": "合约",
 				"type": "类型",
@@ -184,6 +193,12 @@
 				"action": "操作",
 				"status": "状态",
 				"summary": "摘要"
+			},
+			"actions": {
+				"open": "开仓",
+				"close": "平仓",
+				"cancel": "撤单",
+				"adjust": "调整"
 			},
 			"status": {
 				"success": "成功",
@@ -437,6 +452,20 @@
 			"httpProxy": "HTTP 代理（可选）",
 			"httpProxyPlaceholder": "http://127.0.0.1:7890"
 		},
+		"emergency": {
+			"sectionTitle": "🚨 紧急通知",
+			"noticeUrl": "紧急通知 URL（GET 请求）",
+			"noticeUrlPlaceholder": "https://your-webhook-url.com/notify?key=xxx",
+			"noticeUrlHint": "当出现紧急情况时（如多次交易失败），AI 将调用此 URL 发送通知。留空则禁用。",
+			"testButton": "🔔 测试紧急通知",
+			"testMessages": {
+				"fillRequired": "请填写紧急通知 URL",
+				"testing": "正在测试紧急通知...",
+				"success": "✅ 紧急通知发送成功！",
+				"failure": "❌ 紧急通知发送失败：{{detail}}",
+				"networkError": "❌ 网络错误，请检查连接"
+			}
+		},
 		"privacy": {
 			"sectionTitle": "🔒 隐私设置",
 			"description": "控制是否参加社区 AI 竞赛排名以及共享提示词。",
@@ -446,9 +475,9 @@
 			"sharePromptsHint": "仅在开启竞赛上报时共享提示词内容，帮助社区优化策略。"
 		},
 		"reset": {
-			"sectionTitle": "⚠️ 重置实时环境",
+			"sectionTitle": "⚠️ 重置实盘数据",
 			"hint": "该操作会清空交易数据与策略设置，但保留 API 与代理配置。执行前请确保已停止实盘交易。",
-			"trigger": "重置实时数据",
+			"trigger": "重置实盘数据",
 			"confirmHint": "输入 <code>RESET</code> 以确认。",
 			"confirmPlaceholder": "请输入 RESET 继续",
 			"confirm": "确认重置"
@@ -473,6 +502,51 @@
 			"closeWithPnl": "平仓 {{pnl}}",
 			"closeWithPnlPercent": "平仓 {{pnl}}（{{percent}}%）"
 		}
+	},
+	"trade": {
+		"available": "可用余额",
+		"action": "操作",
+		"open": "开仓",
+		"close": "平仓",
+		"symbol": "交易对",
+		"direction": "方向",
+		"long": "做多",
+		"short": "做空",
+		"longOpen": "做多",
+		"shortOpen": "做空",
+		"longClose": "平多",
+		"shortClose": "平空",
+		"leverage": "杠杆 (x)",
+		"orderType": "订单类型",
+		"market": "市价",
+		"limit": "限价",
+		"price": "价格",
+		"pricePlaceholder": "请输入价格",
+		"amount": "下单金额",
+		"amountLabelUsdt": "下单金额 (USDT)",
+		"amountLabelCoin": "下单数量 (币)",
+		"amountUnitUsdt": "USDT",
+		"amountUnitCoin": "币数量",
+		"amountPlaceholderUsdt": "请输入 USDT 金额",
+		"amountPlaceholderCoin": "请输入币数量",
+		"marginMode": "保证金模式",
+		"cross": "全仓",
+		"isolated": "逐仓",
+		"openBtn": "开仓",
+		"closeBtn": "平仓",
+		"processing": "正在提交...",
+		"manualOpenSuccess": "开仓请求已发送",
+		"manualCloseSuccess": "平仓请求已发送",
+		"errors": {
+			"invalidAmount": "请输入有效的下单金额",
+			"invalidLeverage": "请输入有效的杠杆倍数",
+			"priceUnavailable": "无法获取最新行情价格，请稍后重试。"
+		}
+	},
+	"guestView": {
+		"title": "需要登录",
+		"description": "请先通过后台登录后再查看监控面板与手动下单工具。",
+		"hint": "请使用部署时提供的安全后台入口完成认证。"
 	},
 	"notifications": {
 		"loadFailedTitle": "加载失败",
@@ -504,6 +578,9 @@
 		"executingMessage": "AI 决策正在执行，请稍候...",
 		"triggerFailedTitle": "触发失败",
 		"triggerFailedMessage": "触发 AI 决策失败，请检查网络连接。"
+	},
+	"errors": {
+		"authRequired": "请先登录后再手动下单。"
 	},
 	"aiOverlay": {
 		"status": {

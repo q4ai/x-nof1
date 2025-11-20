@@ -771,6 +771,7 @@ export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAg
 			tradingTools.checkOrderStatusTool,
 			tradingTools.calculateRiskTool,
 			tradingTools.syncPositionsTool,
+			tradingTools.sendEmergencyNoticeTool,
 		],
 		memory,
 	});

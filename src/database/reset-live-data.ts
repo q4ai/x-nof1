@@ -43,7 +43,8 @@ const PRESERVED_CONFIG_KEYS = new Set([
   "OPENAI_BASE_URL",
   "AI_MODEL_NAME",
   "HTTP_PROXY_URL",
-  // 策略配置相关，重置实时环境时需要保留
+  "UI_LANGUAGE",
+  // 策略配置相关，重置实盘数据时需要保留
   "TRADING_SYMBOLS",
   "TRADING_MARGIN_MODE",
   "TRADING_INTERVAL_MINUTES",
