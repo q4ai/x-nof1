@@ -24,7 +24,7 @@ import { createLogger } from "../utils/loggerUtils";
 import { createClient } from "@libsql/client";
 import { createTradingAgent, generateTradingPrompt, getAccountRiskConfig, getTradingStrategy } from "../agents/tradingAgent";
 import type { AccountRiskConfig } from "../agents/tradingAgent";
-import { createOkxClient } from "../services/okxClient";
+import { createOkxClient, createExchangeClientFromActiveAccount } from "../services/okxClient";
 import { getChinaTimeISO } from "../utils/timeUtils";
 import { RISK_PARAMS } from "../config/riskParams.new";
 import { getQuantoMultiplier } from "../utils/contractUtils";
@@ -467,7 +467,7 @@ function createTradeActionSummary(actions: TradeActionRecord[]): { message: stri
  * 优化：增加数据验证和错误处理，返回时序数据用于提示词
  */
 async function collectMarketData() {
-  const okxClient = createOkxClient();
+  const okxClient = await createExchangeClientFromActiveAccount();
   const marketData: Record<string, any> = {};
   const symbols = getConfiguredSymbols();
 
@@ -973,7 +973,7 @@ async function calculateSharpeRatio(): Promise<number> {
  * - 前端显示时需加上 unrealisedPnl
  */
 async function getAccountInfo() {
-  const okxClient = createOkxClient();
+  const okxClient = await createExchangeClientFromActiveAccount();
   
   try {
   const account = await okxClient.getFuturesAccount();
@@ -1042,7 +1042,7 @@ async function getAccountInfo() {
  * 实时持仓数据应该直接从 OKX 获取
  */
 async function syncPositionsFromOkx(cachedPositions?: any[]) {
-  const okxClient = createOkxClient();
+  const okxClient = await createExchangeClientFromActiveAccount();
   
   try {
     // 如果提供了缓存数据，使用缓存；否则重新获取
@@ -1200,7 +1200,7 @@ function normalizeDbNumber(value: unknown, fallback = 0): number {
 
 async function getPositions(cachedPositions?: any[], options: GetPositionsOptions = {}) {
   const { fallbackToDb = false } = options;
-  const okxClient = createOkxClient();
+  const okxClient = await createExchangeClientFromActiveAccount();
 
   try {
     const rawPositions = cachedPositions || await okxClient.getPositions();
@@ -1525,7 +1525,7 @@ async function fixHistoricalPnlRecords() {
  * 清仓所有持仓
  */
 async function closeAllPositions(reason: string): Promise<void> {
-  const okxClient = createOkxClient();
+  const okxClient = await createExchangeClientFromActiveAccount();
   
   try {
     logger.warn(`清仓所有持仓，原因: ${reason}`);
@@ -2353,7 +2353,7 @@ export async function initTradingSystem() {
   const exchangeProvider = process.env.EXCHANGE_PROVIDER || "okx";
   if (exchangeProvider.toLowerCase() === "binance") {
     try {
-      const client = createOkxClient(); // 实际返回 BinanceClient
+      const client = await createExchangeClientFromActiveAccount(); // 实际返回 BinanceClient
       if (typeof (client as any).setPositionMode === "function") {
         await (client as any).setPositionMode(true); // 启用双向持仓（Hedge Mode）
       }

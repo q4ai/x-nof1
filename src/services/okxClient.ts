@@ -177,14 +177,14 @@ export class OkxClient {
     if (proxyUrl) {
       try {
         this.dispatcher = new ProxyAgent(proxyUrl);
-        logger.info("已启用 HTTP 代理访问 OKX API");
+        // logger.info("已启用 HTTP 代理访问 OKX API");
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         logger.warn(`HTTP 代理初始化失败，将直接访问 OKX API: ${message}`);
       }
     }
 
-    logger.info(this.simulated ? "使用 OKX 模拟交易环境" : "使用 OKX 正式交易环境");
+    // logger.info(this.simulated ? "使用 OKX 模拟交易环境" : "使用 OKX 正式交易环境");
   }
 
   private contractToInstrument(contract: string): string {
@@ -785,6 +785,62 @@ type ExchangeHttpClient = OkxClient | BinanceClient;
 
 let clientInstance: ExchangeHttpClient | null = null;
 
+/**
+ * 从数据库加载活跃账户配置（优先），回退到环境变量
+ */
+async function loadActiveAccountConfig(): Promise<{
+  provider: "okx" | "binance";
+  apiKey: string;
+  apiSecret: string;
+  passphrase?: string;
+  testnet: boolean;
+  simulated: boolean;
+}> {
+  try {
+    const { getActiveAccount } = await import("./accountConfigService");
+    const activeAccount = await getActiveAccount();
+    
+    if (activeAccount) {
+      logger.info(`使用数据库活跃账户: ${activeAccount.name} (${activeAccount.provider})`);
+      return {
+        provider: activeAccount.provider as "okx" | "binance",
+        apiKey: activeAccount.api_key,
+        apiSecret: activeAccount.api_secret,
+        passphrase: activeAccount.api_passphrase || undefined,
+        testnet: activeAccount.use_paper,
+        simulated: activeAccount.use_paper,
+      };
+    }
+  } catch (error) {
+    logger.warn("读取活跃账户失败，回退到环境变量:", error);
+  }
+  
+  // 回退到环境变量
+  logger.info("使用环境变量配置");
+  const credentials = getExchangeCredentials();
+  
+  if (credentials.provider === "binance") {
+    return {
+      provider: "binance",
+      apiKey: credentials.apiKey,
+      apiSecret: credentials.apiSecret,
+      passphrase: undefined,
+      testnet: credentials.testnet,
+      simulated: false,
+    };
+  }
+  
+  // OKX
+  return {
+    provider: "okx",
+    apiKey: credentials.apiKey,
+    apiSecret: credentials.apiSecret,
+    passphrase: credentials.passphrase,
+    testnet: false,
+    simulated: credentials.simulated,
+  };
+}
+
 function buildExchangeClient(): ExchangeHttpClient {
   const credentials = getExchangeCredentials();
   const proxyUrl = getExchangeProxy() || undefined;
@@ -808,8 +864,74 @@ export function createOkxClient(): ExchangeHttpClient {
     return clientInstance;
   }
 
+  // 注意：这里保持同步调用以兼容现有代码
+  // 在系统启动时应先调用 initExchangeClient() 异步初始化
   clientInstance = buildExchangeClient();
   return clientInstance;
+}
+
+/**
+ * 异步初始化客户端（优先使用数据库活跃账户）
+ * 应在系统启动时调用，确保使用正确的账户配置
+ */
+export async function initExchangeClient(): Promise<ExchangeHttpClient> {
+  const config = await loadActiveAccountConfig();
+  const proxyUrl = getExchangeProxy() || undefined;
+  
+  if (config.provider === "binance") {
+    if (!config.apiKey || !config.apiSecret) {
+      throw new Error("活跃账户缺少 API Key 或 API Secret");
+    }
+    clientInstance = new BinanceClient(config.apiKey, config.apiSecret, config.testnet, proxyUrl);
+  } else {
+    if (!config.apiKey || !config.apiSecret || !config.passphrase) {
+      throw new Error("活跃账户缺少 OKX 必需凭证");
+    }
+    clientInstance = new OkxClient(config.apiKey, config.apiSecret, config.passphrase, config.simulated, proxyUrl);
+  }
+  
+  logger.info("Exchange 客户端已初始化");
+  return clientInstance;
+}
+
+/**
+ * 使用数据库中的活跃账户创建客户端（用于多账户管理）
+ */
+export async function createExchangeClientFromActiveAccount(): Promise<ExchangeHttpClient> {
+  const { getActiveAccount } = await import("./accountConfigService");
+  const activeAccount = await getActiveAccount();
+  
+  if (!activeAccount) {
+    logger.warn("未找到活跃账户配置，回退到环境变量");
+    return createOkxClient();
+  }
+  
+  const proxyUrl = getExchangeProxy() || undefined;
+  
+  if (activeAccount.provider === "binance") {
+    if (!activeAccount.api_key || !activeAccount.api_secret) {
+      throw new Error("活跃账户缺少 API Key 或 API Secret");
+    }
+    return new BinanceClient(
+      activeAccount.api_key,
+      activeAccount.api_secret,
+      activeAccount.use_paper,
+      proxyUrl
+    );
+  }
+  
+  // OKX
+  if (!activeAccount.api_key || !activeAccount.api_secret || !activeAccount.api_passphrase) {
+    throw new Error("活跃账户缺少 OKX 必需凭证");
+  }
+  
+  return new OkxClient(
+    activeAccount.api_key,
+    activeAccount.api_secret,
+    activeAccount.api_passphrase,
+    activeAccount.use_paper,
+    proxyUrl
+  );
 }
 
 /**

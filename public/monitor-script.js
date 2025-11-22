@@ -458,12 +458,15 @@ class TradingMonitor {
     this.aiOverlayIcon = null;
     this.toastContainer = document.getElementById("toast-container");
     this.accountModal = document.getElementById("account-modal");
+    this.accountsListModal = document.getElementById("accounts-list-modal");
+    this.accountFormModal = document.getElementById("account-form-modal");
     this.strategyModal = document.getElementById("strategy-modal");
     this.settingsModal = document.getElementById("settings-modal");
     this.statisticsModal = document.getElementById("statistics-modal");
     this.decisionRequestModal = document.getElementById("decision-request-modal");
     this.decisionRequestDetailEl = document.getElementById("decision-request-detail");
     this.accountForm = document.getElementById("account-form");
+    this.accountEditForm = document.getElementById("account-edit-form");
     this.strategyForm = document.getElementById("strategy-form");
     this.settingsForm = document.getElementById("settings-form");
     this.strategyPreviewEl = document.getElementById("strategy-preview");
@@ -488,6 +491,7 @@ class TradingMonitor {
   this.tradingLoopState = null;
     this.tradingLoopConfirmTimer = null;
     this.tradingLoopDisableConfirm = false;
+  this.accountsCache = [];
 
     this.strategyPromptCache = new Map();
 
@@ -593,6 +597,8 @@ class TradingMonitor {
       this.logModal,
       this.decisionRequestModal,
       this.accountModal,
+      this.accountsListModal,
+      this.accountFormModal,
       this.strategyModal,
       this.settingsModal,
       this.statisticsModal,
@@ -1770,13 +1776,6 @@ class TradingMonitor {
         const timestamp = request.createdAt ? this.formatTime(request.createdAt) : "--";
         const model = request.modelName ? this.escapeHtml(String(request.modelName)) : "--";
         const summary = this.escapeHtml(this.getDecisionRequestSummaryText(request));
-        const statusKey = typeof request.status === "string" ? request.status.toLowerCase() : "unknown";
-        const statusLabelKey = `decisionRequest.status.${statusKey}`;
-        let statusLabel = t(statusLabelKey);
-        if (!statusLabel || statusLabel === statusLabelKey) {
-          statusLabel = request.status || t("decisionRequest.status.unknown");
-        }
-        const statusClass = statusKey === "error" ? "negative" : "";
         const durationLabel = this.formatOutputDuration(request.outputDurationMs);
 
         return `
@@ -1785,7 +1784,6 @@ class TradingMonitor {
             <td>${model}</td>
             <td>${summary}</td>
             <td>${durationLabel}</td>
-            <td><span class="${statusClass}">${this.escapeHtml(statusLabel)}</span></td>
           </tr>
         `;
       })
@@ -1799,7 +1797,6 @@ class TradingMonitor {
             <th>${t("tables.decisionRequests.headers.model")}</th>
             <th>${t("tables.decisionRequests.headers.summary")}</th>
             <th>${t("tables.decisionRequests.headers.duration")}</th>
-            <th>${t("tables.logs.headers.status")}</th>
           </tr>
         </thead>
         <tbody>${rows}</tbody>
@@ -1810,10 +1807,7 @@ class TradingMonitor {
       const index = Number(row.dataset.decisionRequestIndex);
       if (Number.isInteger(index)) {
         row.addEventListener("click", () => {
-          const request = this.recordsCurrentItems[index];
-          if (request) {
-            this.showDecisionRequestDetail(request);
-          }
+          this.showDecisionRequestDetail(requests[index]);
         });
       }
     });
@@ -2405,6 +2399,7 @@ class TradingMonitor {
         const markPrice = this.formatPrice(pos.currentPrice ?? pos.markPrice);
         const pnl = Number(pos.unrealizedPnl ?? pos.unrealisedPnl ?? 0);
         const pnlClass = pnl >= 0 ? "positive" : "negative";
+        const pnlLabel = this.formatCurrency(pnl, 2, true);
         const openedAtRaw = pos.exchangeOpenedAt || pos.openedAt || pos.opened_at;
         const openedAt = openedAtRaw ? this.formatTime(openedAtRaw) : "--";
         const actionCell = showActions
@@ -3055,7 +3050,7 @@ class TradingMonitor {
         if (!statusLabel || statusLabel === `tables.logs.status.${statusKey}`) {
           statusLabel = statusRaw || t("tables.logs.status.unknown");
         }
-        const statusClass = statusKey === "success" ? "" : "negative";
+        const statusClass = statusKey === "success" ? "" : ["error", "failed", "failure"].includes(statusKey) ? "negative" : "";
         const timestamp = log.createdAt ? this.formatTime(log.createdAt) : "--";
 
         return `
@@ -3877,7 +3872,7 @@ class TradingMonitor {
     const statusLower = statusRaw.toLowerCase();
     const statusClass = statusLower === "success" ? "" : ["error", "failed", "failure"].includes(statusLower) ? "negative" : "";
     const statusTranslationKey = statusLower ? `tables.logs.status.${statusLower}` : "";
-    let statusLabel = statusTranslationKey ? t(statusTranslationKey) : "";
+    let statusLabel = t(statusTranslationKey);
     if (!statusLabel || statusLabel === statusTranslationKey) {
       statusLabel = statusRaw || t("logDetail.statusUnknown");
     }
@@ -4095,6 +4090,7 @@ class TradingMonitor {
       }
 
       if (percentValue === null) {
+       
         this.priceChanges.delete(symbol);
       } else {
         this.priceChanges.set(symbol, Number(percentValue));
@@ -4166,7 +4162,7 @@ class TradingMonitor {
     }
 
     console.log(`转换后有 ${candles.length} 条有效K线数据`);
-  this.cacheCandlesSnapshot(normalizedSymbol, intervalKey, candles, Date.now());
+    this.cacheCandlesSnapshot(normalizedSymbol, intervalKey, candles, Date.now());
     this.applyCandlesData(normalizedSymbol, intervalKey, candles);
     
     console.log(`${normalizedSymbol} K线数据加载完成`);
@@ -4953,9 +4949,40 @@ class TradingMonitor {
     // 更新 AI 图标的可点击状态
     this.updateAiOverlayClickable();
 
+    // 更新侧边栏显示状态
+    this.updateSidebarAuthVisibility();
+
     if (!shouldShow) {
       this.updateTradingLoopToggle(null);
       // 注意：不要隐藏 AI overlay，未登录用户也应该能看到状态更新
+    }
+  }
+
+  updateSidebarAuthVisibility() {
+    const sidebarTabs = document.querySelector(".sidebar-tabs.main-tabs");
+    const manualView = document.getElementById("view-manual");
+    const statsView = document.getElementById("view-stats");
+    const manualTabBtn = document.querySelector('.tab-btn[data-tab="view-manual"]');
+    const statsTabBtn = document.querySelector('.tab-btn[data-tab="view-stats"]');
+
+    if (!this.isAuthenticated) {
+      // 未登录：隐藏顶部 Tabs，强制显示统计面板
+      if (sidebarTabs) sidebarTabs.style.display = "none";
+      
+      if (statsView) statsView.classList.add("active");
+      if (manualView) manualView.classList.remove("active");
+      
+      if (statsTabBtn) statsTabBtn.classList.add("active");
+      if (manualTabBtn) manualTabBtn.classList.remove("active");
+    } else {
+      // 已登录：显示顶部 Tabs
+      if (sidebarTabs) sidebarTabs.style.display = "";
+      
+      // 如果当前没有激活的视图，默认显示统计面板
+      if (statsView && manualView && !statsView.classList.contains("active") && !manualView.classList.contains("active")) {
+        statsView.classList.add("active");
+        if (statsTabBtn) statsTabBtn.classList.add("active");
+      }
     }
   }
 
@@ -5695,6 +5722,10 @@ class TradingMonitor {
     return false;
   }
 
+  getCsrfToken() {
+    return window.csrfManager ? window.csrfManager.getToken() : "";
+  }
+
   showModal(modal) {
     if (!modal) return;
     modal.classList.add("show");
@@ -5726,19 +5757,11 @@ class TradingMonitor {
   }
 
   async openAccountModal() {
-    if (!this.ensureAuthenticated() || !this.accountModal || !this.accountForm) {
+    if (!this.ensureAuthenticated()) {
       return;
     }
-
-    const config = await this.fetchFullConfig();
-    if (!config) {
-      this.showToast("error", "加载失败", "无法加载配置，请稍后重试。");
-      return;
-    }
-
-    this.populateForm(this.accountForm, config, ACCOUNT_CONFIG_KEYS);
-    this.updateExchangePanelVisibility();
-    this.showModal(this.accountModal);
+    // 打开账户列表模态框
+    await this.openAccountsListModal();
   }
 
   async openStrategyModal() {
@@ -6875,6 +6898,743 @@ class TradingMonitor {
         },
       },
     });
+  }
+
+  // ====== 账户列表管理功能 ======
+  
+  async openAccountsListModal() {
+    if (!this.accountsListModal) return;
+    
+    this.showModal(this.accountsListModal);
+    await this.loadAccountsList();
+    this.bindAccountsListEvents();
+  }
+
+  async loadAccountsList() {
+    const container = document.getElementById("accounts-list-container");
+    const loading = document.getElementById("accounts-loading");
+    
+    if (!container) return;
+    
+    try {
+      if (loading) {
+        loading.style.display = "flex";
+      }
+      
+      const response = await fetch("/api/accounts", {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error("获取账户列表失败");
+      }
+      
+      const data = await response.json();
+      const accounts = data.accounts || [];
+      this.accountsCache = accounts;
+
+      if (loading) {
+        loading.style.display = "none";
+      }
+      
+      if (accounts.length === 0) {
+        const emptyText = this.translate("accounts.empty", "No accounts configured");
+        container.innerHTML = `
+          <div class="empty-accounts">
+            <div class="empty-accounts-icon">🏦</div>
+            <div class="empty-accounts-text">${this.escapeHtml(emptyText)}</div>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = accounts.map(account => this.renderAccountCard(account)).join("");
+      
+      // 绑定每个账户卡片的事件
+      this.bindAccountCardEvents();
+      
+    } catch (error) {
+      console.error("加载账户列表失败:", error);
+      this.accountsCache = [];
+      if (loading) {
+        loading.style.display = "none";
+      }
+      const errorText = this.translate("accounts.messages.loadError", "加载失败，请稍后重试");
+      container.innerHTML = `
+        <div class="empty-accounts">
+          <div class="empty-accounts-text" style="color: var(--accent-red);">${this.escapeHtml(errorText)}</div>
+        </div>
+      `;
+      this.showToast("error", this.translate("common.error", "Error"), errorText);
+    }
+  }
+
+  renderAccountCard(account) {
+    const providerLabel = account.provider === "okx"
+      ? this.translate("accounts.providers.okx", "OKX")
+      : this.translate("accounts.providers.binance", "Binance");
+    const providerBadgeClass = account.provider === "okx" ? "badge-okx" : "badge-binance";
+    const providerBadge = `<span class="account-badge ${providerBadgeClass}">${this.escapeHtml(providerLabel)}</span>`;
+
+    const paperBadge = account.use_paper
+      ? `<span class="account-badge badge-paper">${this.escapeHtml(this.translate("accounts.badges.paper", "Paper"))}</span>`
+      : "";
+
+    const activeBadge = account.is_active
+      ? `<span class="account-badge badge-active">${this.escapeHtml(this.translate("accounts.badges.active", "Active"))}</span>`
+      : "";
+
+    const activateLabel = this.translate("accounts.actions.activate", "Activate");
+    const currentLabel = this.translate("accounts.actions.current", "Current");
+    const deleteLabel = this.translate("accounts.actions.delete", "Delete");
+
+    let activateBtn;
+    if (account.is_active) {
+      activateBtn = `<button class="account-action-btn" disabled>${this.escapeHtml(currentLabel)}</button>`;
+    } else {
+      const confirmMessage = this.escapeHtml(this.translate("accounts.messages.activateConfirm", "Switch to this account? The trading system will restart."));
+      const confirmLabel = this.escapeHtml(this.translate("common.confirm", "Confirm"));
+      const cancelLabel = this.escapeHtml(this.translate("common.cancel", "Cancel"));
+      
+      activateBtn = `
+        <div class="account-action-wrapper">
+          <button class="account-action-btn btn-activate activate-account-trigger" data-account-id="${account.id}">${this.escapeHtml(activateLabel)}</button>
+          <div class="activate-confirmation-popover" role="alert" aria-hidden="true" data-account-id="${account.id}">
+            <p class="activate-confirmation-text">${confirmMessage}</p>
+            <div class="activate-confirmation-actions">
+              <button type="button" class="link-button cancel-activate-btn">${cancelLabel}</button>
+              <button type="button" class="btn-primary btn-small confirm-activate-btn" data-account-id="${account.id}">${confirmLabel}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    const deleteDisabledTitle = this.translate("accounts.messages.deleteDisabled", "Cannot delete active account");
+    const deleteBtn = account.is_active
+      ? `<button class="account-action-btn btn-delete" disabled title="${this.escapeHtml(deleteDisabledTitle)}">${this.escapeHtml(deleteLabel)}</button>`
+      : `<button class="account-action-btn btn-delete" data-account-id="${account.id}" data-action="delete">${this.escapeHtml(deleteLabel)}</button>`;
+
+    const apiKeyLabel = this.translate("accounts.cards.apiKeyLabel", "API Key");
+    const updatedLabel = this.translate("accounts.cards.updatedLabel", "Updated");
+    const testLabel = this.translate("accounts.actions.test", "Test");
+    const editLabel = this.translate("accounts.actions.edit", "Edit");
+
+    return `
+      <div class="account-card ${account.is_active ? "is-active" : ""}" data-account-id="${account.id}">
+        <div class="account-card-info">
+          <div class="account-card-header">
+            <div class="account-card-name">${this.escapeHtml(account.name)}</div>
+            ${activeBadge}
+            ${providerBadge}
+            ${paperBadge}
+          </div>
+          <div class="account-card-details">
+            <span>${this.escapeHtml(apiKeyLabel)}: ${this.escapeHtml(account.api_key_preview || "***")}</span>
+            <span>${this.escapeHtml(updatedLabel)}: ${this.escapeHtml(this.formatDate(account.updated_at))}</span>
+          </div>
+        </div>
+        <div class="account-card-actions">
+          <button class="account-action-btn" data-account-id="${account.id}" data-action="test">${this.escapeHtml(testLabel)}</button>
+          <button class="account-action-btn" data-account-id="${account.id}" data-action="edit">${this.escapeHtml(editLabel)}</button>
+          ${activateBtn}
+          ${deleteBtn}
+        </div>
+      </div>
+    `;
+  }
+
+  bindAccountsListEvents() {
+    const addBtn = document.getElementById("add-account-btn");
+    if (addBtn && !addBtn.dataset.bound) {
+      addBtn.dataset.bound = "true";
+      addBtn.addEventListener("click", () => this.openAccountFormModal());
+    }
+
+    const container = document.getElementById("accounts-list-container");
+    if (container && !container.dataset.clickBound) {
+      container.dataset.clickBound = "true";
+      container.addEventListener("click", (e) => this.handleAccountsContainerClick(e));
+    }
+  }
+
+  bindAccountCardEvents() {
+    const container = document.getElementById("accounts-list-container");
+    if (!container) return;
+
+    container.querySelectorAll("[data-action]").forEach(btn => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "true";
+      
+      btn.addEventListener("click", async (e) => {
+        const action = btn.dataset.action;
+        const accountId = btn.dataset.accountId;
+        
+        switch (action) {
+          case "edit":
+            await this.openAccountFormModal(Number(accountId));
+            break;
+          case "delete":
+            await this.deleteAccount(Number(accountId), btn);
+            break;
+          case "activate":
+            await this.activateAccount(Number(accountId), btn);
+            break;
+          case "test":
+            await this.testAccountConnection(Number(accountId), btn);
+            break;
+        }
+      });
+    });
+  }
+
+  async openAccountFormModal(accountId = null) {
+    if (!this.accountFormModal || !this.accountEditForm) return;
+    
+    const title = document.getElementById("account-form-title");
+    const idField = document.getElementById("account-edit-id");
+    
+    // 重置表单
+    this.accountEditForm.reset();
+    idField.value = "";
+    
+    const titleKey = accountId ? "modals.accountForm.titleEdit" : "modals.accountForm.titleAdd";
+    if (title) {
+      title.setAttribute("data-i18n", titleKey);
+      title.textContent = this.translate(titleKey, accountId ? "Edit Account" : "Add Account");
+    }
+
+    if (accountId) {
+      // 编辑模式
+      let account = this.accountsCache?.find((item) => item.id === accountId) || null;
+      if (!account) {
+        await this.loadAccountsList();
+        account = this.accountsCache?.find((item) => item.id === accountId) || null;
+      }
+
+      if (!account) {
+        this.showToast("error", this.translate("common.error", "Error"), this.translate("accounts.messages.loadError", "Failed to load account data"));
+        return;
+      }
+
+      idField.value = String(account.id);
+      const nameInput = document.getElementById("account-edit-name");
+      const providerSelect = document.getElementById("account-edit-provider");
+      const proxyInput = document.getElementById("account-edit-proxy");
+      if (nameInput) nameInput.value = account.name || "";
+      if (providerSelect) providerSelect.value = account.provider;
+      if (proxyInput) proxyInput.value = account.proxy_url || "";
+
+      if (account.provider === "okx") {
+        document.getElementById("account-edit-okx-key").value = account.api_key || "";
+        document.getElementById("account-edit-okx-secret").value = account.api_secret || "";
+        document.getElementById("account-edit-okx-passphrase").value = account.api_passphrase || "";
+        document.getElementById("account-edit-okx-paper").checked = Boolean(account.use_paper);
+      } else {
+        document.getElementById("account-edit-binance-key").value = account.api_key || "";
+        document.getElementById("account-edit-binance-secret").value = account.api_secret || "";
+        document.getElementById("account-edit-binance-testnet").checked = Boolean(account.use_paper);
+      }
+
+      this.updateAccountFormPanels();
+    } else {
+      // 新建模式
+      this.updateAccountFormPanels();
+    }
+
+    this.showModal(this.accountFormModal);
+    this.bindAccountFormEvents();
+  }
+
+  bindAccountFormEvents() {
+    const providerSelect = document.getElementById("account-edit-provider");
+    const testBtn = document.getElementById("account-form-test");
+    const cancelBtn = document.getElementById("account-form-cancel");
+    
+    if (providerSelect && !providerSelect.dataset.bound) {
+      providerSelect.dataset.bound = "true";
+      providerSelect.addEventListener("change", () => this.updateAccountFormPanels());
+    }
+    
+    if (testBtn && !testBtn.dataset.bound) {
+      testBtn.dataset.bound = "true";
+      testBtn.addEventListener("click", (e) => {
+        e.preventDefault();
+        void this.testAccountFormConnection();
+      });
+    }
+    
+    if (cancelBtn && !cancelBtn.dataset.bound) {
+      cancelBtn.dataset.bound = "true";
+      cancelBtn.addEventListener("click", () => this.hideModal(this.accountFormModal));
+    }
+    
+    if (this.accountEditForm && !this.accountEditForm.dataset.bound) {
+      this.accountEditForm.dataset.bound = "true";
+      this.accountEditForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        void this.submitAccountForm();
+      });
+    }
+  }
+
+  updateAccountFormPanels() {
+    const provider = document.getElementById("account-edit-provider")?.value || "okx";
+    const panels = document.querySelectorAll("[data-account-panel]");
+    
+    panels.forEach(panel => {
+      const panelProvider = panel.dataset.accountPanel;
+      if (panelProvider === provider) {
+        panel.classList.add("is-active");
+        panel.style.display = "block";
+      } else {
+        panel.classList.remove("is-active");
+        panel.style.display = "none";
+      }
+    });
+  }
+
+  async submitAccountForm() {
+    const idField = document.getElementById("account-edit-id");
+    const accountId = idField?.value ? Number(idField.value) : null;
+    
+    const formData = this.collectAccountFormData();
+    if (!formData) return;
+    
+    try {
+      const csrfToken = this.getCsrfToken();
+      const url = accountId ? `/api/accounts/${accountId}` : "/api/accounts";
+      const method = accountId ? "PUT" : "POST";
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+        body: JSON.stringify(formData),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Failed to save account");
+      }
+      
+      const successMessage = accountId
+        ? this.translate("accounts.messages.updateSuccess", "Account updated")
+        : this.translate("accounts.messages.saveSuccess", "Account created");
+      this.showToast("success", this.translate("common.success", "Success"), successMessage);
+      this.hideModal(this.accountFormModal);
+      await this.loadAccountsList();
+      
+    } catch (error) {
+      console.error("保存账户失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
+  collectAccountFormData() {
+    const name = document.getElementById("account-edit-name")?.value?.trim();
+    const provider = document.getElementById("account-edit-provider")?.value || "okx";
+    const proxyUrl = document.getElementById("account-edit-proxy")?.value?.trim();
+    
+    if (!name) {
+      this.showToast("error", this.translate("common.error", "Error"), this.translate("accounts.messages.validation.missingName", "Please enter account name"));
+      return null;
+    }
+    
+    const data = { name, provider, proxy_url: proxyUrl || undefined };
+    
+    if (provider === "okx") {
+      const apiKey = document.getElementById("account-edit-okx-key")?.value?.trim();
+      const apiSecret = document.getElementById("account-edit-okx-secret")?.value?.trim();
+      const passphrase = document.getElementById("account-edit-okx-passphrase")?.value?.trim();
+      const usePaper = document.getElementById("account-edit-okx-paper")?.checked || false;
+      
+      if (!apiKey || !apiSecret || !passphrase) {
+        this.showToast("error", this.translate("common.error", "Error"), this.translate("accounts.messages.validation.missingOkx", "Please fill in all OKX credentials"));
+        return null;
+      }
+      
+      data.api_key = apiKey;
+      data.api_secret = apiSecret;
+      data.api_passphrase = passphrase;
+      data.use_paper = usePaper;
+    } else {
+      const apiKey = document.getElementById("account-edit-binance-key")?.value?.trim();
+      const apiSecret = document.getElementById("account-edit-binance-secret")?.value?.trim();
+      const useTestnet = document.getElementById("account-edit-binance-testnet")?.checked || false;
+      
+      if (!apiKey || !apiSecret) {
+        this.showToast("error", this.translate("common.error", "Error"), this.translate("accounts.messages.validation.missingBinance", "Please fill in all Binance credentials"));
+        return null;
+      }
+      
+      data.api_key = apiKey;
+      data.api_secret = apiSecret;
+      data.use_paper = useTestnet;
+    }
+    
+    return data;
+  }
+
+  async testAccountFormConnection() {
+    const formData = this.collectAccountFormData();
+    if (!formData) return;
+    const testBtn = document.getElementById("account-form-test");
+    this.setButtonLoading(testBtn, true, "accounts.form.testConnection", "accounts.actions.testing");
+    this.showToast("info", this.translate("common.info", "Info"), this.translate("accounts.messages.testInProgress", "Testing connection..."));
+    
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch("/api/accounts/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+        body: JSON.stringify(formData),
+      });
+      
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        const balanceLabel = result.balance
+          ? ` ${this.translate("accounts.messages.balanceLabel", "(Equity: {{balance}})", { balance: result.balance })}`
+          : "";
+        const successMessage = `${this.translate("accounts.messages.testSuccess", "Connection successful")}${balanceLabel}`.trim();
+        this.displayApiTestResult("api-test-result", "success", successMessage);
+      } else {
+        const errorMessage = result.error || this.translate("accounts.messages.testFailed", "Connection failed");
+        this.displayApiTestResult("api-test-result", "error", errorMessage);
+      }
+    } catch (error) {
+      console.error("测试连接失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.displayApiTestResult("api-test-result", "error", message);
+    } finally {
+      this.setButtonLoading(testBtn, false, "accounts.form.testConnection");
+    }
+  }
+
+  async testAccountConnection(accountId, triggerBtn) {
+    if (!Number.isFinite(accountId) || accountId <= 0) {
+      this.showButtonInlineStatus(
+        triggerBtn,
+        this.translate("accounts.messages.loadError", "Failed to load account data"),
+        "error",
+        3000,
+        "accounts.actions.test"
+      );
+      return;
+    }
+
+    this.setButtonLoading(triggerBtn, true, "accounts.actions.test", "accounts.actions.testing");
+
+    let inlineStatus = null;
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/accounts/${accountId}/test`, {
+        method: "POST",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+      });
+
+      const result = await response.json().catch(() => ({}));
+
+      if (!response.ok || !result?.success) {
+        const errorMessage = result?.error || this.translate("accounts.messages.testFailed", "Connection failed");
+        inlineStatus = { type: "error", message: errorMessage };
+      } else {
+        const balanceLabel = result?.balance
+          ? ` ${this.translate("accounts.messages.balanceLabel", "(Equity: {{balance}})", { balance: result.balance })}`
+          : "";
+        const successMessage = `${this.translate("accounts.messages.testSuccess", "Connection successful")}${balanceLabel}`.trim();
+        inlineStatus = { type: "success", message: successMessage };
+      }
+    } catch (error) {
+      console.error("测试账户连接失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      inlineStatus = { type: "error", message };
+    } finally {
+      this.setButtonLoading(triggerBtn, false, "accounts.actions.test");
+      if (inlineStatus?.message) {
+        this.showButtonInlineStatus(
+          triggerBtn,
+          inlineStatus.message,
+          inlineStatus.type,
+          3000,
+          "accounts.actions.test"
+        );
+      }
+    }
+  }
+
+  async activateAccount(accountId, triggerBtn) {
+    this.setButtonLoading(triggerBtn, true, "accounts.actions.activate", "accounts.actions.activating");
+    
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/accounts/${accountId}/activate`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+      });
+      const payload = await response.json();
+      
+      if (!response.ok) {
+        throw new Error(payload.error || "Failed to activate account");
+      }
+      
+      const successMessage = payload.message || this.translate("accounts.messages.activateSuccess", "Account activated");
+      this.showToast("success", this.translate("common.success", "Success"), successMessage);
+      await this.loadAccountsList();
+      try {
+        await this.refreshAll();
+      } catch (refreshError) {
+        console.warn("切换账户后刷新仪表盘失败", refreshError);
+      }
+      
+    } catch (error) {
+      console.error("激活账户失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false, "accounts.actions.activate");
+    }
+  }
+
+  async deleteAccount(accountId, triggerBtn) {
+    const confirmMessage = this.translate(
+      "accounts.messages.deleteConfirm",
+      "Delete this account? This action cannot be undone."
+    );
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    this.setButtonLoading(triggerBtn, true, "accounts.actions.delete", "accounts.actions.deleting");
+    
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/accounts/${accountId}`, {
+        method: "DELETE",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+      });
+      const payload = await response.json().catch(() => ({}));
+      
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to delete account");
+      }
+      
+      this.showToast("success", this.translate("common.success", "Success"), this.translate("accounts.messages.deleteSuccess", "Account deleted"));
+      await this.loadAccountsList();
+      
+    } catch (error) {
+      console.error("删除账户失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false, "accounts.actions.delete");
+    }
+  }
+
+  escapeHtml(text) {
+    const div = document.createElement("div");
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  formatDate(dateString) {
+    if (!dateString) return "N/A";
+    try {
+      const date = new Date(dateString);
+      return date.toLocaleDateString() + " " + date.toLocaleTimeString();
+    } catch {
+      return "N/A";
+    }
+  }
+
+  translate(key, fallback = "", replacements) {
+    try {
+      if (typeof t === "function") {
+        const value = t(key, replacements);
+        if (value && value !== key) {
+          return value;
+        }
+      }
+    } catch (error) {
+      console.warn("翻译失败", { key, error });
+    }
+
+    const template = fallback || key;
+    if (replacements && typeof replacements === "object") {
+      return template.replace(/\{\{(\w+)\}\}/g, (match, token) => {
+        if (Object.prototype.hasOwnProperty.call(replacements, token)) {
+          return String(replacements[token]);
+        }
+        return match;
+      });
+    }
+    return template;
+  }
+
+  setButtonLoading(button, isLoading, idleKey, loadingKey) {
+    if (!button) return;
+    if (!button.dataset.originalText) {
+      button.dataset.originalText = button.textContent?.trim() || "";
+    }
+
+    this.clearButtonStatusState(button);
+
+    if (isLoading) {
+      button.classList.add("is-loading");
+      button.disabled = true;
+      if (loadingKey) {
+        const loadingText = this.translate(loadingKey, button.dataset.originalText);
+        if (loadingText) {
+          button.textContent = loadingText;
+        }
+      }
+    } else {
+      button.classList.remove("is-loading");
+      button.disabled = false;
+      const idleText = idleKey ? this.translate(idleKey, button.dataset.originalText) : button.dataset.originalText;
+      if (idleText) {
+        button.textContent = idleText;
+      }
+    }
+  }
+
+  clearButtonStatusState(button) {
+    if (!button) return;
+    button.classList.remove("status-success", "status-error", "status-info");
+    if (button.dataset.statusTimeoutId) {
+      window.clearTimeout(Number(button.dataset.statusTimeoutId));
+      delete button.dataset.statusTimeoutId;
+    }
+  }
+
+  showButtonInlineStatus(button, message, type = "info", duration = 2500, idleKey = null) {
+    if (!button || !message) return;
+    if (!button.dataset.originalText) {
+      button.dataset.originalText = button.textContent?.trim() || "";
+    }
+
+    this.clearButtonStatusState(button);
+
+    const className =
+      type === "success"
+        ? "status-success"
+        : type === "error"
+          ? "status-error"
+          : "status-info";
+    if (className) {
+      button.classList.add(className);
+    }
+
+    button.textContent = message;
+
+    const timeoutId = window.setTimeout(() => {
+      this.clearButtonStatusState(button);
+      const idleText = idleKey
+        ? this.translate(idleKey, button.dataset.originalText)
+        : button.dataset.originalText;
+      if (idleText) {
+        button.textContent = idleText;
+      }
+    }, duration);
+
+    button.dataset.statusTimeoutId = String(timeoutId);
+  }
+
+  handleAccountsContainerClick(event) {
+    if (!event) return;
+    const target = event.target;
+    if (!target) return;
+
+    // Handle Activate Trigger
+    const triggerBtn = target.closest(".activate-account-trigger");
+    if (triggerBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      const accountId = triggerBtn.dataset.accountId;
+      this.showActivateConfirmation(accountId, triggerBtn);
+      return;
+    }
+
+    // Handle Confirm Activate
+    const confirmBtn = target.closest(".confirm-activate-btn");
+    if (confirmBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      const accountId = confirmBtn.dataset.accountId;
+      this.hideActivateConfirmation(accountId);
+      // Find the original trigger button to pass to activateAccount for loading state
+      const wrapper = confirmBtn.closest(".account-action-wrapper");
+      const originalTrigger = wrapper ? wrapper.querySelector(".activate-account-trigger") : null;
+      this.activateAccount(accountId, originalTrigger || confirmBtn);
+      return;
+    }
+
+    // Handle Cancel Activate
+    const cancelBtn = target.closest(".cancel-activate-btn");
+    if (cancelBtn) {
+      event.preventDefault();
+      event.stopPropagation();
+      const popover = cancelBtn.closest(".activate-confirmation-popover");
+      if (popover) {
+        const accountId = popover.dataset.accountId;
+        this.hideActivateConfirmation(accountId);
+      }
+      return;
+    }
+  }
+
+  showActivateConfirmation(accountId, triggerBtn) {
+    // Hide other popovers
+    document.querySelectorAll(".activate-confirmation-popover.is-visible").forEach(el => {
+      el.classList.remove("is-visible");
+    });
+
+    const wrapper = triggerBtn.closest(".account-action-wrapper");
+    if (!wrapper) return;
+    
+    const popover = wrapper.querySelector(".activate-confirmation-popover");
+    if (!popover) return;
+
+    popover.classList.add("is-visible");
+    
+    // Handle clicking outside to close
+    const closeHandler = (e) => {
+      if (!wrapper.contains(e.target)) {
+        this.hideActivateConfirmation(accountId);
+        document.removeEventListener("click", closeHandler);
+      }
+    };
+    // Use setTimeout to avoid immediate triggering
+    setTimeout(() => {
+      document.addEventListener("click", closeHandler);
+    }, 0);
+  }
+
+  hideActivateConfirmation(accountId) {
+    const popover = document.querySelector(`.activate-confirmation-popover[data-account-id="${accountId}"]`);
+    if (popover) {
+      popover.classList.remove("is-visible");
+    }
   }
 }
 

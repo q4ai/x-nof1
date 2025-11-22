@@ -191,10 +191,11 @@ async function initDatabase() {
     
     // 执行数据库迁移
     logger.info("检查数据库迁移...");
-    const { ensureAgentDecisionExecutionColumn, ensureContractMultipliersTable, ensureAgentRequestLogsTable } = await import("./migrations");
+    const { ensureAgentDecisionExecutionColumn, ensureContractMultipliersTable, ensureAgentRequestLogsTable, ensureAccountConfigsTable } = await import("./migrations");
     await ensureAgentDecisionExecutionColumn(client);
     await ensureContractMultipliersTable(client);
     await ensureAgentRequestLogsTable(client);
+    await ensureAccountConfigsTable(client);
     logger.info("数据库迁移检查完成");
   } catch (error: unknown) {
     if (error instanceof Error) {

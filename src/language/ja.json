@@ -21,37 +21,6 @@
 			"failure": "ログインに失敗しました。ユーザー名とパスワードを確認してください。",
 			"networkError": "ネットワークエラーです。しばらくしてから再試行してください。",
 			"statusError": "ログイン状態を確認できません。"
-		"openOrders": {
-			"empty": "現在の指値注文はありません",
-			"headers": {
-				"symbol": "銘柄",
-				"side": "方向",
-				"type": "タイプ",
-				"price": "注文価格",
-				"quantity": "数量",
-				"filled": "約定済み",
-				"remaining": "残量",
-				"createdAt": "注文時間",
-				"actions": "操作"
-			},
-			"types": {
-				"market": "成行",
-				"limit": "指値",
-				"postOnly": "ポストオンリー",
-				"ioc": "IOC",
-				"fok": "FOK",
-				"conditional": "条件注文"
-			},
-			"actions": {
-				"cancel": "取消",
-				"cancelling": "取消中...",
-				"confirm": "注文 {{orderId}} をキャンセルしますか？",
-				"cancelSuccessTitle": "キャンセル成功",
-				"cancelSuccessMessage": "注文 {{orderId}} をキャンセルしました。",
-				"cancelErrorTitle": "キャンセル失敗",
-				"cancelErrorMessage": "注文をキャンセルできませんでした。再試行してください。"
-			}
-		},
 		}
 	},
 	"navigation": {
@@ -151,27 +120,92 @@
 		"account": {
 			"title": "アカウント設定"
 		},
-		"trade": {
-			"available": "利用可能",
-			"action": "操作",
-			"open": "新規",
-			"close": "決済",
-			"symbol": "銘柄",
-			"direction": "方向",
-			"long": "ロング",
-			"short": "ショート",
-			"longOpen": "ロング",
-			"shortOpen": "ショート",
-			"longClose": "ロング決済",
-			"shortClose": "ショート決済",
-			"leverage": "レバレッジ (倍)",
-			"amount": "注文金額 (USDT)",
-			"marginMode": "証拠金モード",
-			"cross": "クロス",
-			"isolated": "分離",
-			"openBtn": "新規建て",
-			"closeBtn": "決済",
-			"processing": "処理中...",
+		"accountsList": {
+			"title": "アカウント管理"
+		},
+		"accountForm": {
+			"titleAdd": "アカウントを追加",
+			"titleEdit": "アカウントを編集"
+		},
+		"strategy": {
+			"title": "ストラテジー設定"
+		},
+		"settings": {
+			"title": "システム設定"
+		}
+	},
+	"accounts": {
+		"addAccount": "+ アカウント追加",
+		"empty": "アカウントが設定されていません",
+		"providers": {
+			"okx": "OKX",
+			"binance": "Binance"
+		},
+		"form": {
+			"name": "アカウント名 <span class=\"required\">*</span>",
+			"namePlaceholder": "例: メイントレード口座",
+			"provider": "取引所",
+			"okxApiKey": "API Key <span class=\"required\">*</span>",
+			"okxApiKeyPlaceholder": "OKX API Key を入力",
+			"okxApiSecret": "API Secret <span class=\"required\">*</span>",
+			"okxApiSecretPlaceholder": "OKX API Secret を入力",
+			"okxPassphrase": "Passphrase <span class=\"required\">*</span>",
+			"okxPassphrasePlaceholder": "OKX Passphrase を入力",
+			"okxUsePaper": "ペーパートレード (Sandbox) を使用",
+			"binanceApiKey": "API Key <span class=\"required\">*</span>",
+			"binanceApiKeyPlaceholder": "Binance API Key を入力",
+			"binanceApiSecret": "API Secret <span class=\"required\">*</span>",
+			"binanceApiSecretPlaceholder": "Binance API Secret を入力",
+			"binanceUseTestnet": "Binance Futures テストネットを使用",
+			"proxyUrl": "プロキシURL (任意)",
+			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
+			"testConnection": "接続テスト"
+		},
+		"badges": {
+			"active": "稼働中",
+			"paper": "デモ"
+		},
+		"cards": {
+			"apiKeyLabel": "API Key",
+			"updatedLabel": "更新"
+		},
+		"actions": {
+			"test": "テスト",
+			"testing": "テスト中...",
+			"edit": "編集",
+			"delete": "削除",
+			"deleting": "削除中...",
+			"activate": "有効化",
+			"activating": "切り替え中...",
+			"current": "現在"
+		},
+		"messages": {
+			"loadError": "アカウント情報の取得に失敗しました。再試行してください。",
+			"saveSuccess": "アカウントを作成しました",
+			"updateSuccess": "アカウントを更新しました",
+			"deleteSuccess": "アカウントを削除しました",
+			"deleteDisabled": "稼働中のアカウントは削除できません",
+			"deleteConfirm": "このアカウントを削除しますか？この操作は元に戻せません。",
+			"activateConfirm": "このアカウントに切り替えますか？トレードシステムが再起動します。",
+			"activateSuccess": "アカウントを有効化し、トレーディングループを再起動しました",
+			"testInProgress": "接続テスト中...",
+			"testSuccess": "接続に成功しました",
+			"testFailed": "接続に失敗しました",
+			"balanceLabel": "資産: {{balance}}",
+			"validation": {
+				"missingName": "アカウント名を入力してください",
+				"missingOkx": "OKX の認証情報をすべて入力してください",
+				"missingBinance": "Binance の認証情報をすべて入力してください"
+			}
+		}
+	},
+	"tables": {
+		"common": {
+			"quantityWithSymbol": "{{value}} {{symbol}}",
+			"contractsWithUnit": "{{value}} 枚",
+			"contracts": "枚",
+			"total": "合計",
+			"noContent": "表示するデータがありません",
 			"viewAll": "すべて表示"
 		},
 		"positions": {
@@ -205,9 +239,6 @@
 		},
 		"trades": {
 			"empty": "取引履歴はありません",
-			"action": "アクション",
-			"open": "新規建て",
-			"close": "決済",
 			"headers": {
 				"contract": "銘柄",
 				"type": "種別",
@@ -221,6 +252,37 @@
 			"types": {
 				"open": "新規",
 				"close": "決済"
+			}
+		},
+		"openOrders": {
+			"empty": "現在の指値注文はありません",
+			"headers": {
+				"symbol": "銘柄",
+				"side": "方向",
+				"type": "タイプ",
+				"price": "注文価格",
+				"quantity": "数量",
+				"filled": "約定済み",
+				"remaining": "残量",
+				"createdAt": "注文時間",
+				"actions": "操作"
+			},
+			"types": {
+				"market": "成行",
+				"limit": "指値",
+				"postOnly": "ポストオンリー",
+				"ioc": "IOC",
+				"fok": "FOK",
+				"conditional": "条件注文"
+			},
+			"actions": {
+				"cancel": "取消",
+				"cancelling": "取消中...",
+				"confirm": "注文 {{orderId}} をキャンセルしますか？",
+				"cancelSuccessTitle": "キャンセル成功",
+				"cancelSuccessMessage": "注文 {{orderId}} をキャンセルしました。",
+				"cancelErrorTitle": "キャンセル失敗",
+				"cancelErrorMessage": "注文をキャンセルできませんでした。再試行してください。"
 			}
 		},
 		"logs": {
@@ -305,7 +367,10 @@
 		"save": "保存",
 		"delete": "削除",
 		"edit": "編集",
-		"close": "閉じる"
+		"close": "閉じる",
+		"success": "成功",
+		"error": "エラー",
+		"info": "情報"
 	},
 	"account": {
 		"saveAndRestart": "保存して再起動",

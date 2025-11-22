@@ -141,6 +141,20 @@ export interface ContractMultiplier {
   updated_at: string;
 }
 
+export interface AccountConfig {
+  id: number;
+  name: string;
+  provider: 'okx' | 'binance';
+  api_key: string;
+  api_secret: string;
+  api_passphrase?: string;
+  use_paper: boolean;
+  proxy_url?: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface BinanceContractPrecision {
   id: number;
   contract: string;
@@ -290,6 +304,21 @@ CREATE TABLE IF NOT EXISTS contract_multipliers (
   updated_at TEXT NOT NULL
 );
 
+-- 账户配置表
+CREATE TABLE IF NOT EXISTS account_configs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  provider TEXT NOT NULL,
+  api_key TEXT NOT NULL,
+  api_secret TEXT NOT NULL,
+  api_passphrase TEXT,
+  use_paper INTEGER NOT NULL DEFAULT 0,
+  proxy_url TEXT,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Binance 合约下单精度表
 CREATE TABLE IF NOT EXISTS binance_contract_precisions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -324,6 +353,7 @@ CREATE INDEX IF NOT EXISTS idx_history_timestamp ON account_history(timestamp);
 CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON agent_decisions(timestamp);
 CREATE INDEX IF NOT EXISTS idx_agent_request_logs_created_at ON agent_request_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_binance_contract_precisions_contract ON binance_contract_precisions(contract);
+CREATE INDEX IF NOT EXISTS idx_account_configs_is_active ON account_configs(is_active);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `;
 

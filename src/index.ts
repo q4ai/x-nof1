@@ -74,13 +74,23 @@ async function main() {
   await initConfig();
   await loadRiskParams();
 
-  // 3. 初始化后台登录凭证
+  // 3. 迁移账户配置（从环境变量到数据库）
+  logger.info("迁移账户配置...");
+  const { migrateFromEnv } = await import("./services/accountConfigService");
+  await migrateFromEnv();
+
+  // 4. 初始化交易客户端（使用活跃账户）
+  logger.info("初始化交易客户端...");
+  const { initExchangeClient } = await import("./services/okxClient");
+  await initExchangeClient();
+
+  // 5. 初始化后台登录凭证
   const adminAuth = await initializeAdminAuth(logger);
   
-  // 4. 初始化交易系统配置（读取环境变量并同步到数据库）
+  // 6. 初始化交易系统配置（读取环境变量并同步到数据库）
   await initTradingSystem();
   
-  // 5. 启动 API 服务器
+  // 7. 启动 API 服务器
   logger.info("🌐 启动 Web 服务器...");
   const apiRoutes = createApiRoutes(adminAuth);
   
@@ -94,36 +104,36 @@ async function main() {
   logger.info(`Web 服务器已启动: http://localhost:${port}`);
   logger.info(`监控界面: http://localhost:${port}/`);
   
-  // 6. 初始化 WebSocket 服务器
+  // 8. 初始化 WebSocket 服务器
   logger.info("🔌 启动 WebSocket 服务器...");
   websocketService.initialize(server);
   logger.info("WebSocket 服务器已启动: ws://localhost:${port}/ws/trading-status");
   startDashboardBroadcaster();
   logger.info("仪表盘实时推送服务已启动");
   
-  // 7. 启动交易循环
+  // 9. 启动交易循环
   logger.info("启动交易循环...");
   startTradingLoop();
   
-  // 8. 启动账户资产记录器
+  // 10. 启动账户资产记录器
   logger.info("启动账户资产记录器...");
   startAccountRecorder();
 
-  // 9. 启动社区竞赛上报任务
+  // 11. 启动社区竞赛上报任务
   logger.info("启动社区竞赛上报任务...");
   communityReporterTask = startCommunityReporter();
   
-  // 10. 移动止盈监控器已禁用
+  // 12. 移动止盈监控器已禁用
   // 注意：移动止盈逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
   // logger.info("启动移动止盈监控器...");
   // startTrailingStopMonitor();
   
-  // 11. 止损监控器已禁用
+  // 13. 止损监控器已禁用
   // 注意：止损逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
   // logger.info("启动止损监控器...");
   // startStopLossMonitor();
   
-  // 12. 启动合约乘数同步定时任务（每1小时执行一次）
+  // 14. 启动合约乘数同步定时任务（每1小时执行一次）
   logger.info("启动合约乘数同步定时任务...");
   contractMultiplierSyncTimer = startContractMultiplierSync(1);
 

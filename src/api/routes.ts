@@ -28,7 +28,7 @@ import { createClient } from "@libsql/client";
 import { randomBytes } from "node:crypto";
 import { isIP } from "node:net";
 import { readFile } from "node:fs/promises";
-import { createOkxClient, OkxClient } from "../services/okxClient";
+import { createOkxClient, OkxClient, createExchangeClientFromActiveAccount } from "../services/okxClient";
 import { BinanceClient } from "../services/binanceClient";
 import { createLogger } from "../utils/loggerUtils";
 import { getChinaTimeISO } from "../utils/timeUtils";
@@ -39,6 +39,7 @@ import type { TradingStrategy } from "../config/strategyTypes";
 import { getStrategyPromptDefaultSections, getTradingStrategy } from "../agents/tradingAgent";
 import { RISK_PARAMS, reloadRiskParams } from "../config/riskParams.new";
 import { resetLiveDataToDefaults } from "../database/reset-live-data";
+import { getExchangeProxy } from "../config/exchange";
 import {
   executeTradingDecision,
   getTradingLoopState,
@@ -129,6 +130,8 @@ const CONFIG_ALLOWED_KEYS = new Set([
   "PROMPT_SECTION_VARIABLES",
   "PROMPT_LANGUAGE",
 ]);
+const ACTIVE_ACCOUNT_SWITCH_AT_KEY = "ACTIVE_ACCOUNT_SWITCH_AT";
+const ACTIVE_ACCOUNT_ID_KEY = "ACTIVE_ACCOUNT_ID";
 
 function isPrivateIpv4(hostname: string): boolean {
   const parts = hostname.split(".").map((segment) => Number.parseInt(segment, 10));
@@ -333,6 +336,19 @@ type ExchangeTestResult =
   | { success: true; exchange: "okx" | "binance"; balance?: string }
   | { success: false; error: string; status?: number };
 
+type AccountConnectionTestOptions = {
+  provider: "okx" | "binance";
+  apiKey: string;
+  apiSecret: string;
+  apiPassphrase?: string;
+  usePaper?: boolean;
+  proxyUrl?: string;
+};
+
+type AccountConnectionTestResult =
+  | { success: true; provider: "OKX" | "Binance"; mode: string; balance: string }
+  | { success: false; error: string };
+
 function normalizeProxyUrl(raw: string | undefined): { ok: true; value: string } | { ok: false; error: string } {
   const trimmed = (raw || "").trim();
   if (!trimmed) {
@@ -395,6 +411,48 @@ async function performExchangeConnectionTest(payload: ExchangeTestPayload): Prom
   }
 }
 
+async function runAccountConnectionTest(options: AccountConnectionTestOptions): Promise<AccountConnectionTestResult> {
+  const proxyCheck = normalizeProxyUrl(options.proxyUrl);
+  if (!proxyCheck.ok) {
+    return { success: false, error: proxyCheck.error };
+  }
+
+  const proxyFromSettings = (getExchangeProxy() || "").trim();
+  const effectiveProxy = proxyFromSettings || (proxyCheck.value ? proxyCheck.value : undefined);
+  if (proxyFromSettings) {
+    logger.info(`账户连接测试强制使用系统代理: ${proxyFromSettings}`);
+  }
+
+  try {
+    if (options.provider === "binance") {
+      const client = new BinanceClient(options.apiKey, options.apiSecret, options.usePaper === true, effectiveProxy);
+      const account = await client.getFuturesAccount();
+      return {
+        success: true,
+        provider: "Binance",
+        mode: options.usePaper ? "测试网" : "主网",
+        balance: account.total || "0",
+      };
+    }
+
+    if (!options.apiPassphrase) {
+      return { success: false, error: "OKX 账户需要 API Passphrase" };
+    }
+
+    const testClient = new OkxClient(options.apiKey, options.apiSecret, options.apiPassphrase, options.usePaper === true, effectiveProxy);
+    const account = await testClient.getFuturesAccount();
+    return {
+      success: true,
+      provider: "OKX",
+      mode: options.usePaper ? "模拟盘" : "实盘",
+      balance: account.total || "0",
+    };
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "未知错误";
+    return { success: false, error: message };
+  }
+}
+
 function asDbRows(rows: unknown[]): DbRow[] {
   return rows.filter((row): row is DbRow => Boolean(row) && typeof row === "object");
 }
@@ -415,6 +473,54 @@ function toStringSafe(value: unknown, fallback = ""): string {
     return value.toString();
   }
   return fallback;
+}
+
+async function getSystemConfigString(key: string): Promise<string | null> {
+  try {
+    const result = await dbClient.execute({
+      sql: "SELECT value FROM system_config WHERE key = ? LIMIT 1",
+      args: [key],
+    });
+
+    if (result.rows && result.rows.length > 0) {
+      const rawValue = result.rows[0].value;
+      if (typeof rawValue === "string") {
+        return rawValue;
+      }
+      if (typeof rawValue === "number" || typeof rawValue === "bigint") {
+        return rawValue.toString();
+      }
+    }
+  } catch (error) {
+    logger.warn(`读取配置 ${key} 失败:`, error);
+  }
+  return null;
+}
+
+async function getActiveAccountSwitchTimestamp(): Promise<string | null> {
+  return getSystemConfigString(ACTIVE_ACCOUNT_SWITCH_AT_KEY);
+}
+
+async function recordActiveAccountSnapshot(snapshotTimestamp: string): Promise<void> {
+  try {
+    const client = createOkxClient();
+    const account = await client.getFuturesAccount();
+
+    const accountTotal = Number.parseFloat(account.total || "0");
+    const availableBalance = Number.parseFloat(account.available || "0");
+    const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
+    const totalBalance = accountTotal + unrealisedPnl;
+
+    await dbClient.execute({
+      sql: `INSERT INTO account_history (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent)
+            VALUES (?, ?, ?, ?, ?, ?)`,
+      args: [snapshotTimestamp, totalBalance, availableBalance, unrealisedPnl, 0, 0],
+    });
+
+    logger.info("已记录账户切换快照，用于刷新统计数据");
+  } catch (error) {
+    logger.error("记录账户切换快照失败:", error);
+  }
 }
 
 async function loadLanguageResource(lang: string): Promise<Record<string, unknown>> {
@@ -719,6 +825,321 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   app.use("/*", serveStatic({ root: "./public" }));
 
   /**
+   * ========================================
+   * 多账户管理 API
+   * ========================================
+   */
+
+  /**
+   * 获取所有账户配置
+   */
+  app.get("/api/accounts", requireAuth, async (c) => {
+    try {
+      const { getAllAccounts } = await import("../services/accountConfigService");
+      const accounts = await getAllAccounts();
+      
+      // 隐藏敏感信息
+      const safeAccounts = accounts.map(acc => ({
+        id: acc.id,
+        name: acc.name,
+        provider: acc.provider,
+        use_paper: acc.use_paper,
+        is_active: acc.is_active,
+        created_at: acc.created_at,
+        updated_at: acc.updated_at,
+        // 部分隐藏 API Key
+        api_key_preview: acc.api_key ? `${acc.api_key.substring(0, 8)}...${acc.api_key.substring(acc.api_key.length - 4)}` : '',
+      }));
+      
+      return c.json({ accounts: safeAccounts });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取账户列表失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取当前激活的账户
+   */
+  app.get("/api/accounts/active", requireAuth, async (c) => {
+    try {
+      const { getActiveAccount } = await import("../services/accountConfigService");
+      const account = await getActiveAccount();
+      
+      if (!account) {
+        return c.json({ account: null });
+      }
+      
+      // 隐藏敏感信息
+      const safeAccount = {
+        id: account.id,
+        name: account.name,
+        provider: account.provider,
+        use_paper: account.use_paper,
+        is_active: account.is_active,
+        created_at: account.created_at,
+        updated_at: account.updated_at,
+        api_key_preview: account.api_key ? `${account.api_key.substring(0, 8)}...${account.api_key.substring(account.api_key.length - 4)}` : '',
+      };
+      
+      return c.json({ account: safeAccount });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取当前账户失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 创建新账户
+   */
+  app.post("/api/accounts", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json();
+      const { name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url } = body;
+      
+      if (!name || !provider || !api_key || !api_secret) {
+        return c.json({ error: "缺少必需参数" }, 400);
+      }
+      
+      if (!['okx', 'binance'].includes(provider)) {
+        return c.json({ error: "不支持的交易所" }, 400);
+      }
+      
+      const { createAccount } = await import("../services/accountConfigService");
+      const account = await createAccount({
+        name: String(name),
+        provider: provider as 'okx' | 'binance',
+        api_key: String(api_key),
+        api_secret: String(api_secret),
+        api_passphrase: api_passphrase ? String(api_passphrase) : undefined,
+        use_paper: Boolean(use_paper),
+        proxy_url: proxy_url ? String(proxy_url) : undefined,
+      });
+      
+      logger.info(`创建账户成功: ${account.name} (ID: ${account.id})`);
+      
+      return c.json({ 
+        success: true, 
+        account: {
+          id: account.id,
+          name: account.name,
+          provider: account.provider,
+          use_paper: account.use_paper,
+          is_active: account.is_active,
+          created_at: account.created_at,
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("创建账户失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 更新账户配置
+   */
+  app.put("/api/accounts/:id", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的账户ID" }, 400);
+      }
+      
+      const body = await c.req.json();
+      const { name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url } = body;
+      
+      const { updateAccount } = await import("../services/accountConfigService");
+      const account = await updateAccount(id, {
+        name: name !== undefined ? String(name) : undefined,
+        provider: provider !== undefined ? provider as 'okx' | 'binance' : undefined,
+        api_key: api_key !== undefined ? String(api_key) : undefined,
+        api_secret: api_secret !== undefined ? String(api_secret) : undefined,
+        api_passphrase: api_passphrase !== undefined ? String(api_passphrase) : undefined,
+        use_paper: use_paper !== undefined ? Boolean(use_paper) : undefined,
+        proxy_url: proxy_url !== undefined ? String(proxy_url) : undefined,
+      });
+      
+      logger.info(`更新账户成功: ${account.name} (ID: ${account.id})`);
+      
+      return c.json({ 
+        success: true,
+        account: {
+          id: account.id,
+          name: account.name,
+          provider: account.provider,
+          use_paper: account.use_paper,
+          is_active: account.is_active,
+          updated_at: account.updated_at,
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("更新账户失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 删除账户
+   */
+  app.delete("/api/accounts/:id", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的账户ID" }, 400);
+      }
+      
+      const { deleteAccount } = await import("../services/accountConfigService");
+      await deleteAccount(id);
+      
+      logger.info(`删除账户成功: ID ${id}`);
+      
+      return c.json({ success: true });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("删除账户失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 设置当前激活的账户
+   */
+  app.post("/api/accounts/:id/activate", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的账户ID" }, 400);
+      }
+      
+      const { setActiveAccount } = await import("../services/accountConfigService");
+      const account = await setActiveAccount(id);
+      const switchTimestamp = new Date().toISOString();
+      const { setConfigValue } = await import("../database/init-config");
+      await Promise.all([
+        setConfigValue(ACTIVE_ACCOUNT_ID_KEY, String(account.id)),
+        setConfigValue(ACTIVE_ACCOUNT_SWITCH_AT_KEY, switchTimestamp),
+      ]);
+      
+      logger.info(`切换当前账户成功: ${account.name} (ID: ${account.id})`);
+      
+      // 重置并重新初始化客户端
+      logger.info("正在重置交易客户端...");
+      const { resetOkxClient, initExchangeClient } = await import("../services/okxClient");
+      resetOkxClient();
+      await initExchangeClient();
+      await recordActiveAccountSnapshot(switchTimestamp);
+      
+      // 重载交易循环以使用新账户
+      logger.info("正在重新加载交易系统以使用新账户...");
+      await reloadRiskParams();
+      await restartTradingLoop();
+      
+      return c.json({ 
+        success: true,
+        account: {
+          id: account.id,
+          name: account.name,
+          provider: account.provider,
+          use_paper: account.use_paper,
+          is_active: account.is_active,
+        },
+        message: "账户已切换，交易系统已重载"
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("切换账户失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 测试账户连接
+   */
+  app.post("/api/accounts/test", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json();
+      const { provider, api_key, api_secret, api_passphrase, use_paper, proxy_url } = body;
+      
+      if (!provider || !api_key || !api_secret) {
+        return c.json({ error: "缺少必需参数" }, 400);
+      }
+      
+      if (!['okx', 'binance'].includes(provider)) {
+        return c.json({ error: "不支持的交易所" }, 400);
+      }
+      
+      const result = await runAccountConnectionTest({
+        provider: provider as 'okx' | 'binance',
+        apiKey: String(api_key),
+        apiSecret: String(api_secret),
+        apiPassphrase: api_passphrase ? String(api_passphrase) : undefined,
+        usePaper: Boolean(use_paper),
+        proxyUrl: proxy_url ? String(proxy_url) : undefined,
+      });
+
+      if (!result.success) {
+        return c.json(result, 400);
+      }
+
+      logger.info(`账户连接测试成功: ${provider}`);
+      return c.json(result);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("账户连接测试失败:", error);
+      return c.json({ 
+        success: false, 
+        error: message 
+      }, 400);
+    }
+  });
+
+  /**
+   * 测试特定账户的连接（使用数据库凭证）
+   */
+  app.post("/api/accounts/:id/test", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的账户ID" }, 400);
+      }
+
+      const { getAccountById } = await import("../services/accountConfigService");
+      const account = await getAccountById(id);
+      if (!account) {
+        return c.json({ error: "账户不存在" }, 404);
+      }
+
+      if (!account.api_key || !account.api_secret) {
+        return c.json({ error: "账户缺少必需的 API 凭证" }, 400);
+      }
+
+      const result = await runAccountConnectionTest({
+        provider: account.provider as "okx" | "binance",
+        apiKey: account.api_key,
+        apiSecret: account.api_secret,
+        apiPassphrase: account.api_passphrase,
+        usePaper: account.use_paper,
+        proxyUrl: account.proxy_url,
+      });
+
+      if (!result.success) {
+        return c.json(result, 400);
+      }
+
+      logger.info(`账户(${account.name})连接测试成功`);
+      return c.json(result);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("账户连接测试失败:", error);
+      return c.json({ success: false, error: message }, 500);
+    }
+  });
+
+  /**
    * 获取账户总览
    * 
    * OKX 账户结构：
@@ -733,31 +1154,46 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/account", async (c) => {
     try {
-      const okxClient = createOkxClient();
+      const okxClient = await createExchangeClientFromActiveAccount();
       const account = await okxClient.getFuturesAccount();
-      
-      // 从数据库获取初始资金
-      const initialResult = await dbClient.execute(
-        "SELECT total_value FROM account_history ORDER BY timestamp ASC LIMIT 1"
-      );
-      const initialBalance = initialResult.rows[0]
-        ? Number.parseFloat(initialResult.rows[0].total_value as string)
-        : 100;
-      
-  // OKX 的 account.total 不包含未实现盈亏
-      // 总资产（不含未实现盈亏）= account.total
+      const activeSince = await getActiveAccountSwitchTimestamp();
+      const historyQuery = activeSince
+        ? {
+            sql: "SELECT total_value, timestamp FROM account_history WHERE timestamp >= ? ORDER BY timestamp ASC",
+            args: [activeSince],
+          }
+        : {
+            sql: "SELECT total_value, timestamp FROM account_history ORDER BY timestamp ASC",
+            args: [],
+          };
+      const historyResult = await dbClient.execute(historyQuery);
+      const history = historyResult.rows || [];
+      const historyInitial = history.length > 0 ? Number.parseFloat(history[0].total_value as string || "0") : undefined;
       const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
-      const totalBalance = Number.parseFloat(account.total || "0");
+      const accountTotal = Number.parseFloat(account.total || "0");
+      const totalBalance = accountTotal + unrealisedPnl;
+      const availableBalance = Number.parseFloat(account.available || "0");
+      const initialBalance = historyInitial && Number.isFinite(historyInitial) && historyInitial > 0
+        ? historyInitial
+        : Math.max(totalBalance, 1);
       
       // 收益率 = (总资产 - 初始资金) / 初始资金 * 100
-      // 总资产不包含未实现盈亏，收益率反映已实现盈亏
-      const returnPercent = ((totalBalance - initialBalance) / initialBalance) * 100;
+      // totalBalance 包含未实现盈亏，以便与 account_history 对齐
+      const returnPercent = initialBalance > 0 ? ((totalBalance - initialBalance) / initialBalance) * 100 : 0;
       
       // 计算胜率 - 从已平仓交易计算
       let winRate = 0;
       try {
         const closedTradesResult = await dbClient.execute(
-          "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL"
+          activeSince
+            ? {
+                sql: "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL AND timestamp >= ?",
+                args: [activeSince],
+              }
+            : {
+                sql: "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL",
+                args: [],
+              }
         );
         const closedTrades = closedTradesResult.rows || [];
         
@@ -775,11 +1211,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       // 计算最大回撤 - 从权益历史计算
       let maxDrawdown = 0;
       try {
-        const historyResult = await dbClient.execute(
-          "SELECT total_value FROM account_history ORDER BY timestamp ASC"
-        );
-        const history = historyResult.rows || [];
-        
         if (history.length > 0) {
           let peak = 0;
           let maxDD = 0;
@@ -804,11 +1235,11 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       }
       
       return c.json({
-        totalBalance,  // 总资产（不包含未实现盈亏）
-        availableBalance: Number.parseFloat(account.available || "0"),
+        totalBalance,  // 总资产（包含未实现盈亏）
+        availableBalance,
         positionMargin: Number.parseFloat(account.positionMargin || "0"),
         unrealisedPnl,
-        returnPercent,  // 收益率（不包含未实现盈亏）
+        returnPercent,  // 收益率（基于 totalBalance 计算）
         winRate,        // 胜率
         maxDrawdown,    // 最大回撤
         initialBalance,
@@ -825,7 +1256,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/positions", async (c) => {
     try {
-      const okxClient = createOkxClient();
+      const okxClient = await createExchangeClientFromActiveAccount();
       const okxPositions = await okxClient.getPositions();
       
       // 从数据库获取止损止盈信息
@@ -963,18 +1394,9 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     try {
       const { getConfigValue } = await import("../database/init-config");
       const provider = (await getConfigValue("EXCHANGE_PROVIDER")) || "okx";
-      let orders: any[] = [];
-
-      if (provider === "okx") {
-        const okxClient = createOkxClient();
-        orders = await okxClient.getOpenOrders();
-        logger.info(`获取到 ${orders.length} 个 OKX 挂单`);
-      } else if (provider === "binance") {
-        // Binance 需要通过 OKX 客户端代理（因为系统主要用 OKX）
-        // 或者直接返回空数组，因为当前系统主要支持 OKX
-        logger.warn("Binance 挂单查询暂不支持");
-        orders = [];
-      }
+      const client = await createExchangeClientFromActiveAccount();
+      const orders = await client.getOpenOrders();
+      logger.debug(`获取到 ${orders.length} 个挂单`);
 
       // 统一格式化订单数据
       const formattedOrders = await Promise.all(
@@ -1033,7 +1455,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         })
       );
 
-      logger.info(`返回 ${formattedOrders.length} 个格式化后的挂单`);
+      logger.debug(`返回 ${formattedOrders.length} 个格式化后的挂单`);
       return c.json({ orders: formattedOrders });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
@@ -1057,22 +1479,74 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const contract = `${symbol.toUpperCase()}_USDT`;
       const { getConfigValue } = await import("../database/init-config");
       const provider = (await getConfigValue("EXCHANGE_PROVIDER")) || "okx";
-      let result: any;
+      
+      const client = await createExchangeClientFromActiveAccount();
+      const orders = await client.getOpenOrders();
+      logger.debug(`获取到 ${orders.length} 个挂单`);
 
-      if (provider === "okx") {
-        const okxClient = createOkxClient();
-        result = await okxClient.cancelOrder(contract, orderId);
-      } else if (provider === "binance") {
-        logger.warn("Binance 取消订单暂不支持");
-        return c.json({ success: false, error: "当前交易所不支持此操作" }, 400);
-      }
+      // 统一格式化订单数据
+      const formattedOrders = await Promise.all(
+        orders.map(async (order) => {
+          const inferredContractFromInstId = typeof order.instId === "string"
+            ? order.instId.replace(/-SWAP$/i, "").replace(/-/g, "_")
+            : "";
+          const rawContractCandidate = order.contract || inferredContractFromInstId;
+          const rawContract = rawContractCandidate?.includes("_USDT")
+            ? rawContractCandidate
+            : rawContractCandidate
+              ? `${rawContractCandidate}_USDT`
+              : "";
+          const symbol = (rawContract || String(order.symbol || "")).replace("_USDT", "").toUpperCase();
+          const side = (order.side || order.posSide || "").toLowerCase();
+          const orderType = (order.orderType || order.ordType || order.type || "").toUpperCase();
+          const price = Number.parseFloat(order.px || order.price || "0");
+          const quantityContracts = Number.parseFloat(order.sz || order.origQty || order.size || "0");
+          const filledContracts = Number.parseFloat(order.fillSz || order.executedQty || "0");
+          const remainingContracts = Math.max(quantityContracts - filledContracts, 0);
+          const createTime = order.cTime || order.time || order.updateTime || Date.now();
 
-      logger.info(`取消订单 ${orderId} (${symbol})`, { result });
-      return c.json({ success: true, message: `订单 ${orderId} 已取消`, result });
+          let multiplier = 1;
+          if (provider === "okx" && rawContract) {
+            multiplier = await getQuantoMultiplier(rawContract).catch((error: unknown) => {
+              const message = error instanceof Error ? error.message : String(error);
+              logger.warn(`获取 ${rawContract} 合约乘数失败: ${message}`);
+              return 1;
+            });
+          }
+
+          const convertSize = (value: number) => (Number.isFinite(value) ? value * multiplier : value);
+          const quantity = convertSize(quantityContracts);
+          const filled = convertSize(filledContracts);
+          const remaining = convertSize(remainingContracts);
+
+          const formatted = {
+            orderId: order.ordId || order.orderId?.toString() || order.clientOrderId,
+            symbol,
+            side,
+            orderType,
+            price,
+            quantity,
+            filled,
+            remaining,
+            createTime,
+            status: order.state || order.status,
+            contract: rawContract,
+            contracts: Number.isFinite(quantityContracts) ? quantityContracts : undefined,
+            filledContracts: Number.isFinite(filledContracts) ? filledContracts : undefined,
+            remainingContracts: Number.isFinite(remainingContracts) ? remainingContracts : undefined,
+          };
+
+          logger.debug(`格式化挂单: ${formatted.orderId} - ${formatted.symbol} ${formatted.side} ${formatted.orderType}`);
+          return formatted;
+        })
+      );
+
+      logger.debug(`返回 ${formattedOrders.length} 个格式化后的挂单`);
+      return c.json({ orders: formattedOrders });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
-      logger.error("取消订单失败", error);
-      return c.json({ success: false, error: message, message: `取消订单失败: ${message}` }, 500);
+      logger.error("获取挂单失败", error);
+      return c.json({ error: message }, 500);
     }
   });
 
@@ -1082,20 +1556,36 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   app.get("/api/history", async (c) => {
     try {
       const limitParam = c.req.query("limit");
+      const activeSince = await getActiveAccountSwitchTimestamp();
       
       type ExecuteResult = Awaited<ReturnType<typeof dbClient.execute>>;
       let result: ExecuteResult;
       if (limitParam) {
         // 如果传递了 limit 参数，使用 LIMIT 子句
         const limit = Number.parseInt(limitParam, 10);
-        result = await dbClient.execute({
-          sql: "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history ORDER BY timestamp DESC LIMIT ?",
-          args: [limit],
-        });
+        result = await dbClient.execute(
+          activeSince
+            ? {
+                sql: "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history WHERE timestamp >= ? ORDER BY timestamp DESC LIMIT ?",
+                args: [activeSince, limit],
+              }
+            : {
+                sql: "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history ORDER BY timestamp DESC LIMIT ?",
+                args: [limit],
+              }
+        );
       } else {
         // 如果没有传递 limit 参数，返回全部数据
         result = await dbClient.execute(
-          "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history ORDER BY timestamp DESC",
+          activeSince
+            ? {
+                sql: "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history WHERE timestamp >= ? ORDER BY timestamp DESC",
+                args: [activeSince],
+              }
+            : {
+                sql: "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history ORDER BY timestamp DESC",
+                args: [],
+              }
         );
       }
       
@@ -1120,15 +1610,32 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/statistics", async (c) => {
     try {
+      const activeSince = await getActiveAccountSwitchTimestamp();
       // 获取所有已平仓交易
       const tradesResult = await dbClient.execute(
-        "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL ORDER BY timestamp ASC"
+        activeSince
+          ? {
+              sql: "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL AND timestamp >= ? ORDER BY timestamp ASC",
+              args: [activeSince],
+            }
+          : {
+              sql: "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL ORDER BY timestamp ASC",
+              args: [],
+            }
       );
       const trades = tradesResult.rows || [];
       
       // 获取权益历史
       const historyResult = await dbClient.execute(
-        "SELECT total_value, timestamp FROM account_history ORDER BY timestamp ASC"
+        activeSince
+          ? {
+              sql: "SELECT total_value, timestamp FROM account_history WHERE timestamp >= ? ORDER BY timestamp ASC",
+              args: [activeSince],
+            }
+          : {
+              sql: "SELECT total_value, timestamp FROM account_history ORDER BY timestamp ASC",
+              args: [],
+            }
       );
       const history = historyResult.rows || [];
       
@@ -1427,58 +1934,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
-      logger.error("获取交易执行日志失败", error);
-      return c.json({ error: message }, 500);
-    }
-  });
-
-  /**
-   * 获取 Agent 决策日志
-   */
-  app.get("/api/logs", async (c) => {
-    try {
-      const rawLimit = Number.parseInt(c.req.query("limit") || "20", 10);
-      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 20;
-      const rawPage = Number.parseInt(c.req.query("page") || "1", 10);
-      const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
-      const offset = (page - 1) * limit;
-
-      const [result, countResult] = await Promise.all([
-        dbClient.execute({
-          sql: `SELECT * FROM agent_decisions 
-                ORDER BY datetime(timestamp) DESC 
-                LIMIT ? OFFSET ?`,
-          args: [limit, offset],
-        }),
-        dbClient.execute({
-          sql: `SELECT COUNT(*) AS total FROM agent_decisions`,
-          args: [],
-        }),
-      ]);
-
-      const logs = asDbRows(result.rows).map((row) => ({
-        id: toStringSafe(row.id),
-        timestamp: toStringSafe(row.timestamp),
-        iteration: toNumber(row.iteration),
-        decision: toStringSafe(row.decision),
-        actionsTaken: toStringSafe(row.actions_taken),
-        accountValue: toNumber(row.account_value),
-        positionsCount: toNumber(row.positions_count),
-      }));
-
-      const totalRows = asDbRows(countResult.rows);
-      const total = totalRows.length > 0 ? toNumber(totalRows[0].total, logs.length) : logs.length;
-
-      return c.json({
-        logs,
-        pagination: {
-          page,
-          pageSize: limit,
-          total,
-        },
-      });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "未知错误";
       return c.json({ error: message }, 500);
     }
   });
@@ -1546,144 +2001,55 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   /**
-   * 获取交易统计
+   * 获取 AI 决策日志 (agent_decisions)
+   * 前端 monitor-script.js 使用 /api/logs 获取决策列表
    */
-  app.get("/api/stats", async (c) => {
+  app.get("/api/logs", async (c) => {
     try {
-      // 统计总交易次数 - 使用 pnl IS NOT NULL 来确保这是已完成的平仓交易
-      const totalTradesResult = await dbClient.execute(
-        "SELECT COUNT(*) as count FROM trades WHERE type = 'close' AND pnl IS NOT NULL"
-      );
-      const totalTradesRow = asDbRows(totalTradesResult.rows)[0];
-      const totalTrades = toNumber(totalTradesRow?.count);
-      
-      // 统计盈利交易
-      const winTradesResult = await dbClient.execute(
-        "SELECT COUNT(*) as count FROM trades WHERE type = 'close' AND pnl IS NOT NULL AND pnl > 0"
-      );
-      const winTradesRow = asDbRows(winTradesResult.rows)[0];
-      const winTrades = toNumber(winTradesRow?.count);
-      
-      // 计算胜率
-      const winRate = totalTrades > 0 ? (winTrades / totalTrades) * 100 : 0;
-      
-      // 计算总盈亏
-      const pnlResult = await dbClient.execute(
-        "SELECT SUM(pnl) as total_pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL"
-      );
-      const totalPnlRow = asDbRows(pnlResult.rows)[0];
-      const totalPnl = toNumber(totalPnlRow?.total_pnl);
-      
-      // 获取最大单笔盈利和亏损
-      const maxWinResult = await dbClient.execute(
-        "SELECT MAX(pnl) as max_win FROM trades WHERE type = 'close' AND pnl IS NOT NULL"
-      );
-      const maxWinRow = asDbRows(maxWinResult.rows)[0];
-      const maxWin = toNumber(maxWinRow?.max_win);
-      
-      const maxLossResult = await dbClient.execute(
-        "SELECT MIN(pnl) as max_loss FROM trades WHERE type = 'close' AND pnl IS NOT NULL"
-      );
-      const maxLossRow = asDbRows(maxLossResult.rows)[0];
-      const maxLoss = toNumber(maxLossRow?.max_loss);
-      
+      const rawLimit = Number.parseInt(c.req.query("limit") || "10", 10);
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 50) : 10;
+      const rawPage = Number.parseInt(c.req.query("page") || "1", 10);
+      const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+      const offset = (page - 1) * limit;
+
+      const [result, countResult] = await Promise.all([
+        dbClient.execute({
+          sql: `SELECT * FROM agent_decisions ORDER BY timestamp DESC LIMIT ? OFFSET ?`,
+          args: [limit, offset],
+        }),
+        dbClient.execute({
+          sql: `SELECT COUNT(*) AS total FROM agent_decisions`,
+          args: [],
+        }),
+      ]);
+
+      const logs = asDbRows(result.rows).map((row) => ({
+        id: toNumber(row.id),
+        timestamp: toStringSafe(row.timestamp),
+        iteration: toNumber(row.iteration),
+        marketAnalysis: toStringSafe(row.market_analysis),
+        decision: toStringSafe(row.decision),
+        actionsTaken: toStringSafe(row.actions_taken),
+        accountValue: toNumber(row.account_value),
+        positionsCount: toNumber(row.positions_count),
+        // 为了兼容前端可能的字段名，也映射 response 到 decision
+        response: toStringSafe(row.decision), 
+      }));
+
+      const totalRows = asDbRows(countResult.rows);
+      const total = totalRows.length > 0 ? toNumber(totalRows[0].total, logs.length) : logs.length;
+
       return c.json({
-        totalTrades,
-        winTrades,
-        lossTrades: totalTrades - winTrades,
-        winRate,
-        totalPnl,
-        maxWin,
-        maxLoss,
+        logs,
+        pagination: {
+          page,
+          pageSize: limit,
+          total,
+        },
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
-      return c.json({ error: message }, 500);
-    }
-  });
-
-  /**
-   * 获取指定币种的K线数据
-   */
-  app.get("/api/candles", async (c) => {
-    const symbolParam = c.req.query("symbol")?.trim().toUpperCase();
-    const interval = c.req.query("interval")?.trim() || "5m";
-    const limitParam = c.req.query("limit");
-
-    const symbol = symbolParam && symbolParam.length >= 2 ? symbolParam : "BTC";
-    const limitRaw = limitParam ? Number.parseInt(limitParam, 10) : 200;
-    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 20), 500) : 200;
-
-    try {
-      const okxClient = createOkxClient();
-      const contract = `${symbol}_USDT`;
-      const candles = await okxClient.getFuturesCandles(contract, interval, limit);
-
-      return c.json({
-        symbol,
-        interval,
-        candles,
-      });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "未知错误";
-      logger.error(`获取 ${symbol} K线数据失败: ${message}`);
-      return c.json({ error: message }, 500);
-    }
-  });
-
-  /**
-   * 获取系统配置信息（返回真实值，前端通过密码框遮掩）
-   */
-  app.get("/api/config", requireAuth, async (c) => {
-    try {
-      const { getAllConfig } = await import("../database/init-config");
-      const config = await getAllConfig();
-      
-      return c.json({ config });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "未知错误";
-      return c.json({ error: message }, 500);
-    }
-  });
-
-  app.get("/api/strategy/default-prompts", requireAuth, async (c) => {
-    try {
-      const requestedStrategy = c.req.query("strategy")?.trim().toLowerCase();
-      const validStrategies: TradingStrategy[] = ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"];
-      const fallbackStrategy = getTradingStrategy();
-      const strategy: TradingStrategy = requestedStrategy && validStrategies.includes(requestedStrategy as TradingStrategy)
-        ? (requestedStrategy as TradingStrategy)
-        : fallbackStrategy;
-
-      // Get language parameter (defaults to 'en') and validate
-      const { normalizeStrategyLanguage } = await import("../config/strategyTypes");
-      const rawLanguage = c.req.query("language")?.trim().toLowerCase();
-      const requestedLanguage = normalizeStrategyLanguage(rawLanguage);
-      
-      const intervalParam = c.req.query("interval")?.trim().toLowerCase();
-      const intervalMinutes = (() => {
-        if (!intervalParam) {
-          return RISK_PARAMS.TRADING_INTERVAL_MINUTES;
-        }
-        const numericCandidate = intervalParam.endsWith("m") ? intervalParam.slice(0, -1) : intervalParam;
-        const parsed = Number.parseInt(numericCandidate, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) {
-          return RISK_PARAMS.TRADING_INTERVAL_MINUTES;
-        }
-        return parsed;
-      })();
-
-      const sections = await getStrategyPromptDefaultSections(strategy, intervalMinutes, requestedLanguage);
-
-      return c.json({
-        strategy,
-        intervalMinutes,
-        language: requestedLanguage,
-        sections,
-      });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "未知错误";
-      logger.error("获取默认 Prompt 失败:", error);
+      logger.error("获取决策日志失败", error);
       return c.json({ error: message }, 500);
     }
   });
@@ -1900,7 +2266,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const symbolsParam = c.req.query("symbols") || "BTC,ETH,SOL,BNB,DOGE,XRP";
       const symbols = symbolsParam.split(",").map(s => s.trim());
       
-      const okxClient = createOkxClient();
+      const okxClient = await createExchangeClientFromActiveAccount();
       const prices: Record<string, number> = {};
       
       // 并发获取所有币种价格

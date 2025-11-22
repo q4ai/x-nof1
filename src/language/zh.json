@@ -121,6 +121,13 @@
 		"account": {
 			"title": "账户配置"
 		},
+		"accountsList": {
+			"title": "账户管理"
+		},
+		"accountForm": {
+			"titleAdd": "添加账户",
+			"titleEdit": "编辑账户"
+		},
 		"strategy": {
 			"title": "策略配置"
 		},
@@ -299,7 +306,10 @@
 		"save": "保存",
 		"delete": "删除",
 		"edit": "编辑",
-		"close": "关闭"
+		"close": "关闭",
+		"success": "成功",
+		"error": "错误",
+		"info": "提示"
 	},
 	"account": {
 		"saveAndRestart": "保存并重启",
@@ -357,6 +367,71 @@
 			"stopLossPlaceholder": "请输入止损金额",
 			"takeProfit": "账户止盈 (USDT)",
 			"takeProfitPlaceholder": "请输入止盈金额"
+		}
+	},
+	"accounts": {
+		"addAccount": "+ 添加账户",
+		"empty": "暂无账户配置",
+		"providers": {
+			"okx": "OKX",
+			"binance": "Binance"
+		},
+		"form": {
+			"name": "账户名称 <span class=\"required\">*</span>",
+			"namePlaceholder": "我的交易账户",
+			"provider": "交易所",
+			"okxApiKey": "API Key <span class=\"required\">*</span>",
+			"okxApiKeyPlaceholder": "输入 OKX API Key",
+			"okxApiSecret": "API Secret <span class=\"required\">*</span>",
+			"okxApiSecretPlaceholder": "输入 OKX API Secret",
+			"okxPassphrase": "API Passphrase <span class=\"required\">*</span>",
+			"okxPassphrasePlaceholder": "输入 OKX Passphrase",
+			"okxUsePaper": "使用模拟盘 (Sandbox)",
+			"binanceApiKey": "API Key <span class=\"required\">*</span>",
+			"binanceApiKeyPlaceholder": "输入 Binance API Key",
+			"binanceApiSecret": "API Secret <span class=\"required\">*</span>",
+			"binanceApiSecretPlaceholder": "输入 Binance API Secret",
+			"binanceUseTestnet": "使用测试网",
+			"proxyUrl": "代理地址 (可选)",
+			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
+			"testConnection": "测试连接"
+		},
+		"badges": {
+			"active": "当前",
+			"paper": "模拟盘"
+		},
+		"cards": {
+			"apiKeyLabel": "API Key",
+			"updatedLabel": "更新时间"
+		},
+		"actions": {
+			"test": "测试",
+			"testing": "测试中...",
+			"edit": "编辑",
+			"delete": "删除",
+			"deleting": "删除中...",
+			"activate": "切换",
+			"activating": "切换中...",
+			"current": "当前"
+		},
+		"messages": {
+			"loadError": "无法加载账户数据，请稍后重试。",
+			"saveSuccess": "账户创建成功",
+			"updateSuccess": "账户更新成功",
+			"deleteSuccess": "账户删除成功",
+			"deleteDisabled": "无法删除正在使用的账户",
+			"deleteConfirm": "确定删除该账户？此操作不可恢复。",
+			"activateConfirm": "确定切换到该账户？交易系统将重新启动。",
+			"activateSuccess": "账户已切换并重新启动交易循环",
+			"testInProgress": "正在测试连接...",
+			"testSuccess": "连接成功",
+			"testFailed": "连接失败",
+			"balanceLabel": "账户权益：{{balance}}",
+			"validation": {
+				"missingName": "请填写账户名称",
+				"missingOkx": "请填写完整的 OKX 凭证",
+				"missingBinance": "请填写完整的 Binance 凭证"
+			}
 		}
 	},
 	"strategy": {

@@ -242,3 +242,46 @@ export async function ensureSessionsTable(client: Client): Promise<void> {
     logger.error("创建 sessions 表失败:", error);
   }
 }
+
+/**
+ * 确保 account_configs 表存在（用于多账户管理）
+ */
+export async function ensureAccountConfigsTable(client: Client): Promise<void> {
+  try {
+    const result = await client.execute({
+      sql: "SELECT name FROM sqlite_master WHERE type='table' AND name='account_configs'",
+      args: [],
+    });
+
+    if (result.rows.length > 0) {
+      return; // 表已存在
+    }
+
+    logger.info("创建 account_configs 表...");
+    
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS account_configs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        provider TEXT NOT NULL,
+        api_key TEXT NOT NULL,
+        api_secret TEXT NOT NULL,
+        api_passphrase TEXT,
+        use_paper INTEGER NOT NULL DEFAULT 0,
+        proxy_url TEXT,
+        is_active INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      )
+    `);
+
+    await client.execute(`
+      CREATE INDEX IF NOT EXISTS idx_account_configs_is_active ON account_configs(is_active)
+    `);
+
+    logger.info("✅ account_configs 表创建成功");
+  } catch (error) {
+    logger.error("创建 account_configs 表失败:", error);
+  }
+}
+

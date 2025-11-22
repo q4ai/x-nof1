@@ -21,7 +21,7 @@
  */
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
-import { createOkxClient } from "../../services/okxClient";
+import { createOkxClient, createExchangeClientFromActiveAccount } from "../../services/okxClient";
 import { createClient } from "@libsql/client";
 import { createLogger } from "../../utils/loggerUtils";
 import { getChinaTimeISO } from "../../utils/timeUtils";
@@ -205,7 +205,7 @@ export async function executeOpenPosition({
   // 开仓时不设置止盈止损，由 AI 在每个周期主动决策
   const stopLoss = undefined;
   const takeProfit = undefined;
-  const client = createOkxClient();
+  const client = await createExchangeClientFromActiveAccount();
   const exchangeProvider = getExchangeProvider();
   const normalizedSymbol = symbol.toUpperCase();
   const contract = `${normalizedSymbol}_USDT`;
@@ -664,7 +664,7 @@ export async function executeClosePosition({
 }: ClosePositionOptions) {
   const normalizedSymbol = symbol.toUpperCase();
   const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
-  const client = createOkxClient();
+  const client = await createExchangeClientFromActiveAccount();
   const exchangeProvider = getExchangeProvider();
   const contract = `${normalizedSymbol}_USDT`;
   let logSide: "long" | "short" | undefined;
@@ -1168,7 +1168,7 @@ export const cancelOrderTool = createTool({
     orderId: z.string().describe("订单ID"),
   }),
   execute: async ({ orderId }) => {
-  const client = createOkxClient();
+  const client = await createExchangeClientFromActiveAccount();
     const requestPayload = { orderId };
     const finalize = async (result: {
       success: boolean;

@@ -97,7 +97,9 @@ type AccountPosition = {
 };
 
 class OkxTradingClient {
-  private readonly client = createOkxClient();
+  private get client() {
+    return createOkxClient();
+  }
   private readonly orderContractCache = new Map<string, string>();
 
   private rememberOrder(orderId: string | undefined, contract: string) {

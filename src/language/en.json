@@ -116,11 +116,83 @@
 		"account": {
 			"title": "Account Settings"
 		},
+		"accountsList": {
+			"title": "Account Management"
+		},
+		"accountForm": {
+			"titleAdd": "Add Account",
+			"titleEdit": "Edit Account"
+		},
 		"strategy": {
 			"title": "Strategy Settings"
 		},
 		"settings": {
 			"title": "System Settings"
+		}
+	},
+	"accounts": {
+		"addAccount": "+ Add Account",
+		"empty": "No accounts configured",
+		"providers": {
+			"okx": "OKX",
+			"binance": "Binance"
+		},
+		"form": {
+			"name": "Account Name <span class=\"required\">*</span>",
+			"namePlaceholder": "My Trading Account",
+			"provider": "Exchange Provider",
+			"okxApiKey": "API Key <span class=\"required\">*</span>",
+			"okxApiKeyPlaceholder": "Enter OKX API Key",
+			"okxApiSecret": "API Secret <span class=\"required\">*</span>",
+			"okxApiSecretPlaceholder": "Enter OKX API Secret",
+			"okxPassphrase": "Passphrase <span class=\"required\">*</span>",
+			"okxPassphrasePlaceholder": "Enter OKX Passphrase",
+			"okxUsePaper": "Use Paper Trading (Sandbox)",
+			"binanceApiKey": "API Key <span class=\"required\">*</span>",
+			"binanceApiKeyPlaceholder": "Enter Binance API Key",
+			"binanceApiSecret": "API Secret <span class=\"required\">*</span>",
+			"binanceApiSecretPlaceholder": "Enter Binance API Secret",
+			"binanceUseTestnet": "Use Testnet",
+			"proxyUrl": "Proxy URL (Optional)",
+			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
+			"testConnection": "Test Connection"
+		},
+		"badges": {
+			"active": "Active",
+			"paper": "Paper"
+		},
+		"cards": {
+			"apiKeyLabel": "API Key",
+			"updatedLabel": "Updated"
+		},
+		"actions": {
+			"test": "Test",
+			"testing": "Testing...",
+			"edit": "Edit",
+			"delete": "Delete",
+			"deleting": "Deleting...",
+			"activate": "Activate",
+			"activating": "Activating...",
+			"current": "Current"
+		},
+		"messages": {
+			"loadError": "Failed to load account data. Please try again.",
+			"saveSuccess": "Account created successfully",
+			"updateSuccess": "Account updated successfully",
+			"deleteSuccess": "Account deleted successfully",
+			"deleteDisabled": "You cannot delete an active account",
+			"deleteConfirm": "Delete this account? This action cannot be undone.",
+			"activateConfirm": "Switch to this account? The trading system will restart.",
+			"activateSuccess": "Account activated and trading loop restarted",
+			"testInProgress": "Testing connection...",
+			"testSuccess": "Connection successful",
+			"testFailed": "Connection failed",
+			"balanceLabel": "Equity: {{balance}}",
+			"validation": {
+				"missingName": "Please enter account name",
+				"missingOkx": "Please fill in all OKX credentials",
+				"missingBinance": "Please fill in all Binance credentials"
+			}
 		}
 	},
 	"tables": {
@@ -291,7 +363,10 @@
 		"save": "Save",
 		"delete": "Delete",
 		"edit": "Edit",
-		"close": "Close"
+		"close": "Close",
+		"success": "Success",
+		"error": "Error",
+		"info": "Info"
 	},
 	"account": {
 		"saveAndRestart": "Save & Restart",
@@ -441,14 +516,6 @@
 			"balanced": "Balanced",
 			"aggressive": "Aggressive",
 			"unknown": "Unknown strategy"
-		},
-		"labelMap": {
-			"ultra-short": "Ultra-Short",
-			"swing-trend": "Swing Trend",
-			"dca": "DCA",
-			"conservative": "Conservative",
-			"balanced": "Balanced",
-			"aggressive": "Aggressive"
 		}
 	},
 	"settings": {
