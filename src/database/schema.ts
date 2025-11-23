@@ -144,7 +144,7 @@ export interface ContractMultiplier {
 export interface AccountConfig {
   id: number;
   name: string;
-  provider: 'okx' | 'binance';
+  provider: 'okx' | 'binance' | 'bitget';
   api_key: string;
   api_secret: string;
   api_passphrase?: string;

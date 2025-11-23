@@ -1,6 +1,6 @@
 import { getConfigStringValue } from "./riskParams.new";
 
-export type ExchangeProvider = "okx" | "binance";
+export type ExchangeProvider = "okx" | "binance" | "bitget";
 
 export type OkxCredentials = {
   provider: "okx";
@@ -17,7 +17,15 @@ export type BinanceCredentials = {
   testnet: boolean;
 };
 
-export type ExchangeCredentials = OkxCredentials | BinanceCredentials;
+export type BitgetCredentials = {
+  provider: "bitget";
+  apiKey: string;
+  apiSecret: string;
+  passphrase: string;
+  simulated: boolean;
+};
+
+export type ExchangeCredentials = OkxCredentials | BinanceCredentials | BitgetCredentials;
 
 function asBoolean(value: string | undefined, fallback = "false"): boolean {
   const normalized = (value ?? fallback ?? "false").trim().toLowerCase();
@@ -31,7 +39,9 @@ function getEnv(key: string, fallback = ""): string {
 export function getExchangeProvider(): ExchangeProvider {
   const fromConfig = getConfigStringValue("EXCHANGE_PROVIDER", getEnv("EXCHANGE_PROVIDER", "okx"));
   const normalized = fromConfig.trim().toLowerCase();
-  return normalized === "binance" ? "binance" : "okx";
+  if (normalized === "binance") return "binance";
+  if (normalized === "bitget") return "bitget";
+  return "okx";
 }
 
 export function getExchangeCredentials(): ExchangeCredentials {
@@ -47,6 +57,23 @@ export function getExchangeCredentials(): ExchangeCredentials {
       apiKey,
       apiSecret,
       testnet,
+    };
+  }
+
+  if (provider === "bitget") {
+    const apiKey = getConfigStringValue("BITGET_API_KEY", getEnv("BITGET_API_KEY"));
+    const apiSecret = getConfigStringValue("BITGET_API_SECRET", getEnv("BITGET_API_SECRET"));
+    const passphrase = getConfigStringValue("BITGET_API_PASSPHRASE", getEnv("BITGET_API_PASSPHRASE"));
+    // Bitget doesn't have a standard "paper trading" flag in the same way, but we can support it if needed
+    // For now, assume simulated is false or controlled by a similar env var
+    const simulated = asBoolean(getConfigStringValue("BITGET_USE_PAPER", getEnv("BITGET_USE_PAPER", "false")), "false");
+
+    return {
+      provider: "bitget",
+      apiKey,
+      apiSecret,
+      passphrase,
+      simulated,
     };
   }
 

@@ -374,7 +374,8 @@
 		"empty": "暂无账户配置",
 		"providers": {
 			"okx": "OKX",
-			"binance": "Binance"
+			"binance": "Binance",
+			"bitget": "Bitget"
 		},
 		"form": {
 			"name": "账户名称 <span class=\"required\">*</span>",
@@ -392,6 +393,12 @@
 			"binanceApiSecret": "API Secret <span class=\"required\">*</span>",
 			"binanceApiSecretPlaceholder": "输入 Binance API Secret",
 			"binanceUseTestnet": "使用测试网",
+			"bitgetApiKey": "API Key <span class=\"required\">*</span>",
+			"bitgetApiKeyPlaceholder": "输入 Bitget API Key",
+			"bitgetApiSecret": "API Secret <span class=\"required\">*</span>",
+			"bitgetApiSecretPlaceholder": "输入 Bitget API Secret",
+			"bitgetPassphrase": "API Passphrase <span class=\"required\">*</span>",
+			"bitgetPassphrasePlaceholder": "输入 Bitget Passphrase",
 			"proxyUrl": "代理地址 (可选)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
 			"testConnection": "测试连接"
@@ -430,7 +437,8 @@
 			"validation": {
 				"missingName": "请填写账户名称",
 				"missingOkx": "请填写完整的 OKX 凭证",
-				"missingBinance": "请填写完整的 Binance 凭证"
+				"missingBinance": "请填写完整的 Binance 凭证",
+				"missingBitget": "请填写完整的 Bitget 凭证"
 			}
 		}
 	},

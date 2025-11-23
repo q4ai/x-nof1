@@ -2,6 +2,7 @@ import { ProxyAgent, type Dispatcher } from "undici";
 import { createLogger } from "../utils/loggerUtils";
 import { getExchangeCredentials, getExchangeProxy } from "../config/exchange";
 import { BinanceClient } from "./binanceClient";
+import { BitgetClient } from "./bitgetClient";
 
 type HttpMethod = "GET" | "POST" | "DELETE";
 
@@ -781,7 +782,7 @@ export class OkxClient {
   }
 }
 
-type ExchangeHttpClient = OkxClient | BinanceClient;
+type ExchangeHttpClient = OkxClient | BinanceClient | BitgetClient;
 
 let clientInstance: ExchangeHttpClient | null = null;
 
@@ -789,7 +790,7 @@ let clientInstance: ExchangeHttpClient | null = null;
  * 从数据库加载活跃账户配置（优先），回退到环境变量
  */
 async function loadActiveAccountConfig(): Promise<{
-  provider: "okx" | "binance";
+  provider: "okx" | "binance" | "bitget";
   apiKey: string;
   apiSecret: string;
   passphrase?: string;
@@ -803,7 +804,7 @@ async function loadActiveAccountConfig(): Promise<{
     if (activeAccount) {
       logger.info(`使用数据库活跃账户: ${activeAccount.name} (${activeAccount.provider})`);
       return {
-        provider: activeAccount.provider as "okx" | "binance",
+        provider: activeAccount.provider as "okx" | "binance" | "bitget",
         apiKey: activeAccount.api_key,
         apiSecret: activeAccount.api_secret,
         passphrase: activeAccount.api_passphrase || undefined,
@@ -829,6 +830,17 @@ async function loadActiveAccountConfig(): Promise<{
       simulated: false,
     };
   }
+
+  if (credentials.provider === "bitget") {
+    return {
+      provider: "bitget",
+      apiKey: credentials.apiKey,
+      apiSecret: credentials.apiSecret,
+      passphrase: credentials.passphrase,
+      testnet: false,
+      simulated: credentials.simulated,
+    };
+  }
   
   // OKX
   return {
@@ -852,11 +864,24 @@ function buildExchangeClient(): ExchangeHttpClient {
     return new BinanceClient(credentials.apiKey, credentials.apiSecret, credentials.testnet, proxyUrl);
   }
 
+  if (credentials.provider === "bitget") {
+    if (!credentials.apiKey || !credentials.apiSecret || !credentials.passphrase) {
+      throw new Error("请在环境变量或数据库配置中设置 BITGET_API_KEY / BITGET_API_SECRET / BITGET_API_PASSPHRASE");
+    }
+    return new BitgetClient(credentials.apiKey, credentials.apiSecret, credentials.passphrase, credentials.simulated, proxyUrl);
+  }
+
   if (!credentials.apiKey || !credentials.apiSecret || !credentials.passphrase) {
     throw new Error("请在环境变量或数据库配置中设置 OKX_API_KEY / OKX_API_SECRET / OKX_API_PASSPHRASE");
   }
 
-  return new OkxClient(credentials.apiKey, credentials.apiSecret, credentials.passphrase, credentials.simulated, proxyUrl);
+  return new OkxClient(
+    credentials.apiKey,
+    credentials.apiSecret,
+    credentials.passphrase,
+    credentials.simulated,
+    proxyUrl
+  );
 }
 
 export function createOkxClient(): ExchangeHttpClient {
@@ -883,6 +908,11 @@ export async function initExchangeClient(): Promise<ExchangeHttpClient> {
       throw new Error("活跃账户缺少 API Key 或 API Secret");
     }
     clientInstance = new BinanceClient(config.apiKey, config.apiSecret, config.testnet, proxyUrl);
+  } else if (config.provider === "bitget") {
+    if (!config.apiKey || !config.apiSecret || !config.passphrase) {
+      throw new Error("活跃账户缺少 Bitget 必需凭证");
+    }
+    clientInstance = new BitgetClient(config.apiKey, config.apiSecret, config.passphrase, config.simulated, proxyUrl);
   } else {
     if (!config.apiKey || !config.apiSecret || !config.passphrase) {
       throw new Error("活跃账户缺少 OKX 必需凭证");
@@ -915,6 +945,19 @@ export async function createExchangeClientFromActiveAccount(): Promise<ExchangeH
     return new BinanceClient(
       activeAccount.api_key,
       activeAccount.api_secret,
+      activeAccount.use_paper,
+      proxyUrl
+    );
+  }
+
+  if (activeAccount.provider === "bitget") {
+    if (!activeAccount.api_key || !activeAccount.api_secret || !activeAccount.api_passphrase) {
+      throw new Error("活跃账户缺少 Bitget 必需凭证");
+    }
+    return new BitgetClient(
+      activeAccount.api_key,
+      activeAccount.api_secret,
+      activeAccount.api_passphrase,
       activeAccount.use_paper,
       proxyUrl
     );

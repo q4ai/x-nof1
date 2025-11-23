@@ -135,7 +135,8 @@
 		"empty": "No accounts configured",
 		"providers": {
 			"okx": "OKX",
-			"binance": "Binance"
+			"binance": "Binance",
+			"bitget": "Bitget"
 		},
 		"form": {
 			"name": "Account Name <span class=\"required\">*</span>",
@@ -153,6 +154,12 @@
 			"binanceApiSecret": "API Secret <span class=\"required\">*</span>",
 			"binanceApiSecretPlaceholder": "Enter Binance API Secret",
 			"binanceUseTestnet": "Use Testnet",
+			"bitgetApiKey": "API Key <span class=\"required\">*</span>",
+			"bitgetApiKeyPlaceholder": "Enter Bitget API Key",
+			"bitgetApiSecret": "API Secret <span class=\"required\">*</span>",
+			"bitgetApiSecretPlaceholder": "Enter Bitget API Secret",
+			"bitgetPassphrase": "Passphrase <span class=\"required\">*</span>",
+			"bitgetPassphrasePlaceholder": "Enter Bitget Passphrase",
 			"proxyUrl": "Proxy URL (Optional)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
 			"testConnection": "Test Connection"
@@ -191,7 +198,8 @@
 			"validation": {
 				"missingName": "Please enter account name",
 				"missingOkx": "Please fill in all OKX credentials",
-				"missingBinance": "Please fill in all Binance credentials"
+				"missingBinance": "Please fill in all Binance credentials",
+				"missingBitget": "Please fill in all Bitget credentials"
 			}
 		}
 	},

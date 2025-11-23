@@ -9,6 +9,7 @@ import { createClient } from "@libsql/client";
 import { getQuantoMultiplier } from "../utils/contractUtils";
 import { createLogger } from "../utils/loggerUtils";
 import { createExchangeClient } from "./okxClient";
+import { getActiveAccount } from "./accountConfigService";
 
 const logger = createLogger({
 	name: "dashboard-data-service",
@@ -83,6 +84,9 @@ export interface CandlePoint {
 export async function getCurrentPositions(): Promise<PositionSnapshot[]> {
 	const exchangeClient = createExchangeClient();
 	const exchangePositions = await exchangeClient.getPositions();
+	const activeAccount = await getActiveAccount();
+	const isBitget = activeAccount?.provider === "bitget";
+	const isBinance = activeAccount?.provider === "binance";
 
 	const dbResult = await dbClient.execute(
 		"SELECT symbol, stop_loss, profit_target, opened_at FROM positions",
@@ -126,18 +130,20 @@ export async function getCurrentPositions(): Promise<PositionSnapshot[]> {
 							: null;
 
 				let contractMultiplier = 1;
-				try {
-					contractMultiplier = await getQuantoMultiplier(contract);
-				} catch (error) {
-					const message =
-						error instanceof Error ? error.message : String(error);
-					logger.warn(`获取 ${contract} 合约乘数失败: ${message}`);
+				if (!isBitget && !isBinance) {
+					try {
+						contractMultiplier = await getQuantoMultiplier(contract);
+					} catch (error) {
+						const message =
+							error instanceof Error ? error.message : String(error);
+						logger.warn(`获取 ${contract} 合约乘数失败: ${message}`);
+					}
 				}
 				if (!Number.isFinite(contractMultiplier) || contractMultiplier <= 0) {
 					contractMultiplier = 1;
 				}
 
-				const quantity = contracts * contractMultiplier;
+				const quantity = (isBitget || isBinance) ? contracts : (contracts * contractMultiplier);
 				const currentPrice = Number.parseFloat(position.markPrice || "0");
 				const liquidationPrice = Number.parseFloat(position.liqPrice || "0");
 				const unrealizedPnl = Number.parseFloat(position.unrealisedPnl || "0");

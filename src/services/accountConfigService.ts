@@ -130,7 +130,7 @@ export async function getAccountById(id: number): Promise<AccountConfig | null> 
  */
 export async function createAccount(data: {
   name: string;
-  provider: 'okx' | 'binance';
+  provider: 'okx' | 'binance' | 'bitget';
   api_key: string;
   api_secret: string;
   api_passphrase?: string;
@@ -177,7 +177,7 @@ export async function createAccount(data: {
  */
 export async function updateAccount(id: number, data: {
   name?: string;
-  provider?: 'okx' | 'binance';
+  provider?: 'okx' | 'binance' | 'bitget';
   api_key?: string;
   api_secret?: string;
   api_passphrase?: string;

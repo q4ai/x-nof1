@@ -492,11 +492,25 @@
             </div>
 
             <div class="form-group">
-              <label for="account-edit-provider" data-i18n="accounts.form.provider">Exchange Provider</label>
-              <select id="account-edit-provider">
-                <option value="okx" data-i18n="accounts.providers.okx">OKX</option>
-                <option value="binance" data-i18n="accounts.providers.binance">Binance</option>
-              </select>
+              <label data-i18n="accounts.form.provider">Exchange Provider</label>
+              <input type="hidden" id="account-edit-provider" value="okx">
+              <div class="provider-selector">
+                <div class="provider-option selected" data-value="okx">
+                  <img src="/static/icons/okx.png" alt="OKX">
+                  <span data-i18n="accounts.providers.okx">OKX</span>
+                  <div class="provider-check"></div>
+                </div>
+                <div class="provider-option" data-value="binance">
+                  <img src="/static/icons/binance.png" alt="Binance">
+                  <span data-i18n="accounts.providers.binance">Binance</span>
+                  <div class="provider-check"></div>
+                </div>
+                <div class="provider-option" data-value="bitget">
+                  <img src="/static/icons/bitget.png" alt="Bitget">
+                  <span data-i18n="accounts.providers.bitget">Bitget</span>
+                  <div class="provider-check"></div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -554,11 +568,33 @@
               </div>
             </div>
 
-            <div class="form-group">
-              <label for="account-edit-proxy" data-i18n="accounts.form.proxyUrl">Proxy URL (Optional)</label>
-              <input type="text" id="account-edit-proxy" placeholder="http://proxy.example.com:8080" data-i18n-placeholder="accounts.form.proxyUrlPlaceholder" />
+            <div class="exchange-panel" data-account-panel="bitget">
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.bitgetApiKey">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-bitget-key" placeholder="Bitget API Key" data-i18n-placeholder="accounts.form.bitgetApiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.bitgetApiSecret">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-bitget-secret" placeholder="Bitget API Secret" data-i18n-placeholder="accounts.form.bitgetApiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.bitgetPassphrase">Passphrase <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-bitget-passphrase" placeholder="Bitget Passphrase" data-i18n-placeholder="accounts.form.bitgetPassphrasePlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
             </div>
+
           </div>
+
+          <div id="account-form-test-result" class="api-test-result" style="display: none; margin-bottom: 15px;"></div>
 
           <div class="form-actions">
             <button type="button" class="btn-secondary" id="account-form-test" data-i18n="accounts.form.testConnection">Test Connection</button>

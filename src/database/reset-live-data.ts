@@ -7,7 +7,7 @@
 import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
 import { getDefaultConfigSnapshot } from "./init-config";
-import { createOkxClient } from "../services/okxClient";
+import { createExchangeClientFromActiveAccount } from "../services/okxClient";
 
 const logger = createLogger({
   name: "reset-live-data",
@@ -36,7 +36,7 @@ const PRESERVED_CONFIG_KEYS = new Set([
   "BINANCE_API_KEY",
   "BINANCE_API_SECRET",
   "BINANCE_USE_TESTNET",
-  "INITIAL_BALANCE",
+  // "INITIAL_BALANCE", // 移除 INITIAL_BALANCE，允许重置时更新
   "ACCOUNT_STOP_LOSS_USDT",
   "ACCOUNT_TAKE_PROFIT_USDT",
   "OPENAI_API_KEY",
@@ -99,8 +99,8 @@ export async function resetLiveDataToDefaults(): Promise<ResetLiveDataResult> {
   };
 
   try {
-    const okxClient = createOkxClient();
-    const account = await okxClient.getFuturesAccount();
+    const exchangeClient = await createExchangeClientFromActiveAccount();
+    const account = await exchangeClient.getFuturesAccount();
 
     const accountTotal = Number.parseFloat(account.total ?? "0");
     const available = Number.parseFloat(account.available ?? "0");
@@ -116,11 +116,14 @@ export async function resetLiveDataToDefaults(): Promise<ResetLiveDataResult> {
       unrealizedPnl: safeUnrealised,
     };
 
+    // 更新 INITIAL_BALANCE 为当前账户余额
+    defaults.INITIAL_BALANCE = safeTotal.toString();
+
     logger.info(
-      `[reset] OKX 账户快照: total=${accountSnapshot.totalValue.toFixed(2)}, available=${accountSnapshot.availableCash.toFixed(2)}, unrealized=${accountSnapshot.unrealizedPnl.toFixed(2)}`,
+      `[reset] 账户快照: total=${accountSnapshot.totalValue.toFixed(2)}, available=${accountSnapshot.availableCash.toFixed(2)}, unrealized=${accountSnapshot.unrealizedPnl.toFixed(2)}`,
     );
   } catch (error) {
-    logger.warn("[reset] 获取 OKX 账户快照失败，使用配置的初始余额", error as any);
+    logger.warn("[reset] 获取账户快照失败，使用配置的初始余额", error as any);
   }
 
   const memoryClient = createClient({

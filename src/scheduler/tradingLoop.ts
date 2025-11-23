@@ -1601,6 +1601,8 @@ async function checkAccountThresholds(accountInfo: any): Promise<boolean> {
   if (totalBalance <= accountRiskConfig.stopLossUsdt) {
     logger.error(`触发止损线！余额: ${totalBalance.toFixed(2)} USDT <= ${accountRiskConfig.stopLossUsdt} USDT`);
     await closeAllPositions(`账户余额触发止损线 (${totalBalance.toFixed(2)} USDT)`);
+    // 触发止损后自动停止交易循环，防止反复开仓或误平仓手动交易
+    await setTradingLoopEnabled(false);
     return true;
   }
   
@@ -1608,6 +1610,8 @@ async function checkAccountThresholds(accountInfo: any): Promise<boolean> {
   if (totalBalance >= accountRiskConfig.takeProfitUsdt) {
     logger.warn(`触发止盈线！余额: ${totalBalance.toFixed(2)} USDT >= ${accountRiskConfig.takeProfitUsdt} USDT`);
     await closeAllPositions(`账户余额触发止盈线 (${totalBalance.toFixed(2)} USDT)`);
+    // 触发止盈后自动停止交易循环
+    await setTradingLoopEnabled(false);
     return true;
   }
   

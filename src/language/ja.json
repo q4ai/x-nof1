@@ -139,7 +139,8 @@
 		"empty": "アカウントが設定されていません",
 		"providers": {
 			"okx": "OKX",
-			"binance": "Binance"
+			"binance": "Binance",
+			"bitget": "Bitget"
 		},
 		"form": {
 			"name": "アカウント名 <span class=\"required\">*</span>",
@@ -157,6 +158,12 @@
 			"binanceApiSecret": "API Secret <span class=\"required\">*</span>",
 			"binanceApiSecretPlaceholder": "Binance API Secret を入力",
 			"binanceUseTestnet": "Binance Futures テストネットを使用",
+			"bitgetApiKey": "API Key <span class=\"required\">*</span>",
+			"bitgetApiKeyPlaceholder": "Bitget API Key を入力",
+			"bitgetApiSecret": "API Secret <span class=\"required\">*</span>",
+			"bitgetApiSecretPlaceholder": "Bitget API Secret を入力",
+			"bitgetPassphrase": "Passphrase <span class=\"required\">*</span>",
+			"bitgetPassphrasePlaceholder": "Bitget Passphrase を入力",
 			"proxyUrl": "プロキシURL (任意)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
 			"testConnection": "接続テスト"
@@ -195,7 +202,8 @@
 			"validation": {
 				"missingName": "アカウント名を入力してください",
 				"missingOkx": "OKX の認証情報をすべて入力してください",
-				"missingBinance": "Binance の認証情報をすべて入力してください"
+				"missingBinance": "Binance の認証情報をすべて入力してください",
+				"missingBitget": "Bitget の認証情報をすべて入力してください"
 			}
 		}
 	},

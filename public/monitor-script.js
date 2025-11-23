@@ -6428,8 +6428,10 @@ class TradingMonitor {
     };
 
     const payload = { exchange: target, proxyUrl: proxyValue };
+    let testBtn = null;
 
     if (target === "binance") {
+      testBtn = this.testBinanceBtn;
       const apiKey = this.accountForm.querySelector('[name="BINANCE_API_KEY"]')?.value.trim() || "";
       const apiSecret = this.accountForm.querySelector('[name="BINANCE_API_SECRET"]')?.value.trim() || "";
       const useTestnet = this.accountForm.querySelector('[name="BINANCE_USE_TESTNET"]')?.checked || false;
@@ -6445,6 +6447,7 @@ class TradingMonitor {
         testnet: useTestnet,
       });
     } else {
+      testBtn = this.testOkxBtn;
       const apiKey = this.accountForm.querySelector('[name="OKX_API_KEY"]')?.value.trim() || "";
       const apiSecret = this.accountForm.querySelector('[name="OKX_API_SECRET"]')?.value.trim() || "";
       const passphrase = this.accountForm.querySelector('[name="OKX_API_PASSPHRASE"]')?.value.trim() || "";
@@ -6463,7 +6466,21 @@ class TradingMonitor {
       });
     }
 
-    this.displayApiTestResult("api-test-result", "loading", resolveMessage("testing", "Testing connection..."));
+    // UI Update: Button loading state
+    let originalBtnText = "";
+    if (testBtn) {
+      originalBtnText = testBtn.innerHTML;
+      testBtn.disabled = true;
+      testBtn.textContent = resolveMessage("testing", "Testing...");
+    }
+
+    // Clear previous result, hide container during test
+    const resultContainer = document.getElementById("api-test-result");
+    if (resultContainer) {
+      resultContainer.style.display = "none";
+      resultContainer.classList.remove("success", "error", "loading");
+      resultContainer.textContent = "";
+    }
 
     try {
       const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
@@ -6495,6 +6512,12 @@ class TradingMonitor {
     } catch (error) {
       console.error("[account] 测试交易所 API 失败", error);
       this.displayApiTestResult("api-test-result", "error", resolveMessage("networkError", "Network error, please retry."));
+    } finally {
+      // Restore button state
+      if (testBtn) {
+        testBtn.disabled = false;
+        testBtn.innerHTML = originalBtnText;
+      }
     }
   }
 
@@ -6970,10 +6993,20 @@ class TradingMonitor {
   }
 
   renderAccountCard(account) {
-    const providerLabel = account.provider === "okx"
-      ? this.translate("accounts.providers.okx", "OKX")
-      : this.translate("accounts.providers.binance", "Binance");
-    const providerBadgeClass = account.provider === "okx" ? "badge-okx" : "badge-binance";
+    let providerLabel = "Unknown";
+    let providerBadgeClass = "badge-default";
+    
+    if (account.provider === "okx") {
+      providerLabel = this.translate("accounts.providers.okx", "OKX");
+      providerBadgeClass = "badge-okx";
+    } else if (account.provider === "binance") {
+      providerLabel = this.translate("accounts.providers.binance", "Binance");
+      providerBadgeClass = "badge-binance";
+    } else if (account.provider === "bitget") {
+      providerLabel = this.translate("accounts.providers.bitget", "Bitget");
+      providerBadgeClass = "badge-bitget";
+    }
+
     const providerBadge = `<span class="account-badge ${providerBadgeClass}">${this.escapeHtml(providerLabel)}</span>`;
 
     const paperBadge = account.use_paper
@@ -7119,17 +7152,31 @@ class TradingMonitor {
 
       idField.value = String(account.id);
       const nameInput = document.getElementById("account-edit-name");
-      const providerSelect = document.getElementById("account-edit-provider");
-      const proxyInput = document.getElementById("account-edit-proxy");
+      const providerInput = document.getElementById("account-edit-provider");
+      // const proxyInput = document.getElementById("account-edit-proxy"); // Removed
       if (nameInput) nameInput.value = account.name || "";
-      if (providerSelect) providerSelect.value = account.provider;
-      if (proxyInput) proxyInput.value = account.proxy_url || "";
+      if (providerInput) {
+        providerInput.value = account.provider;
+        // Update visual selection
+        document.querySelectorAll(".provider-option").forEach(opt => {
+          if (opt.dataset.value === account.provider) {
+            opt.classList.add("selected");
+          } else {
+            opt.classList.remove("selected");
+          }
+        });
+      }
+      // if (proxyInput) proxyInput.value = account.proxy_url || ""; // Removed
 
       if (account.provider === "okx") {
         document.getElementById("account-edit-okx-key").value = account.api_key || "";
         document.getElementById("account-edit-okx-secret").value = account.api_secret || "";
         document.getElementById("account-edit-okx-passphrase").value = account.api_passphrase || "";
         document.getElementById("account-edit-okx-paper").checked = Boolean(account.use_paper);
+      } else if (account.provider === "bitget") {
+        document.getElementById("account-edit-bitget-key").value = account.api_key || "";
+        document.getElementById("account-edit-bitget-secret").value = account.api_secret || "";
+        document.getElementById("account-edit-bitget-passphrase").value = account.api_passphrase || "";
       } else {
         document.getElementById("account-edit-binance-key").value = account.api_key || "";
         document.getElementById("account-edit-binance-secret").value = account.api_secret || "";
@@ -7139,6 +7186,18 @@ class TradingMonitor {
       this.updateAccountFormPanels();
     } else {
       // 新建模式
+      const providerInput = document.getElementById("account-edit-provider");
+      if (providerInput) {
+        providerInput.value = "okx";
+        // Reset visual selection to OKX
+        document.querySelectorAll(".provider-option").forEach(opt => {
+          if (opt.dataset.value === "okx") {
+            opt.classList.add("selected");
+          } else {
+            opt.classList.remove("selected");
+          }
+        });
+      }
       this.updateAccountFormPanels();
     }
 
@@ -7147,14 +7206,28 @@ class TradingMonitor {
   }
 
   bindAccountFormEvents() {
-    const providerSelect = document.getElementById("account-edit-provider");
+    const providerOptions = document.querySelectorAll(".provider-option");
     const testBtn = document.getElementById("account-form-test");
     const cancelBtn = document.getElementById("account-form-cancel");
     
-    if (providerSelect && !providerSelect.dataset.bound) {
-      providerSelect.dataset.bound = "true";
-      providerSelect.addEventListener("change", () => this.updateAccountFormPanels());
-    }
+    providerOptions.forEach(option => {
+      if (option.dataset.bound) return;
+      option.dataset.bound = "true";
+      
+      option.addEventListener("click", () => {
+        // Update visual selection
+        providerOptions.forEach(opt => opt.classList.remove("selected"));
+        option.classList.add("selected");
+        
+        // Update hidden input value
+        const value = option.dataset.value;
+        const input = document.getElementById("account-edit-provider");
+        if (input) {
+          input.value = value;
+          this.updateAccountFormPanels();
+        }
+      });
+    });
     
     if (testBtn && !testBtn.dataset.bound) {
       testBtn.dataset.bound = "true";
@@ -7238,14 +7311,14 @@ class TradingMonitor {
   collectAccountFormData() {
     const name = document.getElementById("account-edit-name")?.value?.trim();
     const provider = document.getElementById("account-edit-provider")?.value || "okx";
-    const proxyUrl = document.getElementById("account-edit-proxy")?.value?.trim();
+    // const proxyUrl = document.getElementById("account-edit-proxy")?.value?.trim(); // Removed
     
     if (!name) {
       this.showToast("error", this.translate("common.error", "Error"), this.translate("accounts.messages.validation.missingName", "Please enter account name"));
       return null;
     }
     
-    const data = { name, provider, proxy_url: proxyUrl || undefined };
+    const data = { name, provider }; // Removed proxy_url
     
     if (provider === "okx") {
       const apiKey = document.getElementById("account-edit-okx-key")?.value?.trim();
@@ -7262,6 +7335,20 @@ class TradingMonitor {
       data.api_secret = apiSecret;
       data.api_passphrase = passphrase;
       data.use_paper = usePaper;
+    } else if (provider === "bitget") {
+      const apiKey = document.getElementById("account-edit-bitget-key")?.value?.trim();
+      const apiSecret = document.getElementById("account-edit-bitget-secret")?.value?.trim();
+      const passphrase = document.getElementById("account-edit-bitget-passphrase")?.value?.trim();
+      
+      if (!apiKey || !apiSecret || !passphrase) {
+        this.showToast("error", this.translate("common.error", "Error"), this.translate("accounts.messages.validation.missingBitget", "Please fill in all Bitget credentials"));
+        return null;
+      }
+      
+      data.api_key = apiKey;
+      data.api_secret = apiSecret;
+      data.api_passphrase = passphrase;
+      data.use_paper = false; // Bitget V2 API doesn't support paper trading flag in the same way, or we default to false
     } else {
       const apiKey = document.getElementById("account-edit-binance-key")?.value?.trim();
       const apiSecret = document.getElementById("account-edit-binance-secret")?.value?.trim();
@@ -7284,8 +7371,17 @@ class TradingMonitor {
     const formData = this.collectAccountFormData();
     if (!formData) return;
     const testBtn = document.getElementById("account-form-test");
+    
+    // Clear previous result
+    const resultContainer = document.getElementById("account-form-test-result");
+    if (resultContainer) {
+      resultContainer.style.display = "none";
+      resultContainer.className = "api-test-result";
+      resultContainer.innerHTML = "";
+    }
+
     this.setButtonLoading(testBtn, true, "accounts.form.testConnection", "accounts.actions.testing");
-    this.showToast("info", this.translate("common.info", "Info"), this.translate("accounts.messages.testInProgress", "Testing connection..."));
+    // this.showToast("info", this.translate("common.info", "Info"), this.translate("accounts.messages.testInProgress", "Testing connection..."));
     
     try {
       const csrfToken = this.getCsrfToken();
@@ -7306,15 +7402,15 @@ class TradingMonitor {
           ? ` ${this.translate("accounts.messages.balanceLabel", "(Equity: {{balance}})", { balance: result.balance })}`
           : "";
         const successMessage = `${this.translate("accounts.messages.testSuccess", "Connection successful")}${balanceLabel}`.trim();
-        this.displayApiTestResult("api-test-result", "success", successMessage);
+        this.displayApiTestResult("account-form-test-result", "success", successMessage);
       } else {
         const errorMessage = result.error || this.translate("accounts.messages.testFailed", "Connection failed");
-        this.displayApiTestResult("api-test-result", "error", errorMessage);
+        this.displayApiTestResult("account-form-test-result", "error", errorMessage);
       }
     } catch (error) {
       console.error("测试连接失败:", error);
       const message = error instanceof Error ? error.message : String(error);
-      this.displayApiTestResult("api-test-result", "error", message);
+      this.displayApiTestResult("account-form-test-result", "error", message);
     } finally {
       this.setButtonLoading(testBtn, false, "accounts.form.testConnection");
     }
