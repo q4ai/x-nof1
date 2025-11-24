@@ -132,6 +132,10 @@
 		},
 		"settings": {
 			"title": "システム設定"
+		},
+		"aiModelForm": {
+			"titleAdd": "AIモデルを追加",
+			"titleEdit": "AIモデルを編集"
 		}
 	},
 	"accounts": {
@@ -744,5 +748,43 @@
 		"conservative": "資本保全",
 		"balanced": "バランス拡張",
 		"aggressive": "ブレイクアウトモメンタム"
+	},
+	"aiModels": {
+		"addModel": "+ AIモデルを追加",
+		"empty": "AIモデルが設定されていません",
+		"emptyHint": "上のボタンをクリックして最初のAIモデルを追加してください",
+		"active": "有効",
+		"inactive": "無効",
+		"activate": "有効化",
+		"edit": "編集",
+		"delete": "削除",
+		"test": "接続テスト",
+		"confirmDelete": "AIモデル「{{name}}」を削除してもよろしいですか？",
+		"deleteActiveError": "現在有効なAIモデルは削除できません",
+		"form": {
+			"name": "モデル名",
+			"namePlaceholder": "DeepSeek V3",
+			"provider": "プロバイダー",
+			"providerPlaceholder": "OpenRouter / DeepSeek / OpenAI",
+			"baseUrl": "APIベースURL",
+			"baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+			"apiKey": "APIキー",
+			"apiKeyPlaceholder": "sk-...",
+			"modelName": "モデル名",
+			"modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
+			"testButton": "🔍 接続テスト"
+		},
+		"messages": {
+			"loadFailed": "モデルデータの読み込みに失敗しました",
+			"createSuccess": "AIモデルを作成しました",
+			"updateSuccess": "AIモデルを更新しました",
+			"activateSuccess": "AIモデルを有効化しました",
+			"activateConfirm": "このAIモデルに切り替えますか？トレーディングシステムが再起動されます。",
+			"testSuccess": "接続成功",
+			"testFailed": "接続失敗",
+			"testError": "テスト失敗",
+			"testing": "接続をテスト中...",
+			"fillRequiredForTest": "APIキー、ベースURL、モデル名を入力してください"
+		}
 	}
 }

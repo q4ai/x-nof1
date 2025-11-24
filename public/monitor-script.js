@@ -497,6 +497,7 @@ class TradingMonitor {
     this.tradingLoopConfirmTimer = null;
     this.tradingLoopDisableConfirm = false;
   this.accountsCache = [];
+  this.aiModelsCache = [];
 
     this.strategyPromptCache = new Map();
 
@@ -4763,6 +4764,11 @@ class TradingMonitor {
               panel.classList.remove("active");
             }
           });
+
+          // Load AI models list when switching to AI tab
+          if (targetTab === "ai") {
+            this.loadAiModelsList();
+          }
         });
       }
     }
@@ -7142,7 +7148,7 @@ class TradingMonitor {
 
     let activateBtn;
     if (account.is_active) {
-      activateBtn = `<button class="account-action-btn" disabled>${this.escapeHtml(currentLabel)}</button>`;
+      activateBtn = `<button type="button" class="account-action-btn" disabled>${this.escapeHtml(currentLabel)}</button>`;
     } else {
       const confirmMessage = this.escapeHtml(this.translate("accounts.messages.activateConfirm", "Switch to this account? The trading system will restart."));
       const confirmLabel = this.escapeHtml(this.translate("common.confirm", "Confirm"));
@@ -7756,6 +7762,11 @@ class TradingMonitor {
 
     button.textContent = message;
 
+    if (duration === null) {
+      delete button.dataset.statusTimeoutId;
+      return;
+    }
+
     const timeoutId = window.setTimeout(() => {
       this.clearButtonStatusState(button);
       const idleText = idleKey
@@ -7843,6 +7854,538 @@ class TradingMonitor {
     const popover = document.querySelector(`.activate-confirmation-popover[data-account-id="${accountId}"]`);
     if (popover) {
       popover.classList.remove("is-visible");
+    }
+  }
+
+  // ========== AI 模型管理 ==========
+
+  async loadAiModelsList() {
+    const container = document.getElementById("ai-models-list-container");
+    const loading = document.getElementById("ai-models-loading");
+    
+    if (!container) return;
+    
+    try {
+      if (loading) {
+        loading.style.display = "flex";
+      }
+      
+      const response = await fetch("/api/ai-models", {
+        credentials: "include",
+      });
+      
+      if (!response.ok) {
+        throw new Error("获取 AI 模型列表失败");
+      }
+      
+      const data = await response.json();
+      const models = data.models || [];
+      this.aiModelsCache = models;
+
+      if (loading) {
+        loading.style.display = "none";
+      }
+      
+      if (models.length === 0) {
+        const emptyText = this.translate("aiModels.empty", "No AI models configured");
+        const emptyHint = this.translate("aiModels.emptyHint", "Click the button above to add your first AI model");
+        container.innerHTML = `
+          <div class="empty-accounts">
+            <div class="empty-accounts-icon">🤖</div>
+            <div class="empty-accounts-text">${this.escapeHtml(emptyText)}</div>
+            <div class="empty-accounts-hint">${this.escapeHtml(emptyHint)}</div>
+          </div>
+        `;
+        return;
+      }
+      
+      container.innerHTML = models.map(model => this.renderAiModelCard(model)).join("");
+      this.bindAiModelCardEvents();
+      
+    } catch (error) {
+      console.error("加载 AI 模型列表失败:", error);
+      this.aiModelsCache = [];
+      if (loading) {
+        loading.style.display = "none";
+      }
+      const errorText = this.translate("aiModels.messages.loadError", "加载失败，请稍后重试");
+      container.innerHTML = `
+        <div class="empty-accounts">
+          <div class="empty-accounts-text" style="color: var(--accent-red);">${this.escapeHtml(errorText)}</div>
+        </div>
+      `;
+      this.showToast("error", this.translate("common.error", "Error"), errorText);
+    }
+  }
+
+  renderAiModelCard(model) {
+    const activeBadge = model.is_active
+      ? `<span class="account-badge badge-active">${this.escapeHtml(this.translate("aiModels.active", "Active"))}</span>`
+      : "";
+
+    const activateLabel = this.translate("aiModels.activate", "Activate");
+    const currentLabel = this.translate("aiModels.active", "Active");
+    const editLabel = this.translate("aiModels.edit", "Edit");
+    const deleteLabel = this.translate("aiModels.delete", "Delete");
+    const testLabel = this.translate("aiModels.test", "Test");
+
+    let activateBtn;
+    if (model.is_active) {
+      activateBtn = `<button class="account-action-btn" disabled>${this.escapeHtml(currentLabel)}</button>`;
+    } else {
+      const confirmMessage = this.escapeHtml(this.translate("aiModels.messages.activateConfirm", "Switch to this AI model? The trading system will restart."));
+      const confirmLabel = this.escapeHtml(this.translate("common.confirm", "Confirm"));
+      const cancelLabel = this.escapeHtml(this.translate("common.cancel", "Cancel"));
+      
+      activateBtn = `
+        <button type="button" class="account-action-btn" data-action="activate" data-model-id="${model.id}" 
+          data-confirm="${confirmMessage}"
+          data-confirm-label="${confirmLabel}"
+          data-cancel-label="${cancelLabel}">
+          ${this.escapeHtml(activateLabel)}
+        </button>
+      `;
+    }
+
+    return `
+      <div class="account-card" data-model-id="${model.id}">
+        <div class="account-card-header">
+          <div class="account-card-title">
+            <span class="account-name">${this.escapeHtml(model.name)}</span>
+            ${activeBadge}
+          </div>
+        </div>
+        <div class="account-card-body">
+          <div class="account-card-row">
+            <span class="account-card-label">Base URL:</span>
+            <span class="account-card-value">${this.escapeHtml(model.base_url)}</span>
+          </div>
+          <div class="account-card-row">
+            <span class="account-card-label">Model:</span>
+            <span class="account-card-value">${this.escapeHtml(model.model_name)}</span>
+          </div>
+          <div class="account-card-row">
+            <span class="account-card-label">API Key:</span>
+            <span class="account-card-value code">${this.escapeHtml(model.api_key_preview)}</span>
+          </div>
+        </div>
+        <div class="account-card-actions">
+          ${activateBtn}
+          <button type="button" class="account-action-btn" data-action="test" data-model-id="${model.id}">${this.escapeHtml(testLabel)}</button>
+          <button type="button" class="account-action-btn" data-action="edit" data-model-id="${model.id}">${this.escapeHtml(editLabel)}</button>
+          <button type="button" class="account-action-btn account-action-btn-danger" data-action="delete" data-model-id="${model.id}">${this.escapeHtml(deleteLabel)}</button>
+        </div>
+      </div>
+    `;
+  }
+
+  bindAiModelCardEvents() {
+    const addBtn = document.getElementById("add-ai-model-btn");
+    if (addBtn && !addBtn.dataset.bound) {
+      addBtn.dataset.bound = "true";
+      addBtn.addEventListener("click", () => this.openAiModelFormModal());
+    }
+
+    const container = document.getElementById("ai-models-list-container");
+    if (!container) return;
+
+    container.querySelectorAll("[data-action]").forEach(btn => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = "true";
+      
+      btn.addEventListener("click", async (e) => {
+        const action = btn.dataset.action;
+        const modelId = btn.dataset.modelId;
+        
+        switch (action) {
+          case "edit":
+            await this.openAiModelFormModal(Number(modelId));
+            break;
+          case "delete":
+            await this.deleteAiModel(Number(modelId), btn);
+            break;
+          case "activate":
+            await this.activateAiModel(Number(modelId), btn);
+            break;
+          case "test":
+            await this.testAiModelConnection(Number(modelId), btn);
+            break;
+        }
+      });
+    });
+  }
+
+  async openAiModelFormModal(modelId = null) {
+    const modal = document.getElementById("ai-model-form-modal");
+    const form = document.getElementById("ai-model-edit-form");
+    
+    if (!modal || !form) return;
+    
+    const title = document.getElementById("ai-model-form-title");
+    const idField = document.getElementById("ai-model-edit-id");
+    
+    // 重置表单
+    form.reset();
+    if (idField) idField.value = "";
+    
+    const titleKey = modelId ? "modals.aiModelForm.titleEdit" : "modals.aiModelForm.titleAdd";
+    if (title) {
+      title.setAttribute("data-i18n", titleKey);
+      title.textContent = this.translate(titleKey, modelId ? "Edit AI Model" : "Add AI Model");
+    }
+
+    if (modelId) {
+      // 编辑模式 - 从API获取完整模型数据（包括完整API Key）
+      try {
+        const response = await fetch(`/api/ai-models/${modelId}`, {
+          credentials: "include",
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          const model = data.model;
+          
+          if (model) {
+            if (idField) idField.value = model.id;
+            const nameField = document.getElementById("ai-model-edit-name");
+            const baseUrlField = document.getElementById("ai-model-edit-base-url");
+            const apiKeyField = document.getElementById("ai-model-edit-api-key");
+            const modelNameField = document.getElementById("ai-model-edit-model-name");
+            
+            if (nameField) nameField.value = model.name;
+            if (baseUrlField) baseUrlField.value = model.base_url;
+            if (apiKeyField) apiKeyField.value = model.api_key || ""; // 显示完整 API Key
+            if (modelNameField) modelNameField.value = model.model_name;
+            
+            // 同步 base URL 预设选择器
+            const preset = document.getElementById("ai-model-base-url-preset");
+            if (preset && baseUrlField) {
+              const matchingOption = Array.from(preset.options).find(
+                option => option.value && option.value === baseUrlField.value
+              );
+              preset.value = matchingOption ? matchingOption.value : "";
+            }
+          }
+        }
+      } catch (error) {
+        console.error("加载 AI 模型数据失败:", error);
+        this.showToast("error", this.translate("common.error", "Error"), this.translate("aiModels.messages.loadFailed", "Failed to load model data"));
+      }
+    }
+    
+    this.showModal(modal);
+    
+    // 绑定表单提交
+    if (!form.dataset.submitBound) {
+      form.dataset.submitBound = "true";
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        await this.submitAiModelForm();
+      });
+    }
+    
+    // 绑定取消按钮
+    const cancelBtn = document.getElementById("ai-model-cancel");
+    if (cancelBtn && !cancelBtn.dataset.bound) {
+      cancelBtn.dataset.bound = "true";
+      cancelBtn.addEventListener("click", () => this.hideModal(modal));
+    }
+    
+    // 绑定右上角关闭按钮
+    const closeBtn = modal.querySelector(".modal-close");
+    if (closeBtn && !closeBtn.dataset.bound) {
+      closeBtn.dataset.bound = "true";
+      closeBtn.addEventListener("click", () => this.hideModal(modal));
+    }
+    
+    // 绑定测试按钮
+    const testBtn = document.getElementById("ai-model-test");
+    if (testBtn && !testBtn.dataset.bound) {
+      testBtn.dataset.bound = "true";
+      testBtn.addEventListener("click", async () => {
+        await this.testAiModelFormConnection();
+      });
+    }
+    
+    // 绑定 Base URL 选择器
+    this.bindAiModelBaseUrlSelector();
+  }
+
+  bindAiModelBaseUrlSelector() {
+    const preset = document.getElementById("ai-model-base-url-preset");
+    const input = document.getElementById("ai-model-edit-base-url");
+    
+    if (!preset || !input) return;
+    
+    if (!preset.dataset.bound) {
+      preset.dataset.bound = "true";
+      preset.addEventListener("change", (e) => {
+        const selectedValue = e.target.value;
+        if (selectedValue) {
+          input.value = selectedValue;
+        } else {
+          input.value = "";
+          input.focus();
+        }
+      });
+    }
+    
+    if (!input.dataset.bound) {
+      input.dataset.bound = "true";
+      input.addEventListener("input", () => {
+        const currentValue = input.value.trim();
+        const matchingOption = Array.from(preset.options).find(
+          option => option.value && option.value === currentValue
+        );
+        preset.value = matchingOption ? matchingOption.value : "";
+      });
+    }
+  }
+
+  async submitAiModelForm() {
+    const form = document.getElementById("ai-model-edit-form");
+    const modal = document.getElementById("ai-model-form-modal");
+    
+    if (!form) return;
+    
+    const idField = document.getElementById("ai-model-edit-id");
+    const nameField = document.getElementById("ai-model-edit-name");
+    const baseUrlField = document.getElementById("ai-model-edit-base-url");
+    const apiKeyField = document.getElementById("ai-model-edit-api-key");
+    const modelNameField = document.getElementById("ai-model-edit-model-name");
+    
+    const modelId = idField?.value ? Number(idField.value) : null;
+    const name = nameField?.value.trim();
+    const base_url = baseUrlField?.value.trim();
+    const api_key = apiKeyField?.value.trim();
+    const model_name = modelNameField?.value.trim();
+    
+    if (!name || !base_url || !model_name) {
+      this.showToast("error", this.translate("common.error", "Error"), this.translate("aiModels.messages.fillRequired", "Please fill in all required fields"));
+      return;
+    }
+    
+    // 编辑模式下如果 API Key 为空，不传递该字段
+    const payload = {
+      name,
+      base_url,
+      model_name,
+    };
+    
+    if (api_key || !modelId) {
+      payload.api_key = api_key;
+    }
+    
+    try {
+      const csrfToken = this.getCsrfToken();
+      const url = modelId ? `/api/ai-models/${modelId}` : "/api/ai-models";
+      const method = modelId ? "PUT" : "POST";
+      
+      const response = await fetch(url, {
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "保存失败");
+      }
+      
+      const successKey = modelId ? "aiModels.messages.updateSuccess" : "aiModels.messages.createSuccess";
+      this.showToast("success", this.translate("common.success", "Success"), this.translate(successKey, "AI model saved"));
+      
+      if (modal) this.hideModal(modal);
+      await this.loadAiModelsList();
+      
+    } catch (error) {
+      console.error("保存 AI 模型失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
+  async testAiModelFormConnection() {
+    const apiKeyField = document.getElementById("ai-model-edit-api-key");
+    const baseUrlField = document.getElementById("ai-model-edit-base-url");
+    const modelNameField = document.getElementById("ai-model-edit-model-name");
+    const resultDiv = document.getElementById("ai-model-test-result");
+    
+    const api_key = apiKeyField?.value.trim();
+    const base_url = baseUrlField?.value.trim();
+    const model_name = modelNameField?.value.trim();
+    
+    if (!api_key || !base_url || !model_name) {
+      this.showToast("error", this.translate("common.error", "Error"), this.translate("aiModels.messages.fillRequiredForTest", "Please fill in API Key, Base URL, and Model Name"));
+      return;
+    }
+    
+    if (resultDiv) {
+      resultDiv.style.display = "block";
+      resultDiv.className = "api-test-result testing";
+      resultDiv.textContent = this.translate("aiModels.messages.testing", "Testing connection...");
+    }
+    
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch("/api/ai-models/test", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        body: JSON.stringify({ api_key, base_url, model_name }),
+      });
+      
+      const data = await response.json();
+      
+      if (resultDiv) {
+        if (data.success) {
+          resultDiv.className = "api-test-result success";
+          resultDiv.textContent = `✅ ${this.translate("aiModels.messages.testSuccess", "Connection successful")} (${data.duration})`;
+        } else {
+          resultDiv.className = "api-test-result error";
+          resultDiv.textContent = `❌ ${this.translate("aiModels.messages.testFailed", "Connection failed")}: ${data.error}`;
+        }
+      }
+      
+    } catch (error) {
+      console.error("测试 AI 模型连接失败:", error);
+      if (resultDiv) {
+        resultDiv.className = "api-test-result error";
+        resultDiv.textContent = `❌ ${this.translate("aiModels.messages.testError", "Test failed")}: ${error instanceof Error ? error.message : String(error)}`;
+      }
+    }
+  }
+
+  async testAiModelConnection(modelId, triggerBtn) {
+    if (!modelId || !triggerBtn) return;
+    
+    try {
+      this.setButtonLoading(triggerBtn, true, null, "aiModels.messages.testing");
+      
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/ai-models/${modelId}/test`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+      
+      const data = await response.json();
+      let statusType = "error";
+      let statusMessage = this.translate("aiModels.messages.testFailed", "Connection failed");
+      
+      if (data.success) {
+        statusType = "success";
+        statusMessage = `${this.translate("aiModels.messages.testSuccess", "Connection successful")} (${data.duration})`;
+      } else if (data.error) {
+        statusMessage = `${this.translate("aiModels.messages.testFailed", "Connection failed")}: ${data.error}`;
+      }
+      
+      this.setButtonLoading(triggerBtn, false);
+      this.showButtonInlineStatus(triggerBtn, statusMessage, statusType, null);
+      
+    } catch (error) {
+      console.error("测试 AI 模型连接失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.setButtonLoading(triggerBtn, false);
+      this.showButtonInlineStatus(
+        triggerBtn,
+        `${this.translate("aiModels.messages.testError", "Test failed")}: ${message}`,
+        "error",
+        null
+      );
+    }
+  }
+
+  async activateAiModel(modelId, triggerBtn) {
+    if (!modelId) return;
+    
+    const confirmMessage = triggerBtn?.dataset.confirm || this.translate("aiModels.messages.activateConfirm", "Switch to this AI model? The trading system will restart.");
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
+    try {
+      this.setButtonLoading(triggerBtn, true);
+      
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/ai-models/${modelId}/activate`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "激活失败");
+      }
+      
+      this.showToast("success", this.translate("common.success", "Success"), this.translate("aiModels.messages.activateSuccess", "AI model activated"));
+      await this.loadAiModelsList();
+      // 刷新全局配置以更新图标
+      await this.fetchFullConfig(true);
+      
+    } catch (error) {
+      console.error("激活 AI 模型失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false);
+    }
+  }
+
+  async deleteAiModel(modelId, triggerBtn) {
+    if (!modelId) return;
+    
+    const model = this.aiModelsCache?.find(m => m.id === modelId);
+    const modelName = model ? model.name : `ID ${modelId}`;
+    
+    const confirmMessage = this.translate("aiModels.confirmDelete", "Confirm deletion of AI model「{{name}}」?", { name: modelName });
+    
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+    
+    try {
+      this.setButtonLoading(triggerBtn, true);
+      
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/ai-models/${modelId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+      
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "删除失败");
+      }
+      
+      this.showToast("success", this.translate("common.success", "Success"), this.translate("aiModels.messages.deleteSuccess", "AI model deleted"));
+      await this.loadAiModelsList();
+      
+    } catch (error) {
+      console.error("删除 AI 模型失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false);
     }
   }
 }

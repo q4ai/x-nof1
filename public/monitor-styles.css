@@ -2459,7 +2459,7 @@ a:hover {
   color: var(--text-primary);
 }
 
-#base-url-input {
+#ai-model-edit-base-url {
   flex: 1;
 }
 

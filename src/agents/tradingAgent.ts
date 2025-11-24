@@ -746,9 +746,27 @@ export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAg
 	const { getAllConfig } = await import("../database/init-config");
 	const config = await getAllConfig();
 
-	const apiKey = config.OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
-	const baseURL = config.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1";
-	const modelName = config.AI_MODEL_NAME || process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
+	// 优先从数据库获取激活的 AI 模型配置
+	const { getActiveAiModel } = await import("../services/aiModelService");
+	const activeModel = await getActiveAiModel();
+
+	let apiKey: string;
+	let baseURL: string;
+	let modelName: string;
+
+	if (activeModel) {
+		// 使用数据库中的激活模型
+		apiKey = activeModel.api_key;
+		baseURL = activeModel.base_url;
+		modelName = activeModel.model_name;
+		logger.info(`使用数据库 AI 模型配置: ${activeModel.name} (ID: ${activeModel.id})`);
+	} else {
+		// 回退到 system_config 或 .env
+		apiKey = config.OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
+		baseURL = config.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1";
+		modelName = config.AI_MODEL_NAME || process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
+		logger.warn("未找到激活的 AI 模型配置，使用默认配置");
+	}
 
 	if (!apiKey) {
 		logger.warn("OPENAI_API_KEY 未配置，AI Agent 将无法正常调用模型");

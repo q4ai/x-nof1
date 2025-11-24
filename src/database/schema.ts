@@ -335,6 +335,18 @@ CREATE TABLE IF NOT EXISTS account_configs (
   updated_at TEXT NOT NULL
 );
 
+-- AI 模型配置表
+CREATE TABLE IF NOT EXISTS ai_models (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  api_key TEXT NOT NULL,
+  base_url TEXT NOT NULL,
+  model_name TEXT NOT NULL,
+  is_active INTEGER NOT NULL DEFAULT 0,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 -- Binance 合约下单精度表
 CREATE TABLE IF NOT EXISTS binance_contract_precisions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -370,6 +382,7 @@ CREATE INDEX IF NOT EXISTS idx_decisions_timestamp ON agent_decisions(timestamp)
 CREATE INDEX IF NOT EXISTS idx_agent_request_logs_created_at ON agent_request_logs(created_at);
 CREATE INDEX IF NOT EXISTS idx_binance_contract_precisions_contract ON binance_contract_precisions(contract);
 CREATE INDEX IF NOT EXISTS idx_account_configs_is_active ON account_configs(is_active);
+CREATE INDEX IF NOT EXISTS idx_ai_models_is_active ON ai_models(is_active);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 `;
 

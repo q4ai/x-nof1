@@ -1213,6 +1213,356 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     }
   });
 
+  // ========== AI 模型管理 API ==========
+
+  /**
+   * 获取所有 AI 模型配置
+   */
+  app.get("/api/ai-models", requireAuth, async (c) => {
+    try {
+      const { getAllAiModels } = await import("../services/aiModelService");
+      const models = await getAllAiModels();
+      
+      // 隐藏敏感信息
+      const safeModels = models.map(model => ({
+        id: model.id,
+        name: model.name,
+        base_url: model.base_url,
+        model_name: model.model_name,
+        is_active: model.is_active,
+        created_at: model.created_at,
+        updated_at: model.updated_at,
+        // 部分隐藏 API Key
+        api_key_preview: model.api_key ? `${model.api_key.substring(0, 8)}...${model.api_key.substring(model.api_key.length - 4)}` : '',
+      }));
+      
+      return c.json({ models: safeModels });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取 AI 模型列表失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取当前激活的 AI 模型
+   */
+  app.get("/api/ai-models/active", requireAuth, async (c) => {
+    try {
+      const { getActiveAiModel } = await import("../services/aiModelService");
+      const model = await getActiveAiModel();
+      
+      if (!model) {
+        return c.json({ model: null });
+      }
+      
+      // 隐藏敏感信息
+      const safeModel = {
+        id: model.id,
+        name: model.name,
+        base_url: model.base_url,
+        model_name: model.model_name,
+        is_active: model.is_active,
+        created_at: model.created_at,
+        updated_at: model.updated_at,
+        api_key_preview: model.api_key ? `${model.api_key.substring(0, 8)}...${model.api_key.substring(model.api_key.length - 4)}` : '',
+      };
+      
+      return c.json({ model: safeModel });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取当前 AI 模型失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取单个 AI 模型的完整信息（包括完整 API Key，用于编辑）
+   */
+  app.get("/api/ai-models/:id", requireAuth, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的模型ID" }, 400);
+      }
+      
+      const { getAiModelById } = await import("../services/aiModelService");
+      const model = await getAiModelById(id);
+      
+      if (!model) {
+        return c.json({ error: "模型不存在" }, 404);
+      }
+      
+      // 返回完整信息（包括完整 API Key）供编辑使用
+      return c.json({ model });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error(`获取 AI 模型详情失败 (ID: ${c.req.param("id")}):`, error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 创建新的 AI 模型配置
+   */
+  app.post("/api/ai-models", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json();
+      const { name, api_key, base_url, model_name } = body;
+      
+      if (!name || !api_key || !base_url || !model_name) {
+        return c.json({ error: "缺少必需参数" }, 400);
+      }
+      
+      const { createAiModel } = await import("../services/aiModelService");
+      const model = await createAiModel({
+        name: String(name),
+        api_key: String(api_key),
+        base_url: String(base_url),
+        model_name: String(model_name),
+      });
+      
+      logger.info(`创建 AI 模型成功: ${model.name} (ID: ${model.id})`);
+      
+      return c.json({ 
+        success: true,
+        model: {
+          id: model.id,
+          name: model.name,
+          base_url: model.base_url,
+          model_name: model.model_name,
+          is_active: model.is_active,
+          created_at: model.created_at,
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("创建 AI 模型失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 更新 AI 模型配置
+   */
+  app.put("/api/ai-models/:id", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的模型ID" }, 400);
+      }
+      
+      const body = await c.req.json();
+      const { name, api_key, base_url, model_name } = body;
+      
+      const { updateAiModel } = await import("../services/aiModelService");
+      const model = await updateAiModel(id, {
+        name: name !== undefined ? String(name) : undefined,
+        api_key: api_key !== undefined ? String(api_key) : undefined,
+        base_url: base_url !== undefined ? String(base_url) : undefined,
+        model_name: model_name !== undefined ? String(model_name) : undefined,
+      });
+      
+      logger.info(`更新 AI 模型成功: ${model.name} (ID: ${model.id})`);
+      
+      return c.json({ 
+        success: true,
+        model: {
+          id: model.id,
+          name: model.name,
+          provider: model.provider,
+          base_url: model.base_url,
+          model_name: model.model_name,
+          is_active: model.is_active,
+          updated_at: model.updated_at,
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("更新 AI 模型失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 删除 AI 模型配置
+   */
+  app.delete("/api/ai-models/:id", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的模型ID" }, 400);
+      }
+      
+      const { deleteAiModel } = await import("../services/aiModelService");
+      await deleteAiModel(id);
+      
+      logger.info(`删除 AI 模型成功: ID ${id}`);
+      
+      return c.json({ success: true });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("删除 AI 模型失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 激活指定的 AI 模型
+   */
+  app.post("/api/ai-models/:id/activate", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的模型ID" }, 400);
+      }
+      
+      const { setActiveAiModel } = await import("../services/aiModelService");
+      const model = await setActiveAiModel(id);
+      
+      logger.info(`激活 AI 模型成功: ${model.name} (ID: ${model.id})`);
+      
+      // 重新加载交易循环以使用新的 AI 模型
+      logger.info("正在重新加载交易系统以使用新 AI 模型...");
+      await reloadRiskParams();
+      await restartTradingLoop();
+      
+      return c.json({ 
+        success: true,
+        model: {
+          id: model.id,
+          name: model.name,
+          provider: model.provider,
+          base_url: model.base_url,
+          model_name: model.model_name,
+          is_active: model.is_active,
+        }
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("激活 AI 模型失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 测试 AI 模型连接
+   */
+  app.post("/api/ai-models/test", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json();
+      const { api_key, base_url, model_name } = body;
+      
+      if (!api_key || !base_url || !model_name) {
+        return c.json({ error: "缺少必需参数" }, 400);
+      }
+      
+      // 使用 AI SDK 测试连接
+      const { createOpenAI } = await import("@ai-sdk/openai");
+      const { generateText } = await import("ai");
+      
+      const openai = createOpenAI({
+        apiKey: String(api_key),
+        baseURL: String(base_url),
+      });
+      
+      const startTime = Date.now();
+      const result = await generateText({
+        model: openai(String(model_name)),
+        prompt: "Hello",
+      });
+      const duration = Date.now() - startTime;
+      
+      logger.info(`AI 模型连接测试成功，耗时 ${duration}ms`);
+      
+      return c.json({ 
+        success: true,
+        message: "连接测试成功",
+        response: result.text,
+        duration: `${duration}ms`
+      });
+    } catch (error: unknown) {
+      let message = "未知错误";
+      
+      if (error instanceof Error) {
+        message = error.message;
+        // 如果是AI SDK错误，尝试提取更详细的信息
+        if ('cause' in error && error.cause) {
+          const cause = error.cause as any;
+          if (cause.message) {
+            message = `${message}: ${cause.message}`;
+          }
+        }
+      }
+      
+      logger.error("AI 模型连接测试失败:", { error, message });
+      return c.json({ success: false, error: message });
+    }
+  });
+
+  /**
+   * 测试指定 ID 的 AI 模型连接
+   */
+  app.post("/api/ai-models/:id/test", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的模型ID" }, 400);
+      }
+
+      const { getAiModelById } = await import("../services/aiModelService");
+      const model = await getAiModelById(id);
+      if (!model) {
+        return c.json({ error: "模型不存在" }, 404);
+      }
+
+      if (!model.api_key || !model.base_url || !model.model_name) {
+        return c.json({ error: "模型配置不完整" }, 400);
+      }
+
+      // 使用 AI SDK 测试连接
+      const { createOpenAI } = await import("@ai-sdk/openai");
+      const { generateText } = await import("ai");
+      
+      const openai = createOpenAI({
+        apiKey: model.api_key,
+        baseURL: model.base_url,
+      });
+      
+      const startTime = Date.now();
+      const result = await generateText({
+        model: openai(model.model_name),
+        prompt: "Hello",
+      });
+      const duration = Date.now() - startTime;
+      
+      logger.info(`AI 模型(${model.name})连接测试成功，耗时 ${duration}ms`);
+      
+      return c.json({ 
+        success: true,
+        message: "连接测试成功",
+        response: result.text,
+        duration: `${duration}ms`
+      });
+    } catch (error: unknown) {
+      let message = "未知错误";
+      
+      if (error instanceof Error) {
+        message = error.message;
+        // 如果是AI SDK错误，尝试提取更详细的信息
+        if ('cause' in error && error.cause) {
+          const cause = error.cause as any;
+          if (cause.message) {
+            message = `${message}: ${cause.message}`;
+          }
+        }
+      }
+      
+      logger.error("AI 模型连接测试失败:", { error, message });
+      return c.json({ success: false, error: message });
+    }
+  });
+
   /**
    * 获取账户总览
    * 

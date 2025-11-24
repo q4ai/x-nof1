@@ -133,6 +133,10 @@
 		},
 		"settings": {
 			"title": "系统设置"
+		},
+		"aiModelForm": {
+			"titleAdd": "添加 AI 模型",
+			"titleEdit": "编辑 AI 模型"
 		}
 	},
 	"tables": {
@@ -748,5 +752,43 @@
 		"conservative": "稳健",
 		"balanced": "平衡",
 		"aggressive": "激进"
+	},
+	"aiModels": {
+		"addModel": "+ 添加 AI 模型",
+		"empty": "暂无 AI 模型配置",
+		"emptyHint": "点击上方按钮添加您的第一个 AI 模型配置",
+		"active": "激活",
+		"inactive": "未激活",
+		"activate": "激活",
+		"edit": "编辑",
+		"delete": "删除",
+		"test": "测试连接",
+		"confirmDelete": "确认删除 AI 模型「{{name}}」？",
+		"deleteActiveError": "无法删除当前激活的 AI 模型",
+		"form": {
+			"name": "模型名称",
+			"namePlaceholder": "DeepSeek V3",
+			"provider": "提供商",
+			"providerPlaceholder": "OpenRouter / DeepSeek / OpenAI",
+			"baseUrl": "API 基础地址",
+			"baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+			"apiKey": "API Key",
+			"apiKeyPlaceholder": "sk-...",
+			"modelName": "模型名称",
+			"modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
+			"testButton": "🔍 测试连接"
+		},
+		"messages": {
+			"loadFailed": "加载模型数据失败",
+			"createSuccess": "AI 模型创建成功",
+			"updateSuccess": "AI 模型更新成功",
+			"activateSuccess": "AI 模型已激活",
+			"activateConfirm": "切换到此 AI 模型？交易系统将重启。",
+			"testSuccess": "连接成功",
+			"testFailed": "连接失败",
+			"testError": "测试失败",
+			"testing": "正在测试连接...",
+			"fillRequiredForTest": "请填写 API Key、Base URL 和 Model Name"
+		}
 	}
 }

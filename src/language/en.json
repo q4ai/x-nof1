@@ -128,6 +128,10 @@
 		},
 		"settings": {
 			"title": "System Settings"
+		},
+		"aiModelForm": {
+			"titleAdd": "Add AI Model",
+			"titleEdit": "Edit AI Model"
 		}
 	},
 	"accounts": {
@@ -732,5 +736,43 @@
 		"conservative": "Conservative",
 		"balanced": "Balanced",
 		"aggressive": "Aggressive"
+	},
+	"aiModels": {
+		"addModel": "+ Add AI Model",
+		"empty": "No AI models configured",
+		"emptyHint": "Click the button above to add your first AI model",
+		"active": "Active",
+		"inactive": "Inactive",
+		"activate": "Activate",
+		"edit": "Edit",
+		"delete": "Delete",
+		"test": "Test Connection",
+		"confirmDelete": "Confirm deletion of AI model \u300c{{name}}\u300d?",
+		"deleteActiveError": "Cannot delete the currently active AI model",
+		"form": {
+			"name": "Model Name",
+			"namePlaceholder": "DeepSeek V3",
+			"provider": "Provider",
+			"providerPlaceholder": "OpenRouter / DeepSeek / OpenAI",
+			"baseUrl": "API Base URL",
+			"baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+			"apiKey": "API Key",
+			"apiKeyPlaceholder": "sk-...",
+			"modelName": "Model Name",
+			"modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
+			"testButton": "\ud83d\udd0d Test Connection"
+		},
+		"messages": {
+			"loadFailed": "Failed to load model data",
+			"createSuccess": "AI model created successfully",
+			"updateSuccess": "AI model updated successfully",
+			"activateSuccess": "AI model activated",
+			"activateConfirm": "Switch to this AI model? The trading system will restart.",
+			"testSuccess": "Connection successful",
+			"testFailed": "Connection failed",
+			"testError": "Test failed",
+			"testing": "Testing connection...",
+			"fillRequiredForTest": "Please fill in API Key, Base URL, and Model Name"
+		}
 	}
 }
