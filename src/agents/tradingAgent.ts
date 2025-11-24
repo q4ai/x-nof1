@@ -75,8 +75,8 @@ async function loadPromptTemplate(language: StrategyLanguage): Promise<string> {
 }
 
 export interface AccountRiskConfig {
-	stopLossUsdt: number;
-	takeProfitUsdt: number;
+	stopLossUsdt?: number;
+	takeProfitUsdt?: number;
 	syncOnStartup: boolean;
 }
 
@@ -89,17 +89,34 @@ export async function getAccountRiskConfig(forceReload = false): Promise<Account
 
 	try {
 		const { getConfigValue } = await import("../database/init-config");
-		const stopLossStr = await getConfigValue("ACCOUNT_STOP_LOSS_USDT");
-		const takeProfitStr = await getConfigValue("ACCOUNT_TAKE_PROFIT_USDT");
+        const { getActiveAccount } = await import("../services/accountConfigService");
+        
+        const activeAccount = await getActiveAccount();
 		const syncFlag = await getConfigValue("SYNC_CONFIG_ON_STARTUP");
-
-		const stopLossUsdt = Number.parseFloat(stopLossStr || process.env.ACCOUNT_STOP_LOSS_USDT || "50");
-		const takeProfitUsdt = Number.parseFloat(takeProfitStr || process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000");
 		const syncOnStartup = (syncFlag ?? process.env.SYNC_CONFIG_ON_STARTUP) === "true";
 
+        let stopLossUsdt: number | undefined;
+        let takeProfitUsdt: number | undefined;
+
+        if (activeAccount) {
+            // If active account exists, use its values. 0 or null/undefined means disabled.
+            stopLossUsdt = activeAccount.stop_loss_usdt || undefined;
+            takeProfitUsdt = activeAccount.take_profit_usdt || undefined;
+        } else {
+            // Fallback to legacy env/db config
+            const stopLossStr = await getConfigValue("ACCOUNT_STOP_LOSS_USDT");
+            const takeProfitStr = await getConfigValue("ACCOUNT_TAKE_PROFIT_USDT");
+            
+            const sl = Number.parseFloat(stopLossStr || process.env.ACCOUNT_STOP_LOSS_USDT || "50");
+            stopLossUsdt = Number.isFinite(sl) ? sl : 50;
+            
+            const tp = Number.parseFloat(takeProfitStr || process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000");
+            takeProfitUsdt = Number.isFinite(tp) ? tp : 20000;
+        }
+
 		accountRiskConfigCache = {
-			stopLossUsdt: Number.isFinite(stopLossUsdt) ? stopLossUsdt : 50,
-			takeProfitUsdt: Number.isFinite(takeProfitUsdt) ? takeProfitUsdt : 20000,
+			stopLossUsdt,
+			takeProfitUsdt,
 			syncOnStartup,
 		};
 	} catch (error) {
@@ -190,11 +207,12 @@ function buildBasePromptVariables(
 		STRATEGY_ID: strategy,
 		TRADING_INTERVAL_MINUTES: formatNumber(intervalMinutes, 0),
 		MAX_HOLDING_HOURS: formatNumber(RISK_PARAMS.MAX_HOLDING_HOURS, 0),
+		MIN_HOLDING_MINUTES: formatNumber(RISK_PARAMS.MIN_HOLDING_MINUTES, 0),
 		MAX_HOLDING_CYCLES: formatNumber(RISK_PARAMS.MAX_HOLDING_CYCLES, 0),
 		MAX_POSITIONS: formatNumber(RISK_PARAMS.MAX_POSITIONS, 0),
 		EXTREME_STOP_LOSS_PERCENT: formatNumber(RISK_PARAMS.EXTREME_STOP_LOSS_PERCENT, 0),
-		ACCOUNT_STOP_LOSS_USDT: formatNumber(riskConfig.stopLossUsdt, 0),
-		ACCOUNT_TAKE_PROFIT_USDT: formatNumber(riskConfig.takeProfitUsdt, 0),
+		ACCOUNT_STOP_LOSS_USDT: riskConfig.stopLossUsdt !== undefined ? formatNumber(riskConfig.stopLossUsdt, 0) : "Disabled",
+		ACCOUNT_TAKE_PROFIT_USDT: riskConfig.takeProfitUsdt !== undefined ? formatNumber(riskConfig.takeProfitUsdt, 0) : "Disabled",
 		ACCOUNT_DRAWDOWN_WARNING_PERCENT: formatNumber(RISK_PARAMS.ACCOUNT_DRAWDOWN_WARNING_PERCENT, 0),
 		ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT: formatNumber(
 			RISK_PARAMS.ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT,

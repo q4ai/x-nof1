@@ -81,6 +81,7 @@ export class BitgetClient {
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
       "locale": "zh-CN",
+      "X-CHANNEL-API-CODE": "ajcis",
     };
 
     const bodyString = body ? JSON.stringify(body) : "";

@@ -6,6 +6,7 @@
 [システムリスクパラメータ]
 - 単一トレード損失上限: {{EXTREME_STOP_LOSS_PERCENT}}%
 - 最大保有時間: {{MAX_HOLDING_HOURS}} 時間（約 {{MAX_HOLDING_CYCLES}} サイクル）
+- 最小保有時間: {{MIN_HOLDING_MINUTES}} 分
 - 同時保有ポジション数の上限: {{MAX_POSITIONS}}
 - 口座ストップロス: {{ACCOUNT_STOP_LOSS_USDT}} USDT
 - 口座テイクプロフィット: {{ACCOUNT_TAKE_PROFIT_USDT}} USDT

@@ -22,6 +22,7 @@
 
 export interface Trade {
   id: number;
+  account_id?: number;
   order_id: string;
   symbol: string;
   side: 'long' | 'short';
@@ -37,6 +38,7 @@ export interface Trade {
 
 export interface TradeLog {
   id: number;
+  account_id?: number;
   action: "open" | "close" | "cancel" | "adjust";
   symbol?: string;
   side?: "long" | "short";
@@ -53,6 +55,7 @@ export interface TradeLog {
 
 export interface Position {
   id: number;
+  account_id?: number;
   symbol: string;
   quantity: number;
   entry_price: number;
@@ -75,6 +78,7 @@ export interface Position {
 
 export interface AccountHistory {
   id: number;
+  account_id?: number;
   timestamp: string;
   total_value: number;
   available_cash: number;
@@ -110,6 +114,7 @@ export interface AgentDecision {
   actions_taken: string;
   account_value: number;
   positions_count: number;
+  account_id?: number;
 }
 
 export interface AgentRequestLog {
@@ -124,6 +129,7 @@ export interface AgentRequestLog {
   status: "success" | "error";
   error_message?: string;
   output_duration_ms?: number;
+  account_id?: number;
 }
 
 export interface SystemConfig {
@@ -151,6 +157,8 @@ export interface AccountConfig {
   use_paper: boolean;
   proxy_url?: string;
   is_active: boolean;
+  stop_loss_usdt?: number;
+  take_profit_usdt?: number;
   created_at: string;
   updated_at: string;
 }
@@ -175,6 +183,7 @@ export const CREATE_TABLES_SQL = `
 -- 交易记录表
 CREATE TABLE IF NOT EXISTS trades (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER,
   order_id TEXT NOT NULL,
   symbol TEXT NOT NULL,
   side TEXT NOT NULL,
@@ -188,9 +197,10 @@ CREATE TABLE IF NOT EXISTS trades (
   status TEXT NOT NULL DEFAULT 'pending'
 );
 
--- 交易执行日志表
+-- 交易日志表
 CREATE TABLE IF NOT EXISTS trade_logs (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER,
   action TEXT NOT NULL,
   symbol TEXT,
   side TEXT,
@@ -208,6 +218,7 @@ CREATE TABLE IF NOT EXISTS trade_logs (
 -- 持仓表
 CREATE TABLE IF NOT EXISTS positions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER,
   symbol TEXT NOT NULL,
   quantity REAL NOT NULL,
   entry_price REAL NOT NULL,
@@ -232,6 +243,7 @@ CREATE TABLE IF NOT EXISTS positions (
 -- 账户历史表
 CREATE TABLE IF NOT EXISTS account_history (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
+  account_id INTEGER,
   timestamp TEXT NOT NULL,
   total_value REAL NOT NULL,
   available_cash REAL NOT NULL,
@@ -269,7 +281,8 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
   decision TEXT NOT NULL,
   actions_taken TEXT NOT NULL,
   account_value REAL NOT NULL,
-  positions_count INTEGER NOT NULL
+  positions_count INTEGER NOT NULL,
+  account_id INTEGER
 );
 
 -- Agent 请求日志表
@@ -284,7 +297,8 @@ CREATE TABLE IF NOT EXISTS agent_request_logs (
   response_summary TEXT,
   status TEXT NOT NULL DEFAULT 'success',
   error_message TEXT,
-  output_duration_ms INTEGER
+  output_duration_ms INTEGER,
+  account_id INTEGER
 );
 
 -- 系统配置表
@@ -315,6 +329,8 @@ CREATE TABLE IF NOT EXISTS account_configs (
   use_paper INTEGER NOT NULL DEFAULT 0,
   proxy_url TEXT,
   is_active INTEGER NOT NULL DEFAULT 0,
+  stop_loss_usdt REAL,
+  take_profit_usdt REAL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

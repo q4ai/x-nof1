@@ -28,6 +28,7 @@ const logger = createLogger({
 const CREATE_TABLES_SQL = `
 CREATE TABLE IF NOT EXISTS account_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     timestamp TEXT NOT NULL,
     total_value REAL NOT NULL,
     available_cash REAL NOT NULL,
@@ -38,6 +39,7 @@ CREATE TABLE IF NOT EXISTS account_history (
 
 CREATE TABLE IF NOT EXISTS positions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     symbol TEXT NOT NULL,
     quantity REAL NOT NULL,
     entry_price REAL NOT NULL,
@@ -82,11 +84,13 @@ CREATE TABLE IF NOT EXISTS agent_decisions (
     decision TEXT NOT NULL,
     actions_taken TEXT NOT NULL,
     account_value REAL NOT NULL,
-    positions_count INTEGER NOT NULL
+    positions_count INTEGER NOT NULL,
+    account_id INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS trade_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     timestamp TEXT NOT NULL,
     symbol TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -102,6 +106,7 @@ CREATE TABLE IF NOT EXISTS trade_logs (
 
   CREATE TABLE IF NOT EXISTS agent_request_logs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER,
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     iteration INTEGER,
     model_name TEXT NOT NULL,

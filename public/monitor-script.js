@@ -303,6 +303,7 @@ const STRATEGY_CONFIG_KEYS = [
   "MAX_LEVERAGE",
   "MAX_POSITIONS",
   "MAX_HOLDING_HOURS",
+  "MIN_HOLDING_MINUTES",
   "EXTREME_STOP_LOSS_PERCENT",
   "ACCOUNT_DRAWDOWN_WARNING_PERCENT",
   "ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT",
@@ -329,6 +330,7 @@ const CLIENT_NUMERIC_KEYS = new Set([
   "MAX_LEVERAGE",
   "MAX_POSITIONS",
   "MAX_HOLDING_HOURS",
+  "MIN_HOLDING_MINUTES",
   "EXTREME_STOP_LOSS_PERCENT",
   "INITIAL_BALANCE",
   "ACCOUNT_STOP_LOSS_USDT",
@@ -393,6 +395,7 @@ class TradingMonitor {
     this.positionsUpdatedEl = document.getElementById("positions-updated");
     this.openOrdersContainerEl = document.getElementById("open-orders-container");
     this.pendingPositionClosures = new Set();
+    this.emptyPositionsTimeout = null;
     
     // 手动交易设置缓存（按币种）
     this.manualTradeSettings = new Map();
@@ -2350,13 +2353,26 @@ class TradingMonitor {
     });
 
     if (!positions.length) {
-      this.resetCloseConfirmationState();
-      this.positionsContainerEl.innerHTML = `<p class="empty-state">${t("tables.positions.empty")}</p>`;
-      this.updateTimestamp(this.positionsUpdatedEl, timestamp);
+      // Debounce empty state to prevent flickering
+      if (!this.emptyPositionsTimeout) {
+        this.emptyPositionsTimeout = setTimeout(() => {
+          this.resetCloseConfirmationState();
+          this.positionsContainerEl.innerHTML = `<p class="empty-state">${t("tables.positions.empty")}</p>`;
+          this.updateTimestamp(this.positionsUpdatedEl, timestamp);
+          this.emptyPositionsTimeout = null;
+        }, 500);
+      }
+      
       if (newSymbolAdded) {
         this.schedulePriceSubscriptionUpdate();
       }
       return;
+    }
+
+    // If we have positions, clear any pending empty timeout
+    if (this.emptyPositionsTimeout) {
+      clearTimeout(this.emptyPositionsTimeout);
+      this.emptyPositionsTimeout = null;
     }
 
     const showActions = Boolean(this.isAuthenticated);
@@ -3112,7 +3128,19 @@ class TradingMonitor {
     if (!this.decisionLogsContainerEl) return;
     const timestamp = Date.now();
     const data = await this.fetchJson(`/api/decision-requests?limit=10&_t=${timestamp}`);
-    const requests = Array.isArray(data?.requests) ? data.requests : [];
+    const rawRequests = Array.isArray(data?.requests)
+      ? data.requests
+      : Array.isArray(data?.logs)
+        ? data.logs
+        : [];
+
+    const requests = rawRequests.map((item) => ({
+      ...item,
+      modelName: item.modelName ?? item.model ?? item.model_name ?? null,
+      status: item.status ?? item.state ?? item.result ?? null,
+      errorMessage: item.errorMessage ?? item.error ?? item.error_message ?? null,
+      outputDurationMs: item.outputDurationMs ?? item.durationMs ?? item.output_duration_ms ?? null,
+    }));
 
     if (!requests.length) {
       this.decisionLogsContainerEl.innerHTML = `<p class="empty-state">${t("decisionRequest.empty")}</p>`;
@@ -3397,7 +3425,7 @@ class TradingMonitor {
       ]),
     );
     if (size === null && message) {
-      const sizeMatch = message.match(/(\d+(?:\.\d+)?)\s*张/i) || message.match(/数量[：:]\s*(\d+(?:\.\d+)?)/i);
+      const sizeMatch = message.match(/(\d+(?:\.\d+)?)\s*[张个]/i) || message.match(/数量[：:]\s*(\d+(?:\.\d+)?)/i);
       if (sizeMatch) {
         size = this.parseNumeric(sizeMatch[1]);
       } else {
@@ -3722,9 +3750,9 @@ class TradingMonitor {
     // 匹配多种数量表达方式
     const patterns = [
       /数量[：:]\s*(\d+\.?\d*)/i,
-      /(\d+\.?\d*)\s*张/i,
+      /(\d+\.?\d*)\s*[张个]/i,
       /持仓[：:]\s*(\d+\.?\d*)/i,
-      /开仓.*?(\d+\.?\d*)\s*张/i
+      /开仓.*?(\d+\.?\d*)\s*[张个]/i
     ];
     
     for (const pattern of patterns) {
@@ -3816,7 +3844,7 @@ class TradingMonitor {
                   <th>动作</th>
                   <th>杠杆</th>
                   <th>保证金</th>
-                  <th>张数</th>
+                  <th>数量</th>
                   <th>订单ID</th>
                   <th>状态</th>
                 </tr>
@@ -7157,13 +7185,10 @@ class TradingMonitor {
       if (nameInput) nameInput.value = account.name || "";
       if (providerInput) {
         providerInput.value = account.provider;
-        // Update visual selection
-        document.querySelectorAll(".provider-option").forEach(opt => {
-          if (opt.dataset.value === account.provider) {
-            opt.classList.add("selected");
-          } else {
-            opt.classList.remove("selected");
-          }
+        // Update UI selection
+        document.querySelectorAll(".provider-option-compact").forEach(opt => {
+          if (opt.dataset.value === account.provider) opt.classList.add("selected");
+          else opt.classList.remove("selected");
         });
       }
       // if (proxyInput) proxyInput.value = account.proxy_url || ""; // Removed
@@ -7189,13 +7214,10 @@ class TradingMonitor {
       const providerInput = document.getElementById("account-edit-provider");
       if (providerInput) {
         providerInput.value = "okx";
-        // Reset visual selection to OKX
-        document.querySelectorAll(".provider-option").forEach(opt => {
-          if (opt.dataset.value === "okx") {
-            opt.classList.add("selected");
-          } else {
-            opt.classList.remove("selected");
-          }
+        // Reset UI selection to default
+        document.querySelectorAll(".provider-option-compact").forEach(opt => {
+          if (opt.dataset.value === "okx") opt.classList.add("selected");
+          else opt.classList.remove("selected");
         });
       }
       this.updateAccountFormPanels();
@@ -7206,27 +7228,27 @@ class TradingMonitor {
   }
 
   bindAccountFormEvents() {
-    const providerOptions = document.querySelectorAll(".provider-option");
+    const providerOptions = document.querySelectorAll(".provider-option-compact");
     const testBtn = document.getElementById("account-form-test");
     const cancelBtn = document.getElementById("account-form-cancel");
     
     providerOptions.forEach(option => {
-      if (option.dataset.bound) return;
-      option.dataset.bound = "true";
-      
-      option.addEventListener("click", () => {
-        // Update visual selection
-        providerOptions.forEach(opt => opt.classList.remove("selected"));
-        option.classList.add("selected");
-        
-        // Update hidden input value
-        const value = option.dataset.value;
-        const input = document.getElementById("account-edit-provider");
-        if (input) {
-          input.value = value;
-          this.updateAccountFormPanels();
-        }
-      });
+      if (!option.dataset.bound) {
+        option.dataset.bound = "true";
+        option.addEventListener("click", () => {
+          // Remove selected class from all
+          providerOptions.forEach(opt => opt.classList.remove("selected"));
+          // Add to current
+          option.classList.add("selected");
+          
+          // Update hidden input
+          const providerInput = document.getElementById("account-edit-provider");
+          if (providerInput) {
+            providerInput.value = option.dataset.value;
+            this.updateAccountFormPanels();
+          }
+        });
+      }
     });
     
     if (testBtn && !testBtn.dataset.bound) {

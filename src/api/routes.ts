@@ -51,6 +51,7 @@ import {
   setTradingStartTime,
 } from "../scheduler/tradingLoop";
 import { summarizeAgentResponseText } from "../database/agent-request-logs";
+import { getActiveAccount } from "../services/accountConfigService";
 
 const logger = createLogger({
   name: "api-routes",
@@ -78,6 +79,7 @@ const CONFIG_NUMERIC_KEYS = new Set([
   "MAX_LEVERAGE",
   "MAX_POSITIONS",
   "MAX_HOLDING_HOURS",
+  "MIN_HOLDING_MINUTES",
   "EXTREME_STOP_LOSS_PERCENT",
   "INITIAL_BALANCE",
   "ACCOUNT_STOP_LOSS_USDT",
@@ -104,6 +106,7 @@ const CONFIG_ALLOWED_KEYS = new Set([
   "MAX_LEVERAGE",
   "MAX_POSITIONS",
   "MAX_HOLDING_HOURS",
+  "MIN_HOLDING_MINUTES",
   "EXTREME_STOP_LOSS_PERCENT",
   "INITIAL_BALANCE",
   "ACCOUNT_STOP_LOSS_USDT",
@@ -929,7 +932,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   app.post("/api/accounts", requireAuthWithCsrf, async (c) => {
     try {
       const body = await c.req.json();
-      const { name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url } = body;
+      const { name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url, stop_loss_usdt, take_profit_usdt } = body;
       
       if (!name || !provider || !api_key || !api_secret) {
         return c.json({ error: "缺少必需参数" }, 400);
@@ -948,6 +951,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         api_passphrase: api_passphrase ? String(api_passphrase) : undefined,
         use_paper: Boolean(use_paper),
         proxy_url: proxy_url ? String(proxy_url) : undefined,
+        stop_loss_usdt: stop_loss_usdt ? Number(stop_loss_usdt) : undefined,
+        take_profit_usdt: take_profit_usdt ? Number(take_profit_usdt) : undefined,
       });
       
       logger.info(`创建账户成功: ${account.name} (ID: ${account.id})`);
@@ -1000,7 +1005,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       }
       
       const body = await c.req.json();
-      const { name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url } = body;
+      const { name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url, stop_loss_usdt, take_profit_usdt } = body;
       
       const { updateAccount } = await import("../services/accountConfigService");
       const account = await updateAccount(id, {
@@ -1011,6 +1016,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         api_passphrase: api_passphrase !== undefined ? String(api_passphrase) : undefined,
         use_paper: use_paper !== undefined ? Boolean(use_paper) : undefined,
         proxy_url: proxy_url !== undefined ? String(proxy_url) : undefined,
+        stop_loss_usdt: stop_loss_usdt !== undefined ? (stop_loss_usdt === "" || stop_loss_usdt === null ? 0 : Number(stop_loss_usdt)) : undefined,
+        take_profit_usdt: take_profit_usdt !== undefined ? (take_profit_usdt === "" || take_profit_usdt === null ? 0 : Number(take_profit_usdt)) : undefined,
       });
       
       logger.info(`更新账户成功: ${account.name} (ID: ${account.id})`);
@@ -1224,16 +1231,29 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const okxClient = await createExchangeClientFromActiveAccount();
       const account = await okxClient.getFuturesAccount();
       const activeSince = await getActiveAccountSwitchTimestamp();
-      const historyQuery = activeSince
-        ? {
-            sql: "SELECT total_value, timestamp FROM account_history WHERE timestamp >= ? ORDER BY timestamp ASC",
-            args: [activeSince],
-          }
-        : {
-            sql: "SELECT total_value, timestamp FROM account_history ORDER BY timestamp ASC",
-            args: [],
-          };
-      const historyResult = await dbClient.execute(historyQuery);
+      
+      const { getActiveAccount } = await import("../services/accountConfigService");
+      const activeAccount = await getActiveAccount();
+      const accountId = activeAccount ? activeAccount.id : null;
+
+      let historySql = "SELECT total_value, timestamp FROM account_history WHERE ";
+      const historyArgs: any[] = [];
+
+      if (accountId) {
+        historySql += "account_id = ? ";
+        historyArgs.push(accountId);
+      } else {
+        historySql += "(account_id IS NULL OR account_id = 'default') ";
+      }
+
+      if (activeSince) {
+        historySql += "AND timestamp >= ? ";
+        historyArgs.push(activeSince);
+      }
+      
+      historySql += "ORDER BY timestamp ASC";
+
+      const historyResult = await dbClient.execute({ sql: historySql, args: historyArgs });
       const history = historyResult.rows || [];
       const historyInitial = history.length > 0 ? Number.parseFloat(history[0].total_value as string || "0") : undefined;
       const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
@@ -1251,17 +1271,22 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       // 计算胜率 - 从已平仓交易计算
       let winRate = 0;
       try {
-        const closedTradesResult = await dbClient.execute(
-          activeSince
-            ? {
-                sql: "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL AND timestamp >= ?",
-                args: [activeSince],
-              }
-            : {
-                sql: "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL",
-                args: [],
-              }
-        );
+        let tradesSql = "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL ";
+        const tradesArgs: any[] = [];
+
+        if (accountId) {
+          tradesSql += "AND account_id = ? ";
+          tradesArgs.push(accountId);
+        } else {
+          tradesSql += "AND (account_id IS NULL OR account_id = 'default') ";
+        }
+
+        if (activeSince) {
+          tradesSql += "AND timestamp >= ? ";
+          tradesArgs.push(activeSince);
+        }
+
+        const closedTradesResult = await dbClient.execute({ sql: tradesSql, args: tradesArgs });
         const closedTrades = closedTradesResult.rows || [];
         
         if (closedTrades.length > 0) {
@@ -1332,7 +1357,17 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const isBinance = activeAccount?.provider === 'binance';
 
       // 从数据库获取止损止盈信息
-      const dbResult = await dbClient.execute("SELECT symbol, stop_loss, profit_target FROM positions");
+      let positionsSql = "SELECT symbol, stop_loss, profit_target FROM positions";
+      const positionsArgs: any[] = [];
+      
+      if (activeAccount) {
+        positionsSql += " WHERE account_id = ?";
+        positionsArgs.push(activeAccount.id);
+      } else {
+        positionsSql += " WHERE account_id IS NULL OR account_id = 'default'";
+      }
+
+      const dbResult = await dbClient.execute({ sql: positionsSql, args: positionsArgs });
       const dbRows = asDbRows(dbResult.rows);
       const dbPositionsMap = new Map<string, DbRow>(
         dbRows
@@ -2080,27 +2115,114 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   /**
+   * 获取指定币种的K线数据
+   */
+  app.get("/api/candles", async (c) => {
+    const symbolParam = c.req.query("symbol")?.trim().toUpperCase();
+    const interval = c.req.query("interval")?.trim() || "5m";
+    const limitParam = c.req.query("limit");
+
+    const symbol = symbolParam && symbolParam.length >= 2 ? symbolParam : "BTC";
+    const limitRaw = limitParam ? Number.parseInt(limitParam, 10) : 200;
+    const limit = Number.isFinite(limitRaw) ? Math.min(Math.max(limitRaw, 20), 500) : 200;
+
+    try {
+      const client = await createExchangeClientFromActiveAccount();
+      const contract = `${symbol}_USDT`;
+      const candles = await client.getFuturesCandles(contract, interval, limit);
+
+      return c.json({
+        symbol,
+        interval,
+        candles,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error(`获取 ${symbol} K线数据失败: ${message}`);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取用户语言偏好
+   */
+  app.get("/api/user/language", async (c) => {
+    try {
+      const { getConfigValue } = await import("../database/init-config");
+      const language = (await getConfigValue("UI_LANGUAGE")) || "en";
+      return c.json({ language });
+    } catch (error: unknown) {
+      return c.json({ language: "en" });
+    }
+  });
+
+  /**
+   * 获取当前 AI 模型
+   */
+  app.get("/api/public/model", async (c) => {
+    try {
+      const { getConfigValue } = await import("../database/init-config");
+      const model = (await getConfigValue("AI_MODEL_NAME")) || "gpt-4o";
+      return c.json({ model });
+    } catch (error: unknown) {
+      return c.json({ model: "unknown" });
+    }
+  });
+
+  /**
+   * 获取合约乘数
+   */
+  app.get("/api/public/contract-multipliers", async (c) => {
+    try {
+      const result = await dbClient.execute("SELECT symbol, multiplier FROM contract_multipliers");
+      const multipliers: Record<string, number> = {};
+      for (const row of result.rows) {
+        if (row.symbol && row.multiplier) {
+          multipliers[String(row.symbol)] = Number(row.multiplier);
+        }
+      }
+      return c.json({ multipliers });
+    } catch (error: unknown) {
+      logger.error("获取合约乘数失败", error);
+      return c.json({ multipliers: {} });
+    }
+  });
+
+  /**
    * 获取账户价值历史（用于绘图）
    */
   app.get("/api/history", async (c) => {
     try {
       const limitParam = c.req.query("limit");
+      const accountIdParam = c.req.query("accountId");
+      
+      let accountId: number | null = null;
+      if (accountIdParam) {
+        accountId = Number(accountIdParam);
+      } else {
+        const activeAccount = await getActiveAccount();
+        accountId = activeAccount ? activeAccount.id : null;
+      }
       
       type ExecuteResult = Awaited<ReturnType<typeof dbClient.execute>>;
       let result: ExecuteResult;
-      if (limitParam) {
-        // 如果传递了 limit 参数，使用 LIMIT 子句
-        const limit = Number.parseInt(limitParam, 10);
-        result = await dbClient.execute({
-          sql: "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history ORDER BY timestamp DESC LIMIT ?",
-          args: [limit],
-        });
-      } else {
-        // 如果没有传递 limit 参数，返回全部数据
-        result = await dbClient.execute(
-          "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history ORDER BY timestamp DESC",
-        );
+      
+      let sql = "SELECT timestamp, total_value, unrealized_pnl, return_percent FROM account_history";
+      const args: any[] = [];
+      
+      if (accountId) {
+        sql += " WHERE account_id = ?";
+        args.push(accountId);
       }
+      
+      sql += " ORDER BY timestamp DESC";
+      
+      if (limitParam) {
+        sql += " LIMIT ?";
+        args.push(Number.parseInt(limitParam, 10));
+      }
+      
+      result = await dbClient.execute({ sql, args });
       
       const history = asDbRows(result.rows)
         .map((row) => ({
@@ -2123,16 +2245,37 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/statistics", async (c) => {
     try {
+      const accountIdParam = c.req.query("accountId");
+      let accountId: number | null = null;
+      if (accountIdParam) {
+        accountId = Number(accountIdParam);
+      } else {
+        const activeAccount = await getActiveAccount();
+        accountId = activeAccount ? activeAccount.id : null;
+      }
+
       // 获取所有已平仓交易
-      const tradesResult = await dbClient.execute(
-        "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL ORDER BY timestamp ASC"
-      );
+      let tradesSql = "SELECT pnl FROM trades WHERE type = 'close' AND pnl IS NOT NULL";
+      const tradesArgs: any[] = [];
+      if (accountId) {
+        tradesSql += " AND account_id = ?";
+        tradesArgs.push(accountId);
+      }
+      tradesSql += " ORDER BY timestamp ASC";
+
+      const tradesResult = await dbClient.execute({ sql: tradesSql, args: tradesArgs });
       const trades = tradesResult.rows || [];
       
       // 获取权益历史
-      const historyResult = await dbClient.execute(
-        "SELECT total_value, timestamp FROM account_history ORDER BY timestamp ASC"
-      );
+      let historySql = "SELECT total_value, timestamp FROM account_history";
+      const historyArgs: any[] = [];
+      if (accountId) {
+        historySql += " WHERE account_id = ?";
+        historyArgs.push(accountId);
+      }
+      historySql += " ORDER BY timestamp ASC";
+
+      const historyResult = await dbClient.execute({ sql: historySql, args: historyArgs });
       const history = historyResult.rows || [];
       
       // 获取初始资金
@@ -2516,13 +2659,14 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const logs = asDbRows(result.rows).map((row) => ({
         id: toStringSafe(row.id),
         createdAt: toStringSafe(row.created_at),
+        instructions: toStringSafe(row.instructions),
         prompt: toStringSafe(row.prompt),
         response: toStringSafe(row.response),
-        model: toStringSafe(row.model),
+        model: toStringSafe(row.model_name),
         durationMs: toNumber(row.duration_ms),
         tokensInput: toNumber(row.tokens_input),
         tokensOutput: toNumber(row.tokens_output),
-        error: toStringSafe(row.error),
+        error: toStringSafe(row.error_message),
       }));
 
       const totalRows = asDbRows(countResult.rows);
@@ -2538,6 +2682,41 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 重置实盘数据（清空交易记录、持仓、日志，保留配置）
+   */
+  app.post("/api/reset-live-data", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = (await c.req.json().catch(() => ({}))) as { confirmation?: unknown };
+      if (body.confirmation !== "RESET") {
+        return c.json({ error: "确认口令无效" }, 400);
+      }
+
+      const activeAccount = await getActiveAccount();
+      const accountId = activeAccount ? activeAccount.id.toString() : "default";
+
+      logger.warn(`收到重置实盘数据请求 (account_id=${accountId})，开始清理数据...`);
+      
+      // 调用重置逻辑，仅清理当前账户数据
+      const result = await resetLiveDataToDefaults(accountId);
+      
+      // 重置交易循环状态
+      setIterationCount(0);
+      setTradingStartTime(new Date());
+      
+      logger.info(`实盘数据重置完成 (account_id=${accountId})`);
+      
+      return c.json({ 
+        success: true, 
+        data: result 
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("重置实盘数据失败:", error);
       return c.json({ error: message }, 500);
     }
   });

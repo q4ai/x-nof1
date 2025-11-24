@@ -48,6 +48,8 @@ export async function getAllAccounts(): Promise<AccountConfig[]> {
       use_paper: Boolean(row.use_paper),
       proxy_url: row.proxy_url || undefined,
       is_active: Boolean(row.is_active),
+      stop_loss_usdt: row.stop_loss_usdt ? Number(row.stop_loss_usdt) : undefined,
+      take_profit_usdt: row.take_profit_usdt ? Number(row.take_profit_usdt) : undefined,
       created_at: row.created_at,
       updated_at: row.updated_at,
     }));
@@ -82,6 +84,8 @@ export async function getActiveAccount(): Promise<AccountConfig | null> {
       use_paper: Boolean(row.use_paper),
       proxy_url: row.proxy_url || undefined,
       is_active: Boolean(row.is_active),
+      stop_loss_usdt: row.stop_loss_usdt ? Number(row.stop_loss_usdt) : undefined,
+      take_profit_usdt: row.take_profit_usdt ? Number(row.take_profit_usdt) : undefined,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
@@ -116,6 +120,8 @@ export async function getAccountById(id: number): Promise<AccountConfig | null> 
       use_paper: Boolean(row.use_paper),
       proxy_url: row.proxy_url || undefined,
       is_active: Boolean(row.is_active),
+      stop_loss_usdt: row.stop_loss_usdt ? Number(row.stop_loss_usdt) : undefined,
+      take_profit_usdt: row.take_profit_usdt ? Number(row.take_profit_usdt) : undefined,
       created_at: row.created_at,
       updated_at: row.updated_at,
     };
@@ -136,14 +142,16 @@ export async function createAccount(data: {
   api_passphrase?: string;
   use_paper: boolean;
   proxy_url?: string;
+  stop_loss_usdt?: number;
+  take_profit_usdt?: number;
 }): Promise<AccountConfig> {
   try {
     const now = new Date().toISOString();
     
     const result = await dbClient.execute({
       sql: `INSERT INTO account_configs 
-            (name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url, is_active, created_at, updated_at) 
-            VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+            (name, provider, api_key, api_secret, api_passphrase, use_paper, proxy_url, stop_loss_usdt, take_profit_usdt, is_active, created_at, updated_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
       args: [
         data.name,
         data.provider,
@@ -152,6 +160,8 @@ export async function createAccount(data: {
         data.api_passphrase || null,
         data.use_paper ? 1 : 0,
         data.proxy_url || null,
+        data.stop_loss_usdt || null,
+        data.take_profit_usdt || null,
         now,
         now,
       ],
@@ -183,6 +193,8 @@ export async function updateAccount(id: number, data: {
   api_passphrase?: string;
   use_paper?: boolean;
   proxy_url?: string;
+  stop_loss_usdt?: number;
+  take_profit_usdt?: number;
 }): Promise<AccountConfig> {
   try {
     const existing = await getAccountById(id);
@@ -221,6 +233,14 @@ export async function updateAccount(id: number, data: {
     if (data.proxy_url !== undefined) {
       updates.push("proxy_url = ?");
       args.push(data.proxy_url || null);
+    }
+    if (data.stop_loss_usdt !== undefined) {
+      updates.push("stop_loss_usdt = ?");
+      args.push(data.stop_loss_usdt || null);
+    }
+    if (data.take_profit_usdt !== undefined) {
+      updates.push("take_profit_usdt = ?");
+      args.push(data.take_profit_usdt || null);
     }
     
     updates.push("updated_at = ?");
@@ -327,6 +347,9 @@ export async function migrateFromEnv(): Promise<void> {
       : process.env.BINANCE_USE_TESTNET === 'true';
     const proxyUrl = process.env.HTTP_PROXY_URL;
     
+    const stopLossUsdt = process.env.ACCOUNT_STOP_LOSS_USDT ? Number(process.env.ACCOUNT_STOP_LOSS_USDT) : undefined;
+    const takeProfitUsdt = process.env.ACCOUNT_TAKE_PROFIT_USDT ? Number(process.env.ACCOUNT_TAKE_PROFIT_USDT) : undefined;
+
     if (!apiKey || !apiSecret) {
       logger.warn("环境变量中未配置API凭证，跳过迁移");
       return;
@@ -341,6 +364,8 @@ export async function migrateFromEnv(): Promise<void> {
       api_passphrase: apiPassphrase,
       use_paper: usePaper,
       proxy_url: proxyUrl,
+      stop_loss_usdt: Number.isFinite(stopLossUsdt) ? stopLossUsdt : undefined,
+      take_profit_usdt: Number.isFinite(takeProfitUsdt) ? takeProfitUsdt : undefined,
     });
     
     // 设为激活账户

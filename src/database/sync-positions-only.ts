@@ -25,6 +25,8 @@ import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
 import { createOkxTradingClient } from "../services/okxTradingClient";
 import { fileURLToPath } from 'node:url';
+import { getActiveAccount } from "../services/accountConfigService";
+import { getExchangeProvider } from "../config/exchange";
 
 const logger = createLogger({
   name: "sync-positions",
@@ -33,7 +35,9 @@ const logger = createLogger({
 
 export async function syncPositionsFromOkx() {
   try {
-  logger.info("🔄 从 OKX 同步持仓...");
+    const activeAccount = await getActiveAccount();
+    const accountId = activeAccount ? activeAccount.id.toString() : "default";
+    logger.info(`🔄 从 OKX 同步持仓 (account_id=${accountId})...`);
     
     // 1. 连接数据库
   const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
@@ -84,9 +88,13 @@ export async function syncPositionsFromOkx() {
     
   logger.info(`\n📊 OKX 当前持仓数: ${activePositions.length}`);
     
+    const batchStmts: any[] = [];
+
     // 4. 清空本地持仓表
-    await client.execute("DELETE FROM positions");
-    logger.info("✅ 已清空本地持仓表");
+    batchStmts.push({
+      sql: "DELETE FROM positions WHERE account_id = ?",
+      args: [accountId]
+    });
     
     // 5. 同步持仓到数据库
     if (activePositions.length > 0) {
@@ -105,12 +113,13 @@ export async function syncPositionsFromOkx() {
         const pnl = Number.parseFloat(pos.unrealisedPnl || "0");
         const liqPrice = Number.parseFloat(pos.liqPrice || "0");
         
-        await client.execute({
+        batchStmts.push({
           sql: `INSERT INTO positions 
-                (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
+                (account_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                  leverage, side, entry_order_id, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           args: [
+            accountId,
             symbol,
             quantity,
             entryPrice,
@@ -119,15 +128,21 @@ export async function syncPositionsFromOkx() {
             pnl,
             leverage,
             side,
-            "synced",
+            `synced-${symbol}-${side}-${Date.now()}`,
             new Date().toISOString(),
           ],
         });
         
-        logger.info(`   ✅ ${symbol}: ${quantity} 张 (${side}) @ ${entryPrice} | 盈亏: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`);
+        const unitLabel = getExchangeProvider() === "okx" ? "张" : "个";
+        logger.info(`   ✅ ${symbol}: ${quantity} ${unitLabel} (${side}) @ ${entryPrice} | 盈亏: ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)} USDT`);
       }
     } else {
       logger.info("✅ 当前无持仓");
+    }
+
+    if (batchStmts.length > 0) {
+      await client.batch(batchStmts, "write");
+      logger.info("✅ 数据库更新完成");
     }
     
     client.close();

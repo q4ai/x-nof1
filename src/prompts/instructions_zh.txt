@@ -12,6 +12,7 @@
 【系统硬性底线】
 - 单笔亏损阈值：{{EXTREME_STOP_LOSS_PERCENT}}%
 - 持仓时限：{{MAX_HOLDING_HOURS}} 小时（约 {{MAX_HOLDING_CYCLES}} 个周期）
+- 最小持仓时间：{{MIN_HOLDING_MINUTES}} 分钟
 - 最大持仓数：{{MAX_POSITIONS}}
 - 账户止损：{{ACCOUNT_STOP_LOSS_USDT}} USDT
 - 账户止盈：{{ACCOUNT_TAKE_PROFIT_USDT}} USDT

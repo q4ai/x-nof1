@@ -72,14 +72,14 @@ export class BinanceClient {
     if (proxyUrl) {
       try {
         this.dispatcher = new ProxyAgent(proxyUrl);
-        logger.info("已启用 HTTP 代理访问 Binance API");
+        logger.debug("已启用 HTTP 代理访问 Binance API");
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         logger.warn(`Binance HTTP 代理初始化失败，直接访问 API: ${message}`);
       }
     }
 
-    logger.info(useTestnet ? "使用 Binance 合约测试网" : "使用 Binance 合约正式环境");
+    logger.debug(useTestnet ? "使用 Binance 合约测试网" : "使用 Binance 合约正式环境");
   }
 
   private sign(payload: string): string {

@@ -2152,6 +2152,56 @@ a:hover {
   border-color: var(--accent-cyan);
 }
 
+/* ====== Account Provider Selector (Compact) ====== */
+.provider-selector-compact {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.provider-option-compact {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.provider-option-compact:hover {
+  background: var(--hover-bg);
+  border-color: var(--text-muted);
+}
+
+.provider-option-compact.selected {
+  background: rgba(6, 182, 212, 0.1);
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.provider-option-compact img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
+  filter: grayscale(0.2);
+  transition: filter 0.2s ease;
+}
+
+.provider-option-compact:hover img,
+.provider-option-compact.selected img {
+  filter: grayscale(0);
+}
+
+.provider-option-compact span {
+  font-size: 13px;
+  font-weight: 500;
+}
+
 .form-group textarea {
   resize: vertical;
   min-height: 200px;
@@ -2893,60 +2943,177 @@ a:hover {
   display: inline-block;
 }
 
-/* Provider Selector */
-.provider-selector {
+/* Decision Request Detail Styles (Restored) */
+.decision-request-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  margin-top: 8px;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+.decision-request-section {
+  margin-bottom: 18px;
+}
+.decision-request-section:last-child {
+  margin-bottom: 0;
+}
+.decision-request-section .section-title {
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--text-primary);
+}
+.decision-request-section .section-title .section-meta {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+.decision-request-section .code-block {
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 12px;
+  font-family: "JetBrains Mono", "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 240px;
+  overflow: auto;
+}
+.decision-request-status {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+}
+.decision-request-status.negative {
+  background: rgba(248, 113, 113, 0.15);
+  color: #fecaca;
+}
+.decision-request-summary {
+  font-size: 13px;
+  color: var(--text-muted);
 }
 
-.provider-option {
-  position: relative;
+/* ====== Account Provider Selector ====== */
+/* Styles removed as we switched to a simple select dropdown */
+
+
+/* ====== Accounts List ====== */
+.accounts-list-header {
   display: flex;
-  flex-direction: row;
+  justify-content: flex-end;
+  margin-bottom: 16px;
+}
+
+.accounts-list-container {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 200px;
+}
+
+.account-list-item {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 8px 16px;
+  justify-content: space-between;
+  padding: 16px;
   background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
-  cursor: pointer;
+  border-radius: 8px;
   transition: all 0.2s ease;
-  min-width: 100px;
 }
 
-.provider-option:hover {
+.account-list-item:hover {
+  border-color: var(--text-muted);
   background: var(--hover-bg);
-  border-color: rgba(255, 255, 255, 0.2);
 }
 
-.provider-option.selected {
-  background: rgba(6, 182, 212, 0.1);
+.account-list-item.active {
   border-color: var(--accent-cyan);
-  color: var(--accent-cyan);
+  background: rgba(6, 182, 212, 0.05);
 }
 
-.provider-option img {
-  width: 20px;
-  height: 20px;
-  object-fit: contain;
+.account-item-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
 }
 
-.provider-option span {
-  font-size: 13px;
-  font-weight: 500;
+.account-provider-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-primary);
+  padding: 4px;
+  border: 1px solid var(--border-color);
 }
 
-.provider-check {
-  display: none; /* Hide check circle for compact view, use border/bg to indicate selection */
+.account-item-details {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.provider-option.selected .provider-check {
-  display: none;
+.account-item-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.provider-option.selected .provider-check::after {
-  display: none;
+.account-status-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--bg-primary);
+  color: var(--text-muted);
+  border: 1px solid var(--border-color);
+}
+
+.account-list-item.active .account-status-badge {
+  background: var(--accent-cyan);
+  color: #fff;
+  border-color: var(--accent-cyan);
+}
+
+.account-item-meta {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.account-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-icon {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  transition: all 0.2s ease;
+}
+
+.btn-icon:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.btn-icon.delete:hover {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--accent-red);
 }

@@ -1,6 +1,7 @@
 import { createClient } from "@libsql/client";
 import { getChinaTimeISO } from "./timeUtils";
 import { createLogger } from "./loggerUtils";
+import { getActiveAccount } from "../services/accountConfigService";
 
 type TradeLogStatus = "success" | "failed" | "warning";
 type TradeLogAction = "open" | "close" | "cancel" | "adjust";
@@ -48,8 +49,12 @@ function safeSerialize(value: unknown): string | null {
 
 export async function recordTradeLog(entry: TradeLogEntry): Promise<void> {
   try {
+    const activeAccount = await getActiveAccount();
+    const accountId = activeAccount ? activeAccount.id.toString() : "default";
+
     await dbClient.execute({
       sql: `INSERT INTO trade_logs (
+        account_id,
         action,
         symbol,
         side,
@@ -62,8 +67,9 @@ export async function recordTradeLog(entry: TradeLogEntry): Promise<void> {
         raw_request,
         raw_response,
         created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
       args: [
+        accountId,
         entry.action,
         entry.symbol || null,
         entry.side || null,

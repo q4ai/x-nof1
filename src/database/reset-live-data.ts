@@ -8,6 +8,7 @@ import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
 import { getDefaultConfigSnapshot } from "./init-config";
 import { createExchangeClientFromActiveAccount } from "../services/okxClient";
+import { getActiveAccount } from "../services/accountConfigService";
 
 const logger = createLogger({
   name: "reset-live-data",
@@ -60,6 +61,8 @@ const PRESERVED_CONFIG_KEYS = new Set([
   "PROMPT_SECTION_ENTRY",
   "PROMPT_SECTION_EXIT",
   "PROMPT_SECTION_VARIABLES",
+  "ACTIVE_ACCOUNT_ID",
+  "ACTIVE_ACCOUNT_SWITCH_AT",
 ]);
 
 export interface ResetLiveDataResult {
@@ -76,11 +79,14 @@ export interface ResetLiveDataResult {
   clearedMemoryTables: string[];
 }
 
-export async function resetLiveDataToDefaults(): Promise<ResetLiveDataResult> {
+export async function resetLiveDataToDefaults(accountId?: string): Promise<ResetLiveDataResult> {
   const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
   const client = createClient({
     url: dbUrl,
   });
+
+  const activeAccount = await getActiveAccount();
+  const targetAccountId = accountId || activeAccount?.id?.toString() || null;
 
   const defaults = getDefaultConfigSnapshot();
   const timestamp = new Date().toISOString();
@@ -136,18 +142,25 @@ export async function resetLiveDataToDefaults(): Promise<ResetLiveDataResult> {
     await client.execute("BEGIN");
 
     for (const tableName of DATA_TABLES) {
-      logger.info(`[reset] 清空表 ${tableName}`);
+      const deleteConditions = targetAccountId
+        ? "account_id = ? OR account_id IS NULL OR account_id = 'default'"
+        : "1=1";
+      const deleteArgs = targetAccountId ? [targetAccountId] : [];
+      logger.info(
+        `[reset] 清空表 ${tableName} (${targetAccountId ? `account_id=${targetAccountId}` : "全量"})`,
+      );
       await client.execute({
-        sql: `DELETE FROM ${tableName}`,
-        args: [],
+        sql: `DELETE FROM ${tableName} WHERE ${deleteConditions}`,
+        args: deleteArgs,
       });
     }
 
     logger.info("[reset] 重建账户初始记录");
     await client.execute({
-      sql: `INSERT INTO account_history (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent)
-            VALUES (?, ?, ?, ?, ?, ?)`,
+      sql: `INSERT INTO account_history (account_id, timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [
+        targetAccountId ?? "default",
         timestamp,
         accountSnapshot.totalValue,
         accountSnapshot.availableCash,
@@ -190,6 +203,15 @@ export async function resetLiveDataToDefaults(): Promise<ResetLiveDataResult> {
       });
       updatedKeys.add(key);
     }
+
+    // 强制更新 ACTIVE_ACCOUNT_SWITCH_AT 为当前时间，确保统计数据重置
+    await client.execute({
+      sql: `INSERT INTO system_config (key, value, updated_at)
+            VALUES ('ACTIVE_ACCOUNT_SWITCH_AT', ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = ?, updated_at = ?`,
+      args: [timestamp, timestamp, timestamp, timestamp],
+    });
+    updatedKeys.add("ACTIVE_ACCOUNT_SWITCH_AT");
 
     await client.execute("COMMIT");
 

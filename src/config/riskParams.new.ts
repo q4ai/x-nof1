@@ -97,6 +97,11 @@ export const RISK_PARAMS = {
   get MAX_HOLDING_HOURS(): number {
     return Number.parseInt(getConfig("MAX_HOLDING_HOURS", "36"), 10);
   },
+
+  // 最小持仓分钟数
+  get MIN_HOLDING_MINUTES(): number {
+    return Number.parseInt(getConfig("MIN_HOLDING_MINUTES", "10"), 10);
+  },
   
   // 最大持仓周期数（根据持仓小时数自动计算）
   get MAX_HOLDING_CYCLES(): number {

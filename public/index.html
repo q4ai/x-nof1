@@ -494,21 +494,18 @@
             <div class="form-group">
               <label data-i18n="accounts.form.provider">Exchange Provider</label>
               <input type="hidden" id="account-edit-provider" value="okx">
-              <div class="provider-selector">
-                <div class="provider-option selected" data-value="okx">
+              <div class="provider-selector-compact">
+                <div class="provider-option-compact selected" data-value="okx">
                   <img src="/static/icons/okx.png" alt="OKX">
                   <span data-i18n="accounts.providers.okx">OKX</span>
-                  <div class="provider-check"></div>
                 </div>
-                <div class="provider-option" data-value="binance">
+                <div class="provider-option-compact" data-value="binance">
                   <img src="/static/icons/binance.png" alt="Binance">
                   <span data-i18n="accounts.providers.binance">Binance</span>
-                  <div class="provider-check"></div>
                 </div>
-                <div class="provider-option" data-value="bitget">
+                <div class="provider-option-compact" data-value="bitget">
                   <img src="/static/icons/bitget.png" alt="Bitget">
                   <span data-i18n="accounts.providers.bitget">Bitget</span>
-                  <div class="provider-check"></div>
                 </div>
               </div>
             </div>
@@ -592,6 +589,20 @@
               </div>
             </div>
 
+          </div>
+
+          <div class="settings-section">
+            <h4 data-i18n="accounts.form.riskSettings">Risk Management</h4>
+            <div class="form-group">
+              <label for="account-edit-stop-loss" data-i18n="accounts.form.stopLoss">Account Stop Loss (USDT)</label>
+              <input type="number" id="account-edit-stop-loss" placeholder="e.g. 1000" data-i18n-placeholder="accounts.form.stopLossPlaceholder" step="0.01" min="0" />
+              <div class="form-hint" data-i18n="accounts.form.stopLossHint">Stop trading if equity drops below this value. Leave empty to disable.</div>
+            </div>
+            <div class="form-group">
+              <label for="account-edit-take-profit" data-i18n="accounts.form.takeProfit">Account Take Profit (USDT)</label>
+              <input type="number" id="account-edit-take-profit" placeholder="e.g. 5000" data-i18n-placeholder="accounts.form.takeProfitPlaceholder" step="0.01" min="0" />
+              <div class="form-hint" data-i18n="accounts.form.takeProfitHint">Stop trading if equity reaches this value. Leave empty to disable.</div>
+            </div>
           </div>
 
           <div id="account-form-test-result" class="api-test-result" style="display: none; margin-bottom: 15px;"></div>
@@ -791,6 +802,10 @@
                   <div class="form-group">
                     <label data-i18n="strategy.basic.maxHoldingHours">Max Holding Time (hours)</label>
                     <input type="number" name="MAX_HOLDING_HOURS" min="1" max="168" data-i18n-placeholder="strategy.basic.maxHoldingHoursPlaceholder" placeholder="Enter hours" />
+                  </div>
+                  <div class="form-group">
+                    <label data-i18n="strategy.basic.minHoldingMinutes">Min Holding Time (minutes)</label>
+                    <input type="number" name="MIN_HOLDING_MINUTES" min="0" max="1440" data-i18n-placeholder="strategy.basic.minHoldingMinutesPlaceholder" placeholder="Enter minutes" />
                   </div>
                 </div>
                 <div class="form-group form-group-compact">

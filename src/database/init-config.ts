@@ -28,6 +28,7 @@ const DEFAULT_CONFIG = {
   MAX_LEVERAGE: process.env.MAX_LEVERAGE || "10",
   MAX_POSITIONS: process.env.MAX_POSITIONS || "5",
   MAX_HOLDING_HOURS: process.env.MAX_HOLDING_HOURS || "36",
+  MIN_HOLDING_MINUTES: process.env.MIN_HOLDING_MINUTES || "10",
   EXTREME_STOP_LOSS_PERCENT: process.env.EXTREME_STOP_LOSS_PERCENT || "-30",
   
   // 账户参数

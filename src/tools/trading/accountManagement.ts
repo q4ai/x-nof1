@@ -307,8 +307,13 @@ export const syncPositionsTool = createTool({
     try {
       const positions = await client.getPositions();
       
+      const batchStmts: any[] = [];
+
       // 清空本地持仓表
-      await dbClient.execute("DELETE FROM positions");
+      batchStmts.push({
+        sql: "DELETE FROM positions",
+        args: []
+      });
       
       // 插入当前持仓
       for (const p of positions) {
@@ -324,7 +329,7 @@ export const syncPositionsTool = createTool({
             ? pos.updateTime
             : new Date().toISOString();
         
-        await dbClient.execute({
+        batchStmts.push({
           sql: `INSERT INTO positions 
                 (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                  leverage, side, entry_order_id, opened_at)
@@ -342,6 +347,10 @@ export const syncPositionsTool = createTool({
             openedAtIso,
           ],
         });
+      }
+
+      if (batchStmts.length > 0) {
+        await dbClient.batch(batchStmts, "write");
       }
       
       return {

@@ -166,7 +166,14 @@
 			"bitgetPassphrasePlaceholder": "Bitget Passphrase を入力",
 			"proxyUrl": "プロキシURL (任意)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
-			"testConnection": "接続テスト"
+			"testConnection": "接続テスト",
+			"riskSettings": "リスク管理",
+			"stopLoss": "アカウントストップロス (USDT)",
+			"stopLossPlaceholder": "例: 1000",
+			"stopLossHint": "資産がこの値を下回ると取引を停止します。空欄で無効。",
+			"takeProfit": "アカウントテイクプロフィット (USDT)",
+			"takeProfitPlaceholder": "例: 5000",
+			"takeProfitHint": "資産がこの値に達すると取引を停止します。空欄で無効。"
 		},
 		"badges": {
 			"active": "稼働中",
@@ -462,6 +469,8 @@
 			"maxPositionsPlaceholder": "ポジション数を入力",
 			"maxHoldingHours": "最大保有時間 (時間)",
 			"maxHoldingHoursPlaceholder": "時間を入力",
+			"minHoldingMinutes": "最小保有時間 (分)",
+			"minHoldingMinutesPlaceholder": "分数を入力",
 			"extremeStopLoss": "エクストリームストップ (％)",
 			"extremeStopLossPlaceholder": "％を入力",
 			"drawdownSection": "📉 ドローダウン制御",
@@ -494,6 +503,7 @@
 				"varPrompt": "<code>{{VAR_PROMPT}}</code> 既定変数メモ",
 				"interval": "<code>{{TRADING_INTERVAL_MINUTES}}</code> トレード間隔(分)",
 				"maxHoldingHours": "<code>{{MAX_HOLDING_HOURS}}</code> 最大保有時間",
+				"minHoldingMinutes": "<code>{{MIN_HOLDING_MINUTES}}</code> 最小保有時間",
 				"maxHoldingCycles": "<code>{{MAX_HOLDING_CYCLES}}</code> 最大サイクル数",
 				"maxPositions": "<code>{{MAX_POSITIONS}}</code> 最大ポジション数",
 				"extremeStopLoss": "<code>{{EXTREME_STOP_LOSS_PERCENT}}</code> システム極端ストップ (％)",

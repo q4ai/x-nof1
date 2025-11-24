@@ -401,7 +401,14 @@
 			"bitgetPassphrasePlaceholder": "输入 Bitget Passphrase",
 			"proxyUrl": "代理地址 (可选)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
-			"testConnection": "测试连接"
+			"testConnection": "测试连接",
+			"riskSettings": "风险管理",
+			"stopLoss": "账户止损 (USDT)",
+			"stopLossPlaceholder": "例如 1000",
+			"stopLossHint": "当账户权益低于此值时停止交易。留空则禁用。",
+			"takeProfit": "账户止盈 (USDT)",
+			"takeProfitPlaceholder": "例如 5000",
+			"takeProfitHint": "当账户权益达到此值时停止交易。留空则禁用。"
 		},
 		"badges": {
 			"active": "当前",
@@ -466,6 +473,8 @@
 			"maxPositionsPlaceholder": "请输入最大持仓数",
 			"maxHoldingHours": "最大持仓时间（小时）",
 			"maxHoldingHoursPlaceholder": "请输入小时数",
+			"minHoldingMinutes": "最小持仓时间（分钟）",
+			"minHoldingMinutesPlaceholder": "请输入分钟数",
 			"extremeStopLoss": "极端止损 (%)",
 			"extremeStopLossPlaceholder": "请输入百分比",
 			"drawdownSection": "📉 回撤控制",
@@ -498,6 +507,7 @@
 				"varPrompt": "<code>{{VAR_PROMPT}}</code> 默认变量说明",
 				"interval": "<code>{{TRADING_INTERVAL_MINUTES}}</code> 调度间隔（分钟）",
 				"maxHoldingHours": "<code>{{MAX_HOLDING_HOURS}}</code> 最大持仓时间",
+				"minHoldingMinutes": "<code>{{MIN_HOLDING_MINUTES}}</code> 最小持仓时间",
 				"maxHoldingCycles": "<code>{{MAX_HOLDING_CYCLES}}</code> 最大持仓周期数",
 				"maxPositions": "<code>{{MAX_POSITIONS}}</code> 最大持仓数",
 				"extremeStopLoss": "<code>{{EXTREME_STOP_LOSS_PERCENT}}</code> 系统极端止损 (%)",

@@ -24,7 +24,8 @@ import cron from "node-cron";
 import { createLogger } from "../utils/loggerUtils";
 import { createClient } from "@libsql/client";
 import { getChinaTimeISO } from "../utils/timeUtils";
-import { createOkxClient } from "../services/okxClient";
+import { createExchangeClientFromActiveAccount } from "../services/okxClient";
+import { getActiveAccount } from "../services/accountConfigService";
 
 const logger = createLogger({
   name: "account-recorder",
@@ -41,13 +42,19 @@ const dbClient = createClient({
  */
 async function recordAccountAssets() {
   try {
-    const okxClient = createOkxClient();
+    const activeAccount = await getActiveAccount();
+    if (!activeAccount) {
+      logger.warn("No active account found, skipping recording.");
+      return;
+    }
+
+    const exchangeClient = await createExchangeClientFromActiveAccount();
     
-  // Get account information from OKX
-    const account = await okxClient.getFuturesAccount();
+    // Get account information
+    const account = await exchangeClient.getFuturesAccount();
     
     // Extract account data
-  // OKX 的 account.total 不包含未实现盈亏
+    // OKX 的 account.total 不包含未实现盈亏
     // 需要主动加上 unrealisedPnl 才是真实的总资产
     const accountTotal = Number.parseFloat(account.total || "0");
     const availableBalance = Number.parseFloat(account.available || "0");
@@ -56,10 +63,11 @@ async function recordAccountAssets() {
     // Total balance = account.total + unrealisedPnl (包含未实现盈亏的总资产)
     const totalBalance = accountTotal + unrealisedPnl;
     
-    // Get initial balance from database
-    const initialResult = await dbClient.execute(
-      "SELECT total_value FROM account_history ORDER BY timestamp ASC LIMIT 1"
-    );
+    // Get initial balance from database for this account
+    const initialResult = await dbClient.execute({
+      sql: "SELECT total_value FROM account_history WHERE account_id = ? ORDER BY timestamp ASC LIMIT 1",
+      args: [activeAccount.id]
+    });
     const initialBalance = initialResult.rows[0]
       ? Number.parseFloat(initialResult.rows[0].total_value as string)
       : totalBalance; // Use current balance as initial if no history exists
@@ -73,8 +81,8 @@ async function recordAccountAssets() {
     // Save to database
     await dbClient.execute({
       sql: `INSERT INTO account_history 
-            (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent)
-            VALUES (?, ?, ?, ?, ?, ?)`,
+            (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent, account_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
       args: [
         getChinaTimeISO(),
         totalBalance,
@@ -82,11 +90,12 @@ async function recordAccountAssets() {
         unrealisedPnl,
         realizedPnl,
         returnPercent,
+        activeAccount.id
       ],
     });
     
     logger.info(
-      `📊 Account recorded: Total=${totalBalance.toFixed(2)} USDT, ` +
+      `📊 Account recorded (ID: ${activeAccount.id}): Total=${totalBalance.toFixed(2)} USDT, ` +
       `Available=${availableBalance.toFixed(2)} USDT, ` +
       `Unrealized PnL=${unrealisedPnl >= 0 ? '+' : ''}${unrealisedPnl.toFixed(2)} USDT, ` +
       `Return=${returnPercent >= 0 ? '+' : ''}${returnPercent.toFixed(2)}%`

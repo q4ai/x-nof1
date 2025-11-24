@@ -25,12 +25,14 @@ import { createClient } from "@libsql/client";
 import { createTradingAgent, generateTradingPrompt, getAccountRiskConfig, getTradingStrategy } from "../agents/tradingAgent";
 import type { AccountRiskConfig } from "../agents/tradingAgent";
 import { createOkxClient, createExchangeClientFromActiveAccount } from "../services/okxClient";
+import { getActiveAccount } from "../services/accountConfigService";
 import { getChinaTimeISO } from "../utils/timeUtils";
 import { RISK_PARAMS } from "../config/riskParams.new";
-import { getQuantoMultiplier } from "../utils/contractUtils";
+import { getExchangeProvider } from "../config/exchange";
 import { ensureAgentDecisionExecutionColumn, ensureAgentRequestLogsTable } from "../database/migrations";
 import { websocketService } from "../services/websocketService";
 import { insertAgentRequestLog } from "../database/agent-request-logs";
+import { getQuantoMultiplier } from "../utils/contractUtils";
 
 const logger = createLogger({
   name: "trading-loop",
@@ -436,7 +438,8 @@ function createTradeActionSummary(actions: TradeActionRecord[]): { message: stri
       }
 
       if (sizeLabel) {
-        detailParts.push(`${sizeLabel} 张`);
+        const unitLabel = getExchangeProvider() === "okx" ? "张" : "个";
+        detailParts.push(`${sizeLabel} ${unitLabel}`);
       } else if (amountLabel) {
         detailParts.push(`${amountLabel} USDT`);
       }
@@ -600,11 +603,15 @@ async function collectMarketData() {
       };
       
       // 保存技术指标到数据库（确保所有数值都是有效的）
+      const activeAccount = await getActiveAccount();
+      const accountId = activeAccount ? activeAccount.id.toString() : "default";
+      
       await dbClient.execute({
         sql: `INSERT INTO trading_signals 
-              (symbol, timestamp, price, ema_20, ema_50, macd, rsi_7, rsi_14, volume, funding_rate)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              (account_id, symbol, timestamp, price, ema_20, ema_50, macd, rsi_7, rsi_14, volume, funding_rate)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
+          accountId,
           symbol,
           getChinaTimeISO(),
           ensureFinite(marketData[symbol].price),
@@ -910,13 +917,20 @@ function calculateIndicators(candles: any[]) {
  * 计算 Sharpe Ratio
  * 使用最近30天的账户历史数据
  */
-async function calculateSharpeRatio(): Promise<number> {
+async function calculateSharpeRatio(accountId?: number | null): Promise<number> {
   try {
     // 尝试获取所有账户历史数据（不限制30天）
+    let sql = "SELECT total_value, timestamp FROM account_history ORDER BY timestamp ASC";
+    let args: any[] = [];
+
+    if (accountId) {
+      sql = "SELECT total_value, timestamp FROM account_history WHERE account_id = ? ORDER BY timestamp ASC";
+      args = [accountId];
+    }
+
     const result = await dbClient.execute({
-      sql: `SELECT total_value, timestamp FROM account_history 
-            ORDER BY timestamp ASC`,
-      args: [],
+      sql,
+      args,
     });
     
     if (!result.rows || result.rows.length < 2) {
@@ -973,28 +987,62 @@ async function calculateSharpeRatio(): Promise<number> {
  * - 前端显示时需加上 unrealisedPnl
  */
 async function getAccountInfo() {
+  const activeAccount = await getActiveAccount();
+  const accountId = activeAccount ? activeAccount.id : null;
   const okxClient = await createExchangeClientFromActiveAccount();
   
   try {
-  const account = await okxClient.getFuturesAccount();
+    const account = await okxClient.getFuturesAccount();
     
     // 从数据库获取初始资金
-    const initialResult = await dbClient.execute(
-      "SELECT total_value FROM account_history ORDER BY timestamp ASC LIMIT 1"
-    );
-    const initialBalance = initialResult.rows[0]
-      ? Number.parseFloat(initialResult.rows[0].total_value as string)
-      : 100;
+    let initialBalance = 100;
+    if (accountId) {
+      const initialResult = await dbClient.execute({
+        sql: "SELECT total_value FROM account_history WHERE account_id = ? ORDER BY timestamp ASC LIMIT 1",
+        args: [accountId]
+      });
+      if (initialResult.rows.length > 0) {
+        initialBalance = Number.parseFloat(initialResult.rows[0].total_value as string);
+      } else {
+        // 如果当前账户没有历史记录，尝试查找 account_id 为 NULL 的记录（兼容旧数据）
+        // 或者直接使用当前余额作为初始资金（如果是刚创建的账户）
+        const fallbackResult = await dbClient.execute({
+          sql: "SELECT total_value FROM account_history WHERE account_id IS NULL ORDER BY timestamp ASC LIMIT 1",
+          args: []
+        });
+        if (fallbackResult.rows.length > 0) {
+          initialBalance = Number.parseFloat(fallbackResult.rows[0].total_value as string);
+        }
+      }
+    } else {
+      const initialResult = await dbClient.execute(
+        "SELECT total_value FROM account_history ORDER BY timestamp ASC LIMIT 1"
+      );
+      initialBalance = initialResult.rows[0]
+        ? Number.parseFloat(initialResult.rows[0].total_value as string)
+        : 100;
+    }
     
     // 从数据库获取峰值净值
-    const peakResult = await dbClient.execute(
-      "SELECT MAX(total_value) as peak FROM account_history"
-    );
-    const peakBalance = peakResult.rows[0]?.peak 
-      ? Number.parseFloat(peakResult.rows[0].peak as string)
-      : initialBalance;
+    let peakBalance = initialBalance;
+    if (accountId) {
+      const peakResult = await dbClient.execute({
+        sql: "SELECT MAX(total_value) as peak FROM account_history WHERE account_id = ?",
+        args: [accountId]
+      });
+      if (peakResult.rows[0]?.peak) {
+        peakBalance = Number.parseFloat(peakResult.rows[0].peak as string);
+      }
+    } else {
+      const peakResult = await dbClient.execute(
+        "SELECT MAX(total_value) as peak FROM account_history"
+      );
+      if (peakResult.rows[0]?.peak) {
+        peakBalance = Number.parseFloat(peakResult.rows[0].peak as string);
+      }
+    }
     
-  // 从 OKX API 返回的数据中提取字段
+    // 从 OKX API 返回的数据中提取字段
     const accountTotal = Number.parseFloat(account.total || "0");
     const availableBalance = Number.parseFloat(account.available || "0");
     const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
@@ -1008,7 +1056,7 @@ async function getAccountInfo() {
     const returnPercent = ((totalBalance - initialBalance) / initialBalance) * 100;
     
     // 计算 Sharpe Ratio
-    const sharpeRatio = await calculateSharpeRatio();
+    const sharpeRatio = await calculateSharpeRatio(accountId);
     
     return {
       totalBalance,      // 总资产（不包含未实现盈亏）
@@ -1043,11 +1091,16 @@ async function getAccountInfo() {
  */
 async function syncPositionsFromOkx(cachedPositions?: any[]) {
   const okxClient = await createExchangeClientFromActiveAccount();
+  const activeAccount = await getActiveAccount();
+  const accountId = activeAccount ? activeAccount.id.toString() : "default";
   
   try {
     // 如果提供了缓存数据，使用缓存；否则重新获取
     const okxPositions = cachedPositions || await okxClient.getPositions();
-    const dbResult = await dbClient.execute("SELECT symbol, side, sl_order_id, tp_order_id, stop_loss, profit_target, entry_order_id, opened_at, peak_pnl_percent, partial_close_percentage FROM positions");
+    const dbResult = await dbClient.execute({
+      sql: "SELECT symbol, side, sl_order_id, tp_order_id, stop_loss, profit_target, entry_order_id, opened_at, peak_pnl_percent, partial_close_percentage FROM positions WHERE account_id = ?",
+      args: [accountId],
+    });
     // 双向持仓：用 symbol+side 组合作为唯一键
     const dbPositionsMap = new Map(
       dbResult.rows.map((row: any) => [`${row.symbol}_${row.side}`, row])
@@ -1062,7 +1115,8 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
       return;
     }
     
-    await dbClient.execute("DELETE FROM positions");
+    // 准备批量事务语句
+    const batchStmts: any[] = [];
     
     // 双向持仓模式：同一 symbol 可能同时有 LONG 和 SHORT 两条记录
     // 用 symbol+posSide 组合去重
@@ -1080,7 +1134,7 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
         if (Math.abs(rawSize) > existingSize) {
           mergedPositions.set(posKey, rawPos);
         } else {
-          logger.warn(`检测到 ${symbol} ${posSide} 重复持仓记录，保留张数较大的记录`);
+          logger.warn(`检测到 ${symbol} ${posSide} 重复持仓记录，保留数量较大的记录`);
         }
       } else {
         mergedPositions.set(posKey, rawPos);
@@ -1133,12 +1187,13 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
       // 保留原有的 entry_order_id，不要覆盖
       const entryOrderId = dbPos?.entry_order_id || `synced-${symbol}-${side}-${Date.now()}`;
       
-      await dbClient.execute({
+      batchStmts.push({
         sql: `INSERT INTO positions 
-              (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
+              (account_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                leverage, side, stop_loss, profit_target, sl_order_id, tp_order_id, entry_order_id, opened_at, peak_pnl_percent, partial_close_percentage)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         args: [
+          accountId,
           symbol,
           quantity,
           entryPrice,
@@ -1151,14 +1206,32 @@ async function syncPositionsFromOkx(cachedPositions?: any[]) {
           dbPos?.profit_target || null,
           dbPos?.sl_order_id || null,
           dbPos?.tp_order_id || null,
-          entryOrderId, // 保留原有的订单ID
-          dbPos?.opened_at || getChinaTimeISO(), // 保留原有的开仓时间
-          dbPos?.peak_pnl_percent || 0, // 保留峰值盈利
-          dbPos?.partial_close_percentage || 0, // 保留已平仓百分比（关键修复）
+          entryOrderId,
+          dbPos?.opened_at || getChinaTimeISO(),
+          dbPos?.peak_pnl_percent || 0,
+          dbPos?.partial_close_percentage || 0,
         ],
       });
       
       syncedCount++;
+    }
+    
+    // 执行批量事务：先插入所有新数据，最后再删除旧数据
+    // 这样可以最小化数据库为空的时间窗口
+    if (batchStmts.length > 0) {
+      // 添加删除语句到最后
+      batchStmts.push({
+        sql: "DELETE FROM positions WHERE account_id = ?",
+        args: [accountId],
+      });
+      
+      await dbClient.batch(batchStmts, "write");
+    } else if (activeOkxPositions.length === 0) {
+      // 如果没有持仓需要插入，直接清空
+      await dbClient.execute({
+        sql: "DELETE FROM positions WHERE account_id = ?",
+        args: [accountId],
+      });
     }
     
     const activeOkxPositionsCount = Array.from(mergedPositions.values()).filter((p: any) => Math.abs(Number.parseFloat(p.size || "0")) > 1e-8).length;
@@ -1314,12 +1387,12 @@ async function getPositions(cachedPositions?: any[], options: GetPositionsOption
  * 获取历史成交记录（最近10条）
  * 从数据库获取历史交易记录（监控页的交易历史）
  */
-async function getTradeHistory(limit: number = 10) {
+async function getTradeHistory(accountId: string, limit: number = 10) {
   try {
     // 从数据库获取历史交易记录
     const result = await dbClient.execute({
-      sql: `SELECT * FROM trades ORDER BY timestamp DESC LIMIT ?`,
-      args: [limit],
+      sql: `SELECT * FROM trades WHERE account_id = ? ORDER BY timestamp DESC LIMIT ?`,
+      args: [accountId, limit],
     });
     
     if (!result.rows || result.rows.length === 0) {
@@ -1334,7 +1407,7 @@ async function getTradeHistory(limit: number = 10) {
         type: row.type, // open/close
         price: Number.parseFloat(row.price || "0"),
         quantity: Number.parseFloat(row.quantity || "0"),
-  leverage: Number.parseFloat(row.leverage || "1"),
+        leverage: Number.parseFloat(row.leverage || "1"),
         pnl: row.pnl ? Number.parseFloat(row.pnl) : null,
         fee: Number.parseFloat(row.fee || "0"),
         timestamp: row.timestamp,
@@ -1355,14 +1428,15 @@ async function getTradeHistory(limit: number = 10) {
 /**
  * 获取最近N次的AI决策记录
  */
-async function getRecentDecisions(limit: number = 3) {
+async function getRecentDecisions(accountId: string, limit: number = 3) {
   try {
     const result = await dbClient.execute({
       sql: `SELECT timestamp, iteration, decision, account_value, positions_count 
             FROM agent_decisions 
+            WHERE account_id = ?
             ORDER BY timestamp DESC 
             LIMIT ?`,
-      args: [limit],
+      args: [accountId, limit],
     });
     
     if (!result.rows || result.rows.length === 0) {
@@ -1395,15 +1469,15 @@ async function syncConfigToDatabase() {
     // 更新或插入配置
     await dbClient.execute({
       sql: `INSERT OR REPLACE INTO system_config (key, value, updated_at) VALUES (?, ?, ?)`,
-      args: ['account_stop_loss_usdt', config.stopLossUsdt.toString(), timestamp],
+      args: ['account_stop_loss_usdt', (config.stopLossUsdt ?? 0).toString(), timestamp],
     });
     
     await dbClient.execute({
       sql: `INSERT OR REPLACE INTO system_config (key, value, updated_at) VALUES (?, ?, ?)`,
-      args: ['account_take_profit_usdt', config.takeProfitUsdt.toString(), timestamp],
+      args: ['account_take_profit_usdt', (config.takeProfitUsdt ?? 0).toString(), timestamp],
     });
     
-    logger.info(`配置已同步到数据库: 止损线=${config.stopLossUsdt} USDT, 止盈线=${config.takeProfitUsdt} USDT`);
+    logger.info(`配置已同步到数据库: 止损线=${config.stopLossUsdt ?? 'Disabled'} USDT, 止盈线=${config.takeProfitUsdt ?? 'Disabled'} USDT`);
   } catch (error) {
     logger.error("同步配置到数据库失败:", error as any);
   }
@@ -1545,7 +1619,7 @@ async function closeAllPositions(reason: string): Promise<void> {
       const symbol = contract.replace("_USDT", "");
       const quantity = Math.abs(rawSize);
       
-      // Determine position mode and side
+      // Determine positionSide and isReduceOnly based on posSide
       let positionSide: "long" | "short" | "net" = "long";
       let isReduceOnly = false;
       
@@ -1577,7 +1651,8 @@ async function closeAllPositions(reason: string): Promise<void> {
           reduceOnly: isReduceOnly
         });
         
-        logger.info(`已平仓: ${symbol} ${quantity}张 (Mode: ${positionSide})`);
+        const unitLabel = getExchangeProvider() === "okx" ? "张" : "个";
+        logger.info(`已平仓: ${symbol} ${quantity}${unitLabel} (Mode: ${positionSide})`);
       } catch (error) {
         logger.error(`平仓失败: ${symbol}`, error as any);
       }
@@ -1598,7 +1673,7 @@ async function checkAccountThresholds(accountInfo: any): Promise<boolean> {
   const totalBalance = accountInfo.totalBalance;
   
   // 检查止损线
-  if (totalBalance <= accountRiskConfig.stopLossUsdt) {
+  if (accountRiskConfig.stopLossUsdt !== undefined && totalBalance <= accountRiskConfig.stopLossUsdt) {
     logger.error(`触发止损线！余额: ${totalBalance.toFixed(2)} USDT <= ${accountRiskConfig.stopLossUsdt} USDT`);
     await closeAllPositions(`账户余额触发止损线 (${totalBalance.toFixed(2)} USDT)`);
     // 触发止损后自动停止交易循环，防止反复开仓或误平仓手动交易
@@ -1607,7 +1682,7 @@ async function checkAccountThresholds(accountInfo: any): Promise<boolean> {
   }
   
   // 检查止盈线
-  if (totalBalance >= accountRiskConfig.takeProfitUsdt) {
+  if (accountRiskConfig.takeProfitUsdt !== undefined && totalBalance >= accountRiskConfig.takeProfitUsdt) {
     logger.warn(`触发止盈线！余额: ${totalBalance.toFixed(2)} USDT >= ${accountRiskConfig.takeProfitUsdt} USDT`);
     await closeAllPositions(`账户余额触发止盈线 (${totalBalance.toFixed(2)} USDT)`);
     // 触发止盈后自动停止交易循环
@@ -1647,6 +1722,10 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
   lastExecutionFinishedAt = null;
   let executionStartedAt = getChinaTimeISO();
   lastExecutionStartedAt = executionStartedAt;
+
+  // 获取当前活跃账户ID
+  const activeAccount = await getActiveAccount();
+  const accountId = activeAccount ? activeAccount.id.toString() : "default";
 
   iterationCount++;
   const minutesElapsed = Math.floor((Date.now() - tradingStartTime.getTime()) / 60000);
@@ -1704,10 +1783,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       // 检查账户余额是否触发止损或止盈
       const shouldExit = await checkAccountThresholds(accountInfo);
       if (shouldExit) {
-        logger.error("账户余额触发退出条件，系统即将停止！");
-        setTimeout(() => {
-          process.exit(0);
-        }, 5000);
+        logger.error("账户余额触发退出条件，交易循环已停止。");
         return;
       }
       
@@ -1845,6 +1921,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       
       // d) 其他风控检查已移除，交由AI全权决策
       // AI负责：止损、移动止盈、分批止盈、时间止盈、峰值回撤等策略性决策
+     
       // 系统只保留底线安全保护（极端止损、最大持仓时间强制平仓、账户回撤保护）
       
       logger.info(`${symbol} 持仓监控: 盈亏=${pnlPercent.toFixed(2)}%, 持仓时间=${holdingHours.toFixed(1)}h, 峰值盈利=${peakPnlPercent.toFixed(2)}%, 杠杆=${leverage}x`);
@@ -1941,13 +2018,15 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
             // 详细日志
             logger.info(`【强制平仓盈亏详情】${symbol} ${side}`);
             logger.info(`  原因: ${closeReason}`);
-            logger.info(`  开仓价: ${pos.entry_price.toFixed(4)}, 平仓价: ${finalPrice.toFixed(4)}, 数量: ${actualQuantity}张`);
+            const unitLabel = getExchangeProvider() === "okx" ? "张" : "个";
+            logger.info(`  开仓价: ${pos.entry_price.toFixed(4)}, 平仓价: ${finalPrice.toFixed(4)}, 数量: ${actualQuantity}${unitLabel}`);
             logger.info(`  净盈亏: ${pnl.toFixed(2)} USDT, 手续费: ${totalFee.toFixed(4)} USDT`);
             
             await dbClient.execute({
-              sql: `INSERT INTO trades (order_id, symbol, side, type, price, quantity, leverage, pnl, fee, timestamp, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              sql: `INSERT INTO trades (account_id, order_id, symbol, side, type, price, quantity, leverage, pnl, fee, timestamp, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
               args: [
+                accountId,
                 order.id?.toString() || "",
                 symbol,
                 side,
@@ -2027,7 +2106,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     // 7. 获取历史成交记录（最近10条）
     let tradeHistory: any[] = [];
     try {
-      tradeHistory = await getTradeHistory(10);
+      tradeHistory = await getTradeHistory(accountId, 10);
     } catch (error) {
       logger.warn("获取历史成交记录失败:", error as any);
       // 不影响主流程，继续执行
@@ -2036,7 +2115,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     // 8. 获取上一次的AI决策
     let recentDecisions: any[] = [];
     try {
-      recentDecisions = await getRecentDecisions(1);
+      recentDecisions = await getRecentDecisions(accountId, 1);
     } catch (error) {
       logger.warn("获取最近决策记录失败:", error as any);
       // 不影响主流程，继续执行
@@ -2173,6 +2252,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
       const outputDurationMs = agentRequestStartedAt ? Date.now() - agentRequestStartedAt : null;
 
       await insertAgentRequestLog(dbClient, {
+        accountId,
         iteration: iterationCount,
         modelName,
         instructions,
@@ -2217,9 +2297,10 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
 
       await dbClient.execute({
         sql: `INSERT INTO agent_decisions 
-      (timestamp, execution_started_at, iteration, market_analysis, decision, actions_taken, account_value, positions_count)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)` ,
+      (account_id, timestamp, execution_started_at, iteration, market_analysis, decision, actions_taken, account_value, positions_count)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
         args: [
+          accountId,
           decisionTimestamp,
           executionStartedAt,
           iterationCount,
@@ -2255,7 +2336,8 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
             ? ((pos.current_price - pos.entry_price) / pos.entry_price * 100 * (pos.side === 'long' ? 1 : -1))
             : 0;
           const pnlPercent = priceChangePercent * pos.leverage;
-          logger.info(`  ${pos.symbol} ${pos.side === 'long' ? '做多' : '做空'} ${pos.quantity}张 (入场: ${pos.entry_price.toFixed(2)}, 当前: ${pos.current_price.toFixed(2)}, 盈亏: ${pos.unrealized_pnl >= 0 ? '+' : ''}${pos.unrealized_pnl.toFixed(2)} USDT / ${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`);
+          const unitLabel = getExchangeProvider() === "okx" ? "张" : "个";
+          logger.info(`  ${pos.symbol} ${pos.side === 'long' ? '做多' : '做空'} ${pos.quantity}${unitLabel} (入场: ${pos.entry_price.toFixed(2)}, 当前: ${pos.current_price.toFixed(2)}, 盈亏: ${pos.unrealized_pnl >= 0 ? '+' : ''}${pos.unrealized_pnl.toFixed(2)} USDT / ${pnlPercent >= 0 ? '+' : ''}${pnlPercent.toFixed(2)}%)`);
         });
       }
       

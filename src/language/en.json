@@ -162,7 +162,14 @@
 			"bitgetPassphrasePlaceholder": "Enter Bitget Passphrase",
 			"proxyUrl": "Proxy URL (Optional)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
-			"testConnection": "Test Connection"
+			"testConnection": "Test Connection",
+			"riskSettings": "Risk Management",
+			"stopLoss": "Account Stop Loss (USDT)",
+			"stopLossPlaceholder": "e.g. 1000",
+			"stopLossHint": "Stop trading if equity drops below this value. Leave empty to disable.",
+			"takeProfit": "Account Take Profit (USDT)",
+			"takeProfitPlaceholder": "e.g. 5000",
+			"takeProfitHint": "Stop trading if equity reaches this value. Leave empty to disable."
 		},
 		"badges": {
 			"active": "Active",
@@ -458,6 +465,8 @@
 			"maxPositionsPlaceholder": "Enter max positions",
 			"maxHoldingHours": "Max Holding Time (hours)",
 			"maxHoldingHoursPlaceholder": "Enter hours",
+			"minHoldingMinutes": "Min Holding Time (minutes)",
+			"minHoldingMinutesPlaceholder": "Enter minutes",
 			"extremeStopLoss": "Extreme Stop Loss (%)",
 			"extremeStopLossPlaceholder": "Enter percentage",
 			"drawdownSection": "📉 Drawdown Controls",
@@ -490,6 +499,7 @@
 				"varPrompt": "<code>{{VAR_PROMPT}}</code> Default variable notes",
 				"interval": "<code>{{TRADING_INTERVAL_MINUTES}}</code> Trading loop interval (minutes)",
 				"maxHoldingHours": "<code>{{MAX_HOLDING_HOURS}}</code> Maximum holding hours",
+				"minHoldingMinutes": "<code>{{MIN_HOLDING_MINUTES}}</code> Minimum holding minutes",
 				"maxHoldingCycles": "<code>{{MAX_HOLDING_CYCLES}}</code> Maximum holding cycles",
 				"maxPositions": "<code>{{MAX_POSITIONS}}</code> Maximum open positions",
 				"extremeStopLoss": "<code>{{EXTREME_STOP_LOSS_PERCENT}}</code> System extreme stop loss (%)",

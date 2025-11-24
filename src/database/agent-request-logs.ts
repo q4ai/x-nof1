@@ -13,6 +13,7 @@ const logger = createLogger({
 export type AgentRequestLogStatus = "success" | "error";
 
 export interface AgentRequestLogInput {
+  accountId?: string;
   iteration?: number;
   modelName: string;
   instructions: string;
@@ -37,6 +38,7 @@ export function summarizeAgentResponseText(text: string | null, maxLength = 200)
 
 export async function insertAgentRequestLog(client: Client, payload: AgentRequestLogInput): Promise<void> {
   const {
+    accountId,
     iteration,
     modelName,
     instructions,
@@ -54,9 +56,10 @@ export async function insertAgentRequestLog(client: Client, payload: AgentReques
   try {
     await client.execute({
       sql: `INSERT INTO agent_request_logs
-        (created_at, iteration, model_name, instructions, prompt, response, response_summary, status, error_message, output_duration_ms)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
+        (account_id, created_at, iteration, model_name, instructions, prompt, response, response_summary, status, error_message, output_duration_ms)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
       args: [
+        accountId || "default",
         timestamp,
         iteration ?? null,
         modelName,
@@ -66,12 +69,10 @@ export async function insertAgentRequestLog(client: Client, payload: AgentReques
         summary,
         status,
         errorMessage ?? null,
-        typeof outputDurationMs === "number" && Number.isFinite(outputDurationMs)
-          ? Math.max(0, Math.round(outputDurationMs))
-          : null,
+        outputDurationMs ?? null,
       ],
     });
-  } catch (error) {
-    logger.error("写入 agent_request_logs 失败", error as any);
+  } catch (error: any) {
+    logger.error(`Failed to insert agent request log: ${error.message}`);
   }
 }
