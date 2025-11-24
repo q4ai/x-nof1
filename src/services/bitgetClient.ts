@@ -242,7 +242,7 @@ export class BitgetClient {
         instId: pos.symbol,
         contract,
         size: String(direction),
-        entryPrice: pos.averageOpenPrice,
+        entryPrice: pos.openPriceAvg || pos.averageOpenPrice || "0",
         markPrice: pos.markPrice,
         leverage: pos.leverage,
         margin: pos.margin,

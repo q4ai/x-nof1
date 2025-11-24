@@ -186,7 +186,7 @@ export async function executeOpenPosition({
   amount,
   amountUsdt,
   amountUnit = "usdt",
-  isNotional = true,
+  isNotional = false,
   marginMode = "cross",
   orderType = "market",
   price,
@@ -644,10 +644,10 @@ export const openPositionTool = createTool({
     symbol: z.string().describe("币种代码"),
     side: z.enum(["long", "short"]).describe("方向：long=做多，short=做空"),
     leverage: z.number().min(1).max(RISK_PARAMS.MAX_LEVERAGE).describe(`杠杆倍数（1-${RISK_PARAMS.MAX_LEVERAGE}倍，根据环境变量MAX_LEVERAGE配置）`),
-    amountUsdt: z.number().describe("开仓金额（USDT面值）- 该金额表示仓位的总价值，例如25表示开25 USDT的仓位"),
-    isNotional: z.boolean().optional().default(true).describe("金额类型：true=USDT面值（默认，推荐），false=币的数量。注意：大部分情况应使用默认值true"),
+    amountUsdt: z.number().describe("开仓金额（USDT保证金）- 该金额表示保证金数量，实际仓位 = 保证金 × 杠杆，例如25 USDT保证金配合10倍杠杆开250 USDT仓位"),
+    isNotional: z.boolean().optional().default(false).describe("金额类型：false=USDT保证金（默认），true=USDT面值。注意：默认使用保证金模式"),
   }),
-  execute: async ({ symbol, side, leverage, amountUsdt, isNotional = true }) => 
+  execute: async ({ symbol, side, leverage, amountUsdt, isNotional = false }) => 
     executeOpenPosition({ symbol, side, leverage, amountUsdt, isNotional }),
 });
 

@@ -2157,6 +2157,51 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   /**
+   * 获取策略默认提示词（需要鉴权）
+   */
+  app.get("/api/strategy/default-prompts", requireAuth, async (c) => {
+    try {
+      const requestedStrategy = c.req.query("strategy")?.trim().toLowerCase();
+      const validStrategies: TradingStrategy[] = ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"];
+      const fallbackStrategy = getTradingStrategy();
+      const strategy: TradingStrategy = requestedStrategy && validStrategies.includes(requestedStrategy as TradingStrategy)
+        ? (requestedStrategy as TradingStrategy)
+        : fallbackStrategy;
+
+      // Get language parameter and validate
+      const { normalizeStrategyLanguage } = await import("../config/strategyTypes");
+      const rawLanguage = c.req.query("language")?.trim().toLowerCase();
+      const requestedLanguage = normalizeStrategyLanguage(rawLanguage);
+      
+      const intervalParam = c.req.query("interval")?.trim().toLowerCase();
+      const intervalMinutes = (() => {
+        if (!intervalParam) {
+          return RISK_PARAMS.TRADING_INTERVAL_MINUTES;
+        }
+        const numericCandidate = intervalParam.endsWith("m") ? intervalParam.slice(0, -1) : intervalParam;
+        const parsed = Number.parseInt(numericCandidate, 10);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          return RISK_PARAMS.TRADING_INTERVAL_MINUTES;
+        }
+        return parsed;
+      })();
+
+      const sections = await getStrategyPromptDefaultSections(strategy, intervalMinutes, requestedLanguage);
+      
+      return c.json({
+        strategy,
+        intervalMinutes,
+        language: requestedLanguage,
+        sections,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取默认 Prompt 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
    * 获取当前 AI 模型
    */
   app.get("/api/public/model", async (c) => {
