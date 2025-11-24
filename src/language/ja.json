@@ -552,10 +552,11 @@
 		"saveAndRestart": "保存して再起動",
 		"ai": {
 			"sectionTitle": "🤖 AI モデル設定",
-			"apiKeyLabel": "OpenAI API Key <span class=\"required\">*</span>",
+			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
 			"apiKeyPlaceholder": "sk-...",
 			"baseUrl": "API ベースURL",
 			"baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+			"customOption": "カスタム",
 			"modelName": "AI モデル名",
 			"modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
 			"testButton": "🔍 AI 接続をテスト",

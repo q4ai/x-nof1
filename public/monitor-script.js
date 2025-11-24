@@ -4709,6 +4709,36 @@ class TradingMonitor {
         event.preventDefault();
         void this.submitSettingsForm();
       });
+
+      // Base URL Preset Selector
+      const baseUrlPreset = document.getElementById("base-url-preset");
+      const baseUrlInput = document.getElementById("base-url-input");
+      
+      if (baseUrlPreset && baseUrlInput) {
+        baseUrlPreset.addEventListener("change", (event) => {
+          const selectedValue = event.target.value;
+          if (selectedValue) {
+            baseUrlInput.value = selectedValue;
+          } else {
+            // 选择自定义选项时清空输入框并获得焦点
+            baseUrlInput.value = "";
+            baseUrlInput.focus();
+          }
+        });
+
+        // Set initial preset based on current input value
+        baseUrlInput.addEventListener("input", () => {
+          const currentValue = baseUrlInput.value.trim();
+          const matchingOption = Array.from(baseUrlPreset.options).find(
+            option => option.value && option.value === currentValue
+          );
+          if (matchingOption) {
+            baseUrlPreset.value = matchingOption.value;
+          } else {
+            baseUrlPreset.value = "";
+          }
+        });
+      }
     }
 
     if (this.accountCancelBtn) {
@@ -5860,6 +5890,22 @@ class TradingMonitor {
     console.log("[openSettingsModal] 配置已获取，开始填充表单");
     this.populateForm(this.settingsForm, config, SETTINGS_CONFIG_KEYS);
     this.applyPrivacyDependencies();
+    
+    // Sync Base URL Preset Selector
+    const baseUrlInput = document.getElementById("base-url-input");
+    const baseUrlPreset = document.getElementById("base-url-preset");
+    if (baseUrlInput && baseUrlPreset) {
+      const currentValue = baseUrlInput.value.trim();
+      const matchingOption = Array.from(baseUrlPreset.options).find(
+        option => option.value && option.value === currentValue
+      );
+      if (matchingOption) {
+        baseUrlPreset.value = matchingOption.value;
+      } else {
+        baseUrlPreset.value = "";
+      }
+    }
+    
     this.showModal(this.settingsModal);
     console.log("[openSettingsModal] 弹窗已显示");
   }

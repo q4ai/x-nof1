@@ -556,10 +556,11 @@
 		"saveAndRestart": "保存并重启",
 		"ai": {
 			"sectionTitle": "🤖 AI 模型配置",
-			"apiKeyLabel": "OpenAI API Key <span class=\"required\">*</span>",
+			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
 			"apiKeyPlaceholder": "sk-...",
 			"baseUrl": "API 基础地址",
 			"baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+			"customOption": "自定义",
 			"modelName": "AI 模型名称",
 			"modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
 			"testButton": "🔍 测试 AI 连接",

@@ -540,10 +540,11 @@
 		"saveAndRestart": "Save & Restart",
 		"ai": {
 			"sectionTitle": "🤖 AI Model Configuration",
-			"apiKeyLabel": "OpenAI API Key <span class=\"required\">*</span>",
+			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
 			"apiKeyPlaceholder": "sk-...",
 			"baseUrl": "API Base URL",
 			"baseUrlPlaceholder": "https://openrouter.ai/api/v1",
+			"customOption": "Custom",
 			"modelName": "AI Model Name",
 			"modelNamePlaceholder": "deepseek/deepseek-v3.2-exp",
 			"testButton": "🔍 Test AI Connection",

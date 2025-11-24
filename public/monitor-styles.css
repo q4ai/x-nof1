@@ -2415,6 +2415,39 @@ a:hover {
   opacity: 1;
 }
 
+/* Base URL Selector */
+.base-url-selector {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.base-url-preset {
+  flex: 0 0 180px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.2s ease;
+}
+
+.base-url-preset:focus {
+  outline: none;
+  border-color: var(--accent-cyan);
+}
+
+.base-url-preset option {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+#base-url-input {
+  flex: 1;
+}
+
 .form-row {
   display: flex;
   gap: 16px;
