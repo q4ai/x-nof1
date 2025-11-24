@@ -772,10 +772,14 @@ export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAg
 		logger.warn("OPENAI_API_KEY 未配置，AI Agent 将无法正常调用模型");
 	}
 
+	// 清理 Base URL
+	let cleanBaseUrl = String(baseURL).trim();
+	cleanBaseUrl = cleanBaseUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, "");
+
 	const openai = createOpenAI({
 		apiKey,
-		baseURL,
-	});
+		baseURL: cleanBaseUrl,
+	} as any);
 
 	const memory = new Memory({
 		storage: new LibSQLMemoryAdapter({

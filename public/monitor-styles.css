@@ -1086,9 +1086,10 @@ a:hover {
 }
 
 .section-header h4 {
-  font-size: 13px;
-  font-weight: 500;
+  font-size: 14px;
+  font-weight: 600;
   color: var(--text-primary);
+  margin: 0;
 }
 
 .equity-metrics {
@@ -1727,6 +1728,17 @@ a:hover {
   font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.header-actions button {
+  padding: 6px 12px;
+  font-size: 12px;
 }
 
 .modal-close {

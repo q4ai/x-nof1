@@ -943,8 +943,11 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
-  <h3 data-i18n="modals.settings.title">System Settings</h3>
-        <button class="modal-close">&times;</button>
+        <h3 data-i18n="modals.settings.title">System Settings</h3>
+        <div class="header-actions">
+          <button type="button" class="btn-secondary" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
+          <button type="submit" form="settings-form" class="btn-primary" data-i18n="settings.saveAndRestart">Save & Restart</button>
+        </div>
       </div>
       <div class="modal-body" id="settings-body">
         <form id="settings-form" class="settings-form">
@@ -1014,10 +1017,6 @@
             </div>
           </div>
 
-          <div class="form-actions">
-            <button type="button" class="btn-secondary" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
-            <button type="submit" class="btn-primary" data-i18n="settings.saveAndRestart">Save & Restart</button>
-          </div>
         </form>
       </div>
     </div>
@@ -1046,14 +1045,13 @@
               <div class="base-url-selector">
                 <select class="base-url-preset" id="ai-model-base-url-preset" aria-label="API Provider Preset">
                   <option value="" data-i18n="settings.ai.customOption">Custom</option>
-                  <option value="https://openrouter.ai/api/v1">OpenRouter</option>
-                  <option value="https://api.deepseek.com">DeepSeek</option>
-                  <option value="https://api.openai.com/v1">OpenAI</option>
-                  <option value="https://open.bigmodel.cn/api/paas/v4">智谱 BigModel</option>
-                  <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">阿里云 DashScope</option>
-                  <option value="https://api.anthropic.com/v1">Anthropic Claude</option>
+                  <option value="https://openrouter.ai/api/v1/chat/completions">OpenRouter</option>
+                  <option value="https://api.deepseek.com/chat/completions">DeepSeek</option>
+                  <option value="https://api.openai.com/v1/chat/completions">OpenAI</option>
+                  <option value="https://open.bigmodel.cn/api/paas/v4/chat/completions">智谱 BigModel</option>
+                  <option value="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions">阿里云 DashScope</option>
                 </select>
-                <input type="text" id="ai-model-edit-base-url" placeholder="https://openrouter.ai/api/v1" data-i18n-placeholder="aiModels.form.baseUrlPlaceholder" required />
+                <input type="text" id="ai-model-edit-base-url" placeholder="https://openrouter.ai/api/v1/chat/completions" data-i18n-placeholder="aiModels.form.baseUrlPlaceholder" required />
               </div>
             </div>
 

@@ -1313,12 +1313,16 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       if (!name || !api_key || !base_url || !model_name) {
         return c.json({ error: "缺少必需参数" }, 400);
       }
+
+      // 清理 Base URL
+      let cleanBaseUrl = String(base_url).trim();
+      cleanBaseUrl = cleanBaseUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, "");
       
       const { createAiModel } = await import("../services/aiModelService");
       const model = await createAiModel({
         name: String(name),
         api_key: String(api_key),
-        base_url: String(base_url),
+        base_url: cleanBaseUrl,
         model_name: String(model_name),
       });
       
@@ -1355,11 +1359,17 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const body = await c.req.json();
       const { name, api_key, base_url, model_name } = body;
       
+      let cleanBaseUrl = base_url;
+      if (base_url !== undefined) {
+        cleanBaseUrl = String(base_url).trim();
+        cleanBaseUrl = cleanBaseUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, "");
+      }
+
       const { updateAiModel } = await import("../services/aiModelService");
       const model = await updateAiModel(id, {
         name: name !== undefined ? String(name) : undefined,
         api_key: api_key !== undefined ? String(api_key) : undefined,
-        base_url: base_url !== undefined ? String(base_url) : undefined,
+        base_url: cleanBaseUrl,
         model_name: model_name !== undefined ? String(model_name) : undefined,
       });
       
@@ -1370,7 +1380,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         model: {
           id: model.id,
           name: model.name,
-          provider: model.provider,
           base_url: model.base_url,
           model_name: model.model_name,
           is_active: model.is_active,
@@ -1432,7 +1441,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         model: {
           id: model.id,
           name: model.name,
-          provider: model.provider,
           base_url: model.base_url,
           model_name: model.model_name,
           is_active: model.is_active,
@@ -1456,6 +1464,10 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       if (!api_key || !base_url || !model_name) {
         return c.json({ error: "缺少必需参数" }, 400);
       }
+
+      // 清理 Base URL (移除末尾的 /chat/completions 和 /)
+      let cleanBaseUrl = String(base_url).trim();
+      cleanBaseUrl = cleanBaseUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, "");
       
       // 使用 AI SDK 测试连接
       const { createOpenAI } = await import("@ai-sdk/openai");
@@ -1463,12 +1475,12 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       
       const openai = createOpenAI({
         apiKey: String(api_key),
-        baseURL: String(base_url),
-      });
+        baseURL: cleanBaseUrl,
+      } as any);
       
       const startTime = Date.now();
       const result = await generateText({
-        model: openai(String(model_name)),
+        model: openai.chat(String(model_name)),
         prompt: "Hello",
       });
       const duration = Date.now() - startTime;
@@ -1524,14 +1536,18 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const { createOpenAI } = await import("@ai-sdk/openai");
       const { generateText } = await import("ai");
       
+      // 清理 Base URL
+      let cleanBaseUrl = model.base_url.trim();
+      cleanBaseUrl = cleanBaseUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, "");
+
       const openai = createOpenAI({
         apiKey: model.api_key,
-        baseURL: model.base_url,
-      });
+        baseURL: cleanBaseUrl,
+      } as any);
       
       const startTime = Date.now();
       const result = await generateText({
-        model: openai(model.model_name),
+        model: openai.chat(model.model_name),
         prompt: "Hello",
       });
       const duration = Date.now() - startTime;
