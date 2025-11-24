@@ -4739,6 +4739,32 @@ class TradingMonitor {
           }
         });
       }
+
+      // Settings Tab Switching
+      const settingsTabs = document.getElementById("settings-tabs");
+      if (settingsTabs) {
+        settingsTabs.addEventListener("click", (event) => {
+          const btn = event.target.closest("[data-settings-tab]");
+          if (!btn) return;
+
+          const targetTab = btn.dataset.settingsTab;
+          
+          // Update tab buttons
+          settingsTabs.querySelectorAll(".settings-tab-btn").forEach(b => {
+            b.classList.remove("active");
+          });
+          btn.classList.add("active");
+
+          // Update tab panels
+          document.querySelectorAll("[data-settings-panel]").forEach(panel => {
+            if (panel.dataset.settingsPanel === targetTab) {
+              panel.classList.add("active");
+            } else {
+              panel.classList.remove("active");
+            }
+          });
+        });
+      }
     }
 
     if (this.accountCancelBtn) {

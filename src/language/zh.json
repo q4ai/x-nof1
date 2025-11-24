@@ -554,6 +554,10 @@
 	},
 	"settings": {
 		"saveAndRestart": "保存并重启",
+		"tabs": {
+			"basic": "基本设置",
+			"aiModel": "AI 模型配置"
+		},
 		"ai": {
 			"sectionTitle": "🤖 AI 模型配置",
 			"apiKeyLabel": "API Key <span class=\"required\">*</span>",

@@ -939,7 +939,7 @@
   </div>
 
   <!-- 系统设置弹窗 -->
-  <div class="modal settings-modal" id="settings-modal">
+  <div class="modal settings-modal settings-modal--fullscreen" id="settings-modal">
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
@@ -948,91 +948,109 @@
       </div>
       <div class="modal-body" id="settings-body">
         <form id="settings-form" class="settings-form">
-          
-          <!-- AI API 配置 -->
-          <div class="settings-section">
-            <h4 data-i18n-html="settings.ai.sectionTitle">🤖 AI Model Configuration</h4>
-            <div class="form-group">
-              <label data-i18n="settings.ai.baseUrl">API Base URL</label>
-              <div class="base-url-selector">
-                <select class="base-url-preset" id="base-url-preset" aria-label="API Provider Preset">
-                  <option value="" data-i18n="settings.ai.customOption">Custom</option>
-                  <option value="https://openrouter.ai/api/v1">OpenRouter</option>
-                  <option value="https://api.deepseek.com">DeepSeek</option>
-                  <option value="https://api.openai.com/v1">OpenAI</option>
-                  <option value="https://open.bigmodel.cn/api/paas/v4">智谱 BigModel</option>
-                  <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">阿里云 DashScope</option>
-                  <option value="https://api.anthropic.com/v1">Anthropic Claude</option>
-                </select>
-                <input type="text" name="OPENAI_BASE_URL" id="base-url-input" placeholder="https://openrouter.ai/api/v1" data-i18n-placeholder="settings.ai.baseUrlPlaceholder" />
-              </div>
-            </div>
-            <div class="form-group">
-              <label data-i18n-html="settings.ai.apiKeyLabel">OpenAI API Key <span class="required">*</span></label>
-              <div class="password-input">
-                <input type="password" name="OPENAI_API_KEY" placeholder="sk-..." autocomplete="off" data-i18n-placeholder="settings.ai.apiKeyPlaceholder" />
-                <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
-              </div>
-            </div>
-            <div class="form-group">
-              <label data-i18n="settings.ai.modelName">AI Model Name</label>
-              <input type="text" name="AI_MODEL_NAME" placeholder="deepseek/deepseek-v3.2-exp" data-i18n-placeholder="settings.ai.modelNamePlaceholder" />
-            </div>
-            <div class="form-row" style="align-items: center; margin-top: 12px;">
-              <div class="form-group" style="flex: 1;"></div>
-              <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
-                <button type="button" class="btn-test" id="test-ai-api" data-i18n-html="settings.ai.testButton">🔍 Test AI Connection</button>
-              </div>
-            </div>
-            <div id="ai-test-result" class="api-test-result" style="display: none;"></div>
+
+          <!-- Tab 导航 -->
+          <div class="settings-tabs" id="settings-tabs">
+            <button type="button" class="settings-tab-btn active" data-settings-tab="basic" data-i18n="settings.tabs.basic">Basic Settings</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="ai" data-i18n="settings.tabs.aiModel">AI Model Configuration</button>
           </div>
 
-          <!-- 网络配置 -->
-          <div class="settings-section">
-            <h4 data-i18n-html="settings.network.sectionTitle">🌐 Network Configuration</h4>
-            <div class="form-group">
-              <label data-i18n="settings.network.httpProxy">HTTP Proxy (optional)</label>
-              <input type="text" name="HTTP_PROXY_URL" placeholder="http://127.0.0.1:7890" data-i18n-placeholder="settings.network.httpProxyPlaceholder" />
-            </div>
-          </div>
+          <div class="settings-tab-panels">
+            <!-- Tab 1: 基本设置 -->
+            <div class="settings-tab-panel active" data-settings-panel="basic">
+              <!-- 网络配置 -->
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.network.sectionTitle">🌐 Network Configuration</h4>
+                <div class="form-group">
+                  <label data-i18n="settings.network.httpProxy">HTTP Proxy (optional)</label>
+                  <input type="text" name="HTTP_PROXY_URL" placeholder="http://127.0.0.1:7890" data-i18n-placeholder="settings.network.httpProxyPlaceholder" />
+                </div>
+              </div>
 
-          <!-- 隐私设置 -->
-          <div class="settings-section">
-            <h4 data-i18n-html="settings.privacy.sectionTitle">🔒 Privacy Settings</h4>
-            <p class="field-hint" data-i18n="settings.privacy.description">Control how your strategy contributes to the community leaderboard.</p>
-            <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" name="COMMUNITY_REPORT_ENABLED" />
-                <span data-i18n="settings.privacy.reportEnabled">Join community AI competition leaderboard</span>
-              </label>
-              <p class="field-hint" data-i18n="settings.privacy.reportEnabledHint">When enabled, anonymized performance reports are sent hourly.</p>
+              <!-- 隐私设置 -->
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.privacy.sectionTitle">🔒 Privacy Settings</h4>
+                <p class="field-hint" data-i18n="settings.privacy.description">Control how your strategy contributes to the community leaderboard.</p>
+                <div class="form-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="COMMUNITY_REPORT_ENABLED" />
+                    <span data-i18n="settings.privacy.reportEnabled">Join community AI competition leaderboard</span>
+                  </label>
+                  <p class="field-hint" data-i18n="settings.privacy.reportEnabledHint">When enabled, anonymized performance reports are sent hourly.</p>
+                </div>
+                <div class="form-group privacy-sharing">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="COMMUNITY_SHARE_PROMPTS" />
+                    <span data-i18n="settings.privacy.sharePrompts">Share my entry & exit prompt logic</span>
+                  </label>
+                  <p class="field-hint" data-i18n="settings.privacy.sharePromptsHint">Prompt details are only shared if leaderboard reporting is enabled.</p>
+                </div>
+              </div>
+
+              <!-- 重置实盘数据 -->
+              <div class="settings-danger-zone">
+                <h4 data-i18n-html="settings.reset.sectionTitle">⚠️ Reset Live Environment</h4>
+                <p class="danger-hint" data-i18n="settings.reset.hint">This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.</p>
+                <button type="button" class="btn-danger" id="reset-live-data-btn" data-i18n="settings.reset.trigger">Reset Live Data</button>
+                <div class="reset-confirm hidden" id="reset-live-data-confirm">
+                  <p class="confirm-hint" data-i18n-html="settings.reset.confirmHint">Type <code>RESET</code> to confirm.</p>
+                  <input type="text" id="reset-live-data-input" placeholder="Enter RESET to continue" data-i18n-placeholder="settings.reset.confirmPlaceholder" autocomplete="off" />
+                  <div class="reset-confirm-actions">
+                    <button type="button" class="btn-secondary" id="reset-live-data-cancel" data-i18n="common.cancel">Cancel</button>
+                    <button type="button" class="btn-danger" id="reset-live-data-confirm-btn" data-i18n="settings.reset.confirm">Confirm Reset</button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div class="form-group privacy-sharing">
-              <label class="checkbox-label">
-                <input type="checkbox" name="COMMUNITY_SHARE_PROMPTS" />
-                <span data-i18n="settings.privacy.sharePrompts">Share my entry & exit prompt logic</span>
-              </label>
-              <p class="field-hint" data-i18n="settings.privacy.sharePromptsHint">Prompt details are only shared if leaderboard reporting is enabled.</p>
+
+            <!-- Tab 2: AI 模型配置 -->
+            <div class="settings-tab-panel" data-settings-panel="ai">
+              <!-- AI API 配置 -->
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.ai.sectionTitle">🤖 AI Model Configuration</h4>
+              <!-- AI API 配置 -->
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.ai.sectionTitle">🤖 AI Model Configuration</h4>
+                <div class="form-group">
+                  <label data-i18n="settings.ai.baseUrl">API Base URL</label>
+                  <div class="base-url-selector">
+                    <select class="base-url-preset" id="base-url-preset" aria-label="API Provider Preset">
+                      <option value="" data-i18n="settings.ai.customOption">Custom</option>
+                      <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+                      <option value="https://api.deepseek.com">DeepSeek</option>
+                      <option value="https://api.openai.com/v1">OpenAI</option>
+                      <option value="https://open.bigmodel.cn/api/paas/v4">智谱 BigModel</option>
+                      <option value="https://dashscope.aliyuncs.com/compatible-mode/v1">阿里云 DashScope</option>
+                      <option value="https://api.anthropic.com/v1">Anthropic Claude</option>
+                    </select>
+                    <input type="text" name="OPENAI_BASE_URL" id="base-url-input" placeholder="https://openrouter.ai/api/v1" data-i18n-placeholder="settings.ai.baseUrlPlaceholder" />
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label data-i18n-html="settings.ai.apiKeyLabel">OpenAI API Key <span class="required">*</span></label>
+                  <div class="password-input">
+                    <input type="password" name="OPENAI_API_KEY" placeholder="sk-..." autocomplete="off" data-i18n-placeholder="settings.ai.apiKeyPlaceholder" />
+                    <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label data-i18n="settings.ai.modelName">AI Model Name</label>
+                  <input type="text" name="AI_MODEL_NAME" placeholder="deepseek/deepseek-v3.2-exp" data-i18n-placeholder="settings.ai.modelNamePlaceholder" />
+                </div>
+                <div class="form-row" style="align-items: center; margin-top: 12px;">
+                  <div class="form-group" style="flex: 1;"></div>
+                  <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
+                    <button type="button" class="btn-test" id="test-ai-api" data-i18n-html="settings.ai.testButton">🔍 Test AI Connection</button>
+                  </div>
+                </div>
+                <div id="ai-test-result" class="api-test-result" style="display: none;"></div>
+              </div>
             </div>
           </div>
 
           <div class="form-actions">
             <button type="button" class="btn-secondary" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
             <button type="submit" class="btn-primary" data-i18n="settings.saveAndRestart">Save & Restart</button>
-          </div>
-
-          <div class="settings-danger-zone">
-            <h4 data-i18n-html="settings.reset.sectionTitle">⚠️ Reset Live Environment</h4>
-            <p class="danger-hint" data-i18n="settings.reset.hint">This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.</p>
-            <button type="button" class="btn-danger" id="reset-live-data-btn" data-i18n="settings.reset.trigger">Reset Live Data</button>
-            <div class="reset-confirm hidden" id="reset-live-data-confirm">
-              <p class="confirm-hint" data-i18n-html="settings.reset.confirmHint">Type <code>RESET</code> to confirm.</p>
-              <input type="text" id="reset-live-data-input" placeholder="Enter RESET to continue" data-i18n-placeholder="settings.reset.confirmPlaceholder" autocomplete="off" />
-              <div class="reset-confirm-actions">
-                <button type="button" class="btn-secondary" id="reset-live-data-cancel" data-i18n="common.cancel">Cancel</button>
-                <button type="button" class="btn-danger" id="reset-live-data-confirm-btn" data-i18n="settings.reset.confirm">Confirm Reset</button>
-              </div>
-            </div>
           </div>
         </form>
       </div>

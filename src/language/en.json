@@ -538,6 +538,10 @@
 	},
 	"settings": {
 		"saveAndRestart": "Save & Restart",
+		"tabs": {
+			"basic": "Basic Settings",
+			"aiModel": "AI Model Configuration"
+		},
 		"ai": {
 			"sectionTitle": "🤖 AI Model Configuration",
 			"apiKeyLabel": "API Key <span class=\"required\">*</span>",

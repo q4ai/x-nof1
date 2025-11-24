@@ -550,6 +550,10 @@
 	},
 	"settings": {
 		"saveAndRestart": "保存して再起動",
+		"tabs": {
+			"basic": "基本設定",
+			"aiModel": "AI モデル設定"
+		},
 		"ai": {
 			"sectionTitle": "🤖 AI モデル設定",
 			"apiKeyLabel": "API Key <span class=\"required\">*</span>",
