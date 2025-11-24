@@ -453,7 +453,7 @@ class TradingMonitor {
     this.logsViewAllLink = null;
     this.decisionsViewAllLink = null;
     this.decisionRequestsViewAllLink = null;
-    this.accountBtn = document.getElementById("account-btn");
+    // this.accountBtn = document.getElementById("account-btn"); // Removed
     this.strategyBtn = document.getElementById("strategy-btn");
     this.settingsBtn = document.getElementById("settings-btn");
     this.logoutBtn = document.getElementById("logout-btn");
@@ -462,8 +462,8 @@ class TradingMonitor {
     this.aiOverlayText = null;
     this.aiOverlayIcon = null;
     this.toastContainer = document.getElementById("toast-container");
-    this.accountModal = document.getElementById("account-modal");
-    this.accountsListModal = document.getElementById("accounts-list-modal");
+    // this.accountModal = document.getElementById("account-modal"); // Removed
+    // this.accountsListModal = document.getElementById("accounts-list-modal"); // Removed
     this.accountFormModal = document.getElementById("account-form-modal");
     this.strategyModal = document.getElementById("strategy-modal");
     this.settingsModal = document.getElementById("settings-modal");
@@ -602,8 +602,8 @@ class TradingMonitor {
       this.decisionModal,
       this.logModal,
       this.decisionRequestModal,
-      this.accountModal,
-      this.accountsListModal,
+      // this.accountModal, // Removed
+      // this.accountsListModal, // Removed
       this.accountFormModal,
       this.strategyModal,
       this.settingsModal,
@@ -4768,6 +4768,9 @@ class TradingMonitor {
           // Load AI models list when switching to AI tab
           if (targetTab === "ai") {
             this.loadAiModelsList();
+          } else if (targetTab === "account") {
+            this.loadAccountsList();
+            this.bindAccountsListEvents();
           }
         });
       }
@@ -5866,11 +5869,16 @@ class TradingMonitor {
   }
 
   async openAccountModal() {
-    if (!this.ensureAuthenticated()) {
-      return;
+    // Deprecated: Account management moved to Settings > Account Config
+    const settingsBtn = document.getElementById("settings-btn");
+    if (settingsBtn) {
+      settingsBtn.click();
+      // Switch to account tab
+      setTimeout(() => {
+        const accountTabBtn = document.querySelector('[data-settings-tab="account"]');
+        if (accountTabBtn) accountTabBtn.click();
+      }, 100);
     }
-    // 打开账户列表模态框
-    await this.openAccountsListModal();
   }
 
   async openStrategyModal() {
@@ -7050,13 +7058,8 @@ class TradingMonitor {
 
   // ====== 账户列表管理功能 ======
   
-  async openAccountsListModal() {
-    if (!this.accountsListModal) return;
-    
-    this.showModal(this.accountsListModal);
-    await this.loadAccountsList();
-    this.bindAccountsListEvents();
-  }
+  // async openAccountsListModal() { ... } // Removed as part of UI refactor
+
 
   async loadAccountsList() {
     const container = document.getElementById("accounts-list-container");
@@ -7918,6 +7921,12 @@ class TradingMonitor {
     }
   }
 
+  getAiModelIcon(modelName) {
+    if (!modelName) return DEFAULT_AI_ICON;
+    const match = MODEL_ICON_MATCHERS.find(m => m.pattern.test(modelName));
+    return match ? match.icon : DEFAULT_AI_ICON;
+  }
+
   renderAiModelCard(model) {
     const activeBadge = model.is_active
       ? `<span class="account-badge badge-active">${this.escapeHtml(this.translate("aiModels.active", "Active"))}</span>`
@@ -7938,19 +7947,26 @@ class TradingMonitor {
       const cancelLabel = this.escapeHtml(this.translate("common.cancel", "Cancel"));
       
       activateBtn = `
-        <button type="button" class="account-action-btn" data-action="activate" data-model-id="${model.id}" 
-          data-confirm="${confirmMessage}"
-          data-confirm-label="${confirmLabel}"
-          data-cancel-label="${cancelLabel}">
-          ${this.escapeHtml(activateLabel)}
-        </button>
+        <div class="account-action-wrapper">
+          <button class="account-action-btn btn-activate activate-model-trigger" data-model-id="${model.id}">${this.escapeHtml(activateLabel)}</button>
+          <div class="activate-confirmation-popover" role="alert" aria-hidden="true" data-model-id="${model.id}">
+            <p class="activate-confirmation-text">${confirmMessage}</p>
+            <div class="activate-confirmation-actions">
+              <button type="button" class="link-button cancel-activate-btn">${cancelLabel}</button>
+              <button type="button" class="btn-primary btn-small confirm-activate-model-btn" data-model-id="${model.id}">${confirmLabel}</button>
+            </div>
+          </div>
+        </div>
       `;
     }
 
+    const iconPath = this.getAiModelIcon(model.model_name || model.name);
+
     return `
-      <div class="account-card" data-model-id="${model.id}">
+      <div class="account-card ${model.is_active ? "is-active" : ""}" data-model-id="${model.id}">
         <div class="account-card-header">
-          <div class="account-card-title">
+          <div class="account-card-title" style="display: flex; align-items: center; gap: 8px;">
+            <img src="${iconPath}" alt="AI Icon" style="width: 20px; height: 20px; object-fit: contain; border-radius: 4px;">
             <span class="account-name">${this.escapeHtml(model.name)}</span>
             ${activeBadge}
           </div>
@@ -7989,30 +8005,107 @@ class TradingMonitor {
     const container = document.getElementById("ai-models-list-container");
     if (!container) return;
 
-    container.querySelectorAll("[data-action]").forEach(btn => {
-      if (btn.dataset.bound) return;
-      btn.dataset.bound = "true";
-      
-      btn.addEventListener("click", async (e) => {
-        const action = btn.dataset.action;
-        const modelId = btn.dataset.modelId;
+    // Use event delegation for better performance and dynamic content handling
+    if (container.dataset.bound) return;
+    container.dataset.bound = "true";
+
+    container.addEventListener("click", async (e) => {
+      const target = e.target;
+      if (!target) return;
+
+      // Handle Activate Trigger (Popover)
+      const triggerBtn = target.closest(".activate-model-trigger");
+      if (triggerBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const modelId = triggerBtn.dataset.modelId;
+        this.showAiModelActivateConfirmation(modelId, triggerBtn);
+        return;
+      }
+
+      // Handle Confirm Activate
+      const confirmBtn = target.closest(".confirm-activate-model-btn");
+      if (confirmBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const modelId = confirmBtn.dataset.modelId;
+        this.hideAiModelActivateConfirmation(modelId);
+        
+        // Find original trigger for loading state
+        const wrapper = confirmBtn.closest(".account-action-wrapper");
+        const originalTrigger = wrapper ? wrapper.querySelector(".activate-model-trigger") : null;
+        
+        await this.activateAiModel(Number(modelId), originalTrigger || confirmBtn);
+        return;
+      }
+
+      // Handle Cancel Activate
+      const cancelBtn = target.closest(".cancel-activate-btn");
+      if (cancelBtn) {
+        e.preventDefault();
+        e.stopPropagation();
+        const popover = cancelBtn.closest(".activate-confirmation-popover");
+        if (popover) {
+          const modelId = popover.dataset.modelId;
+          this.hideAiModelActivateConfirmation(modelId);
+        }
+        return;
+      }
+
+      // Handle other actions
+      const actionBtn = target.closest("[data-action]");
+      if (actionBtn) {
+        const action = actionBtn.dataset.action;
+        const modelId = actionBtn.dataset.modelId;
         
         switch (action) {
           case "edit":
             await this.openAiModelFormModal(Number(modelId));
             break;
           case "delete":
-            await this.deleteAiModel(Number(modelId), btn);
-            break;
-          case "activate":
-            await this.activateAiModel(Number(modelId), btn);
+            await this.deleteAiModel(Number(modelId), actionBtn);
             break;
           case "test":
-            await this.testAiModelConnection(Number(modelId), btn);
+            await this.testAiModelConnection(Number(modelId), actionBtn);
             break;
         }
-      });
+      }
     });
+  }
+
+  showAiModelActivateConfirmation(modelId, triggerBtn) {
+    // Hide other popovers
+    const allPopovers = document.querySelectorAll(".activate-confirmation-popover");
+    allPopovers.forEach(p => {
+      p.setAttribute("aria-hidden", "true");
+      p.classList.remove("is-visible");
+    });
+
+    const popover = document.querySelector(`.activate-confirmation-popover[data-model-id="${modelId}"]`);
+    if (popover) {
+      popover.setAttribute("aria-hidden", "false");
+      popover.classList.add("is-visible");
+    }
+
+    // Click outside to close
+    const closeHandler = (e) => {
+      if (!popover.contains(e.target) && !triggerBtn.contains(e.target)) {
+        this.hideAiModelActivateConfirmation(modelId);
+        document.removeEventListener("click", closeHandler);
+      }
+    };
+    // Delay to avoid immediate trigger
+    setTimeout(() => {
+      document.addEventListener("click", closeHandler);
+    }, 0);
+  }
+
+  hideAiModelActivateConfirmation(modelId) {
+    const popover = document.querySelector(`.activate-confirmation-popover[data-model-id="${modelId}"]`);
+    if (popover) {
+      popover.setAttribute("aria-hidden", "true");
+      popover.classList.remove("is-visible");
+    }
   }
 
   async openAiModelFormModal(modelId = null) {
@@ -8309,14 +8402,10 @@ class TradingMonitor {
   async activateAiModel(modelId, triggerBtn) {
     if (!modelId) return;
     
-    const confirmMessage = triggerBtn?.dataset.confirm || this.translate("aiModels.messages.activateConfirm", "Switch to this AI model? The trading system will restart.");
-    
-    if (!confirm(confirmMessage)) {
-      return;
-    }
+    // Confirmation is now handled by the UI popover
     
     try {
-      this.setButtonLoading(triggerBtn, true);
+      this.setButtonLoading(triggerBtn, true, "aiModels.activate", "aiModels.activating");
       
       const csrfToken = this.getCsrfToken();
       const response = await fetch(`/api/ai-models/${modelId}/activate`, {

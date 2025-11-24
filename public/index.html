@@ -45,7 +45,6 @@
             <button type="button" class="language-option" data-lang="ja" role="menuitem">日本語</button>
           </div>
         </div>
-  <a href="#" class="nav-action nav-account hidden" id="account-btn" data-i18n="navigation.account" data-i18n-title="navigation.account">Account</a>
   <a href="#" class="nav-action nav-strategy hidden" id="strategy-btn" data-i18n="navigation.strategy" data-i18n-title="navigation.strategy">Strategy</a>
   <a href="#" class="nav-action nav-settings hidden" id="settings-btn" data-i18n="navigation.settings" data-i18n-title="navigation.settings">Settings</a>
   <a href="#" class="nav-action nav-logout hidden" id="logout-btn" data-i18n="navigation.logout" data-i18n-title="navigation.logout">Logout</a>
@@ -454,24 +453,8 @@
     </div>
   </div>
 
-  <!-- 账户列表弹窗 (新) -->
-  <div class="modal settings-modal" id="accounts-list-modal">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h3 data-i18n="modals.accountsList.title">Account Management</h3>
-        <button class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body">
-        <div class="accounts-list-header">
-          <button type="button" class="btn-primary" id="add-account-btn" data-i18n="accounts.addAccount">+ Add Account</button>
-        </div>
-        <div class="accounts-list-container" id="accounts-list-container">
-          <div class="loading-spinner" id="accounts-loading" data-i18n="loading">Loading...</div>
-        </div>
-      </div>
-    </div>
-  </div>
+  <!-- 账户列表弹窗 (已移动到设置) -->
+
 
   <!-- 添加/编辑账户弹窗 -->
   <div class="modal settings-modal" id="account-form-modal">
@@ -943,10 +926,10 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header">
-        <h3 data-i18n="modals.settings.title">System Settings</h3>
+        <h3 data-i18n="modals.settings.title">Global Settings</h3>
         <div class="header-actions">
-          <button type="button" class="btn-secondary" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
           <button type="submit" form="settings-form" class="btn-primary" data-i18n="settings.saveAndRestart">Save & Restart</button>
+          <button type="button" class="btn-secondary" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
         </div>
       </div>
       <div class="modal-body" id="settings-body">
@@ -955,7 +938,8 @@
           <!-- Tab 导航 -->
           <div class="settings-tabs" id="settings-tabs">
             <button type="button" class="settings-tab-btn active" data-settings-tab="basic" data-i18n="settings.tabs.basic">Basic Settings</button>
-            <button type="button" class="settings-tab-btn" data-settings-tab="ai" data-i18n="settings.tabs.aiModel">AI Model Configuration</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="account" data-i18n="settings.tabs.account">Account Config</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="ai" data-i18n="settings.tabs.aiModel">AI Config</button>
           </div>
 
           <div class="settings-tab-panels">
@@ -1006,7 +990,17 @@
               </div>
             </div>
 
-            <!-- Tab 2: AI 模型配置 -->
+            <!-- Tab 2: 账户配置 -->
+            <div class="settings-tab-panel" data-settings-panel="account">
+              <div class="accounts-list-header">
+                <button type="button" class="btn-primary" id="add-account-btn" data-i18n="accounts.addAccount">+ Add Account</button>
+              </div>
+              <div class="accounts-list-container" id="accounts-list-container">
+                <div class="loading-spinner" id="accounts-loading" data-i18n="loading">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Tab 3: AI 模型配置 -->
             <div class="settings-tab-panel" data-settings-panel="ai">
               <div class="accounts-list-header">
                 <button type="button" class="btn-primary" id="add-ai-model-btn" data-i18n="aiModels.addModel">+ Add AI Model</button>

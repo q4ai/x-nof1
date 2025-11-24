@@ -132,7 +132,7 @@
 			"title": "策略配置"
 		},
 		"settings": {
-			"title": "系统设置"
+			"title": "全局设置"
 		},
 		"aiModelForm": {
 			"titleAdd": "添加 AI 模型",
@@ -429,7 +429,7 @@
 			"delete": "删除",
 			"deleting": "删除中...",
 			"activate": "切换",
-			"activating": "切换中...",
+			"activating": "激活中...",
 			"current": "当前"
 		},
 		"messages": {
@@ -559,7 +559,8 @@
 	"settings": {
 		"saveAndRestart": "保存并重启",
 		"tabs": {
-			"basic": "基本设置",
+			"basic": "基础设置",
+			"account": "账户配置",
 			"aiModel": "AI 模型配置"
 		},
 		"ai": {

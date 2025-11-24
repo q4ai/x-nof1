@@ -131,7 +131,7 @@
 			"title": "ストラテジー設定"
 		},
 		"settings": {
-			"title": "システム設定"
+			"title": "グローバル設定"
 		},
 		"aiModelForm": {
 			"titleAdd": "AIモデルを追加",
@@ -556,7 +556,8 @@
 		"saveAndRestart": "保存して再起動",
 		"tabs": {
 			"basic": "基本設定",
-			"aiModel": "AI モデル設定"
+			"account": "アカウント設定",
+			"aiModel": "AI 設定"
 		},
 		"ai": {
 			"sectionTitle": "🤖 AI モデル設定",

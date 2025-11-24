@@ -2487,7 +2487,8 @@ export async function restartTradingLoop(): Promise<void> {
 
   scheduleTradingTask(intervalMinutes);
 
-  await executeTradingDecision("manual");
+  // 异步执行一次，不阻塞重启过程
+  void executeTradingDecision("manual");
 }
 
 /**

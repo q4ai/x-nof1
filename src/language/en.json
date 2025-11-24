@@ -127,7 +127,7 @@
 			"title": "Strategy Settings"
 		},
 		"settings": {
-			"title": "System Settings"
+			"title": "Global Settings"
 		},
 		"aiModelForm": {
 			"titleAdd": "Add AI Model",
@@ -544,7 +544,8 @@
 		"saveAndRestart": "Save & Restart",
 		"tabs": {
 			"basic": "Basic Settings",
-			"aiModel": "AI Model Configuration"
+			"account": "Account Config",
+			"aiModel": "AI Config"
 		},
 		"ai": {
 			"sectionTitle": "🤖 AI Model Configuration",
