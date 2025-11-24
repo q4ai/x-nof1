@@ -23,7 +23,7 @@
 import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
-import { createOkxTradingClient } from "../services/okxTradingClient";
+import { createTradingClient } from "../services/okxTradingClient";
 import { fileURLToPath } from 'node:url';
 import { getActiveAccount } from "../services/accountConfigService";
 import { getExchangeProvider } from "../config/exchange";
@@ -80,7 +80,7 @@ export async function syncPositionsFromOkx() {
     }
     
   // 3. 从 OKX 获取持仓
-  const okxClient = createOkxTradingClient();
+  const okxClient = createTradingClient();
   const positions = await okxClient.getPositions();
     const activePositions = positions.filter((position: { size?: string }) =>
       Number.parseInt(position.size ?? "0", 10) !== 0

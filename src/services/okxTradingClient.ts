@@ -96,7 +96,7 @@ type AccountPosition = {
   updateTime?: string;
 };
 
-class OkxTradingClient {
+class TradingClient {
   private get client() {
     return createOkxClient();
   }
@@ -340,11 +340,14 @@ class OkxTradingClient {
   }
 }
 
-let singleton: OkxTradingClient | null = null;
+let singleton: TradingClient | null = null;
 
-export function createOkxTradingClient(): OkxTradingClient {
+export function createTradingClient(): TradingClient {
   if (!singleton) {
-    singleton = new OkxTradingClient();
+    singleton = new TradingClient();
   }
   return singleton;
 }
+
+// 保持向后兼容的别名
+export const createOkxTradingClient = createTradingClient;

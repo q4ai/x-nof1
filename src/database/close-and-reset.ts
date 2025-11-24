@@ -22,7 +22,7 @@
  */
 import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
-import { createOkxTradingClient } from "../services/okxTradingClient";
+import { createTradingClient } from "../services/okxTradingClient";
 import "dotenv/config";
 
 const logger = createLogger({
@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS trade_logs (
  * 平仓所有持仓
  */
 async function closeAllPositions(): Promise<void> {
-  const okxClient = createOkxTradingClient();
+  const okxClient = createTradingClient();
   
   try {
     logger.info("📊 获取当前持仓...");
@@ -281,7 +281,7 @@ async function resetDatabase(): Promise<void> {
  * 同步持仓数据
  */
 async function syncPositions(): Promise<void> {
-  const okxClient = createOkxTradingClient();
+  const okxClient = createTradingClient();
   const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
   
   try {

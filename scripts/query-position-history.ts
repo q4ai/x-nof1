@@ -21,7 +21,7 @@
  * 用于输出账号合约的历史仓位记录
  */
 
-import { createOkxTradingClient } from "../src/services/okxTradingClient";
+import { createTradingClient } from "../src/services/okxTradingClient";
 import { createLogger } from "../src/utils/loggerUtils";
 
 const logger = createLogger({
@@ -31,7 +31,7 @@ const logger = createLogger({
 
 async function queryPositionHistory() {
   try {
-  const okxClient = createOkxTradingClient();
+  const okxClient = createTradingClient();
     
     logger.info("=".repeat(80));
     logger.info("开始查询历史仓位记录...");

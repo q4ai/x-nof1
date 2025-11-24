@@ -20,18 +20,18 @@
  * 检查交易记录和持仓状态的一致性
  */
 import { createClient } from "@libsql/client";
-import { createOkxTradingClient } from "../src/services/okxTradingClient";
+import { createTradingClient } from "../src/services/okxTradingClient";
 
 const dbClient = createClient({
   url: process.env.DATABASE_URL || "file:./db/sqlite.db",
 });
 
 async function checkConsistency() {
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("📊 检查交易记录与持仓状态一致性");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
-  const okxClient = createOkxTradingClient();
+  const okxClient = createTradingClient();
 
   try {
   // 1. 从 OKX 获取实际持仓

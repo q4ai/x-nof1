@@ -396,6 +396,8 @@ class TradingMonitor {
     this.openOrdersContainerEl = document.getElementById("open-orders-container");
     this.pendingPositionClosures = new Set();
     this.emptyPositionsTimeout = null;
+    this.lastPositionsData = null;
+    this.lastPositionsTimestamp = 0;
     
     // 手动交易设置缓存（按币种）
     this.manualTradeSettings = new Map();
@@ -2352,7 +2354,18 @@ class TradingMonitor {
       }
     });
 
+    // Check if we're receiving an empty positions array
     if (!positions.length) {
+      // If we had positions before and now receiving empty, this might be a temporary glitch
+      // Only clear after debounce timeout to avoid flickering
+      const timeSinceLastUpdate = timestamp - this.lastPositionsTimestamp;
+      
+      // If last update was recent (< 30 seconds) and we had positions, ignore this empty update
+      if (this.lastPositionsData && this.lastPositionsData.length > 0 && timeSinceLastUpdate < 30000) {
+        console.warn('[Positions] 收到空持仓数据，但上次更新有持仓且时间较近，忽略此次更新以防止闪烁');
+        return;
+      }
+      
       // Debounce empty state to prevent flickering
       if (!this.emptyPositionsTimeout) {
         this.emptyPositionsTimeout = setTimeout(() => {
@@ -2360,6 +2373,8 @@ class TradingMonitor {
           this.positionsContainerEl.innerHTML = `<p class="empty-state">${t("tables.positions.empty")}</p>`;
           this.updateTimestamp(this.positionsUpdatedEl, timestamp);
           this.emptyPositionsTimeout = null;
+          this.lastPositionsData = null;
+          this.lastPositionsTimestamp = timestamp;
         }, 500);
       }
       
@@ -2374,6 +2389,10 @@ class TradingMonitor {
       clearTimeout(this.emptyPositionsTimeout);
       this.emptyPositionsTimeout = null;
     }
+
+    // Cache the current positions data
+    this.lastPositionsData = positions;
+    this.lastPositionsTimestamp = timestamp;
 
     const showActions = Boolean(this.isAuthenticated);
     const rows = positions

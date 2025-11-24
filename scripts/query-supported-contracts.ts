@@ -21,7 +21,7 @@
  */
 
 import "dotenv/config";
-import { createOkxTradingClient } from "../src/services/okxTradingClient";
+import { createTradingClient } from "../src/services/okxTradingClient";
 import { createLogger } from "../src/utils/loggerUtils";
 
 const logger = createLogger({
@@ -36,7 +36,7 @@ async function queryContracts() {
     console.log(`\n🌐 当前环境: ${isPaper ? "模拟盘" : "正式盘"}`);
     console.log("=====================================\n");
 
-    const okxClient = createOkxTradingClient();
+    const okxClient = createTradingClient();
 
     // 获取所有合约
     console.log("🔍 正在获取合约列表...\n");

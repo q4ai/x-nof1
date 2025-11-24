@@ -23,7 +23,7 @@ import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { CREATE_TABLES_SQL } from "./schema";
 import { createLogger } from "../utils/loggerUtils";
-import { createOkxTradingClient } from "../services/okxTradingClient";
+import { createTradingClient } from "../services/okxTradingClient";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -37,7 +37,7 @@ async function syncFromOkx() {
     logger.info("🔄 从 OKX 同步账户信息...");
     
     // 1. 连接 OKX 获取当前账户余额
-    const okxClient = createOkxTradingClient();
+    const okxClient = createTradingClient();
     const account = await okxClient.getFuturesAccount();
     
     const accountTotal = Number.parseFloat(account.total || "0");

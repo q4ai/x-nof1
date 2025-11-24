@@ -164,7 +164,6 @@ export async function getAllConfigMasked(): Promise<Record<string, string>> {
       "OKX_API_PASSPHRASE",
       "BINANCE_API_KEY",
       "BINANCE_API_SECRET",
-      "OPENAI_API_KEY",
     ];
     
     const maskedConfig: Record<string, string> = {};

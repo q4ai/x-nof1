@@ -21,7 +21,7 @@
  */
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
-import { createOkxTradingClient } from "../../services/okxTradingClient";
+import { createTradingClient } from "../../services/okxTradingClient";
 import { RISK_PARAMS } from "../../config/riskParams.new";
 
 /**
@@ -229,7 +229,7 @@ export const getMarketPriceTool = createTool({
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
   }),
   execute: async ({ symbol }) => {
-  const client = createOkxTradingClient();
+  const client = createTradingClient();
     const contract = `${symbol}_USDT`;
     
     const ticker = await client.getFuturesTicker(contract);
@@ -260,7 +260,7 @@ export const getTechnicalIndicatorsTool = createTool({
     limit: z.number().default(100).describe("K线数量"),
   }),
   execute: async ({ symbol, interval, limit }) => {
-  const client = createOkxTradingClient();
+  const client = createTradingClient();
     const contract = `${symbol}_USDT`;
     
     const candles = await client.getFuturesCandles(contract, interval, limit);
@@ -285,7 +285,7 @@ export const getFundingRateTool = createTool({
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
   }),
   execute: async ({ symbol }) => {
-  const client = createOkxTradingClient();
+  const client = createTradingClient();
     const contract = `${symbol}_USDT`;
     
     const fundingRate = await client.getFundingRate(contract);
@@ -310,7 +310,7 @@ export const getOrderBookTool = createTool({
     limit: z.number().default(10).describe("深度档位数量"),
   }),
   execute: async ({ symbol, limit }) => {
-  const client = createOkxTradingClient();
+  const client = createTradingClient();
     const contract = `${symbol}_USDT`;
     
     const orderBook = await client.getOrderBook(contract, limit);

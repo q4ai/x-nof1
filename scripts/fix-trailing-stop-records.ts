@@ -7,7 +7,7 @@
 
 import "dotenv/config";
 import { createClient } from "@libsql/client";
-import { createOkxTradingClient } from "../src/services/okxTradingClient";
+import { createTradingClient } from "../src/services/okxTradingClient";
 import { getQuantoMultiplier } from "../src/utils/contractUtils";
 
 const dbClient = createClient({
@@ -15,7 +15,7 @@ const dbClient = createClient({
 });
 
 async function fixTrailingStopRecords() {
-  const okxClient = createOkxTradingClient();
+  const okxClient = createTradingClient();
   
   try {
     console.log("开始修复移动止盈交易记录...\n");
