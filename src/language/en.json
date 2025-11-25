@@ -137,6 +137,11 @@
 	"accounts": {
 		"addAccount": "+ Add Account",
 		"empty": "No accounts configured",
+		"switcher": {
+			"label": "Account",
+			"noActive": "No active account",
+			"empty": "No other accounts"
+		},
 		"providers": {
 			"okx": "OKX",
 			"binance": "Binance",
@@ -816,7 +821,24 @@
 		"exitLogic": "Exit Logic",
 		"exitDesc": "Describe the conditions for closing a position.",
 		"variables": "Prompt Variables",
-		"variablesDesc": "Define variables to be used in the prompt.",
+		"variablesDesc": "These placeholders are auto-provided. Reference them directly in your entry/exit instructions.",
+		"variableGuide": {
+			"button": "Prompt Variables",
+			"intro": "All system presets below are available without additional configuration:",
+			"strategyId": "Current strategy file name, useful for logging or sanity checks.",
+			"interval": "Trading loop interval (minutes) configured for the strategy.",
+			"maxHolding": "Maximum holding hours before the bot must exit.",
+			"minHolding": "Minimum holding minutes that must elapse before exit.",
+			"maxCycles": "Maximum execution cycles a position can stay open.",
+			"maxPositions": "Maximum simultaneous positions allowed.",
+			"extremeStop": "Emergency stop-loss percentage applied globally.",
+			"accountSl": "Account-level stop-loss in USDT. Displays 'Disabled' when unset.",
+			"accountTp": "Account-level take-profit in USDT. Displays 'Disabled' when unset.",
+			"ddWarning": "Drawdown warning threshold percentage.",
+			"ddPause": "Drawdown percentage where new entries are blocked.",
+			"ddClose": "Drawdown percentage that triggers forced liquidation.",
+			"symbolList": "Comma-separated tradable symbols respecting the UI language."
+		},
 		"configTitle": "Configuration",
 		"loading": "Loading strategies...",
 		"requireLogin": "Please sign in to manage strategies.",
@@ -835,7 +857,9 @@
 			"label": "Description",
 			"placeholder": "Describe the core logic and target scenarios",
 			"hint": "Saved with the strategy file so teammates understand how it should behave."
-		}
+		},
+		"tradingSymbols": "Trading Symbols (comma separated)",
+		"tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB"
 	},
 	"aiModels": {
 		"addModel": "+ Add AI Model",

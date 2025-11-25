@@ -18,9 +18,10 @@ export interface StrategyFileContent {
   prompts: {
     entryLogic: string;
     exitLogic: string;
-    variables: string;
+    variables?: string;
   };
   params: {
+    tradingSymbols?: string;
     intervalMinutes: number;
     leverage: number;
     maxPositions: number;
@@ -65,9 +66,9 @@ export class StrategyFileManager {
         prompts: {
           entryLogic: parsed.prompts?.entryLogic ?? "",
           exitLogic: parsed.prompts?.exitLogic ?? "",
-          variables: parsed.prompts?.variables ?? "",
         },
         params: {
+          tradingSymbols: parsed.params?.tradingSymbols ?? "",
           intervalMinutes: parsed.params?.intervalMinutes ?? 20,
           leverage: parsed.params?.leverage ?? 1,
           maxPositions: parsed.params?.maxPositions ?? 1,

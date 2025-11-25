@@ -40,8 +40,17 @@
           <span data-i18n="github">GitHub</span>
         </a>
   <a href="https://github.com/q4ai/x-nof1/blob/main/README.md" target="_blank" rel="noopener noreferrer" data-i18n="docs">Docs</a>
-        <div class="language-selector hidden" id="language-selector">
-          <button type="button" class="language-toggle" id="language-toggle" aria-haspopup="true" aria-expanded="false" aria-label="Language">
+        <div class="language-selector" id="language-selector">
+          <button
+            type="button"
+            class="language-toggle"
+            id="language-toggle"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Language"
+            data-i18n-aria="navigation.language"
+            data-i18n-title="navigation.language"
+          >
             <span class="language-label">English</span>
             <span class="language-caret" aria-hidden="true">
               <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" role="presentation">
@@ -53,6 +62,20 @@
             <button type="button" class="language-option" data-lang="en" role="menuitem">English</button>
             <button type="button" class="language-option" data-lang="zh" role="menuitem">中文</button>
             <button type="button" class="language-option" data-lang="ja" role="menuitem">日本語</button>
+          </div>
+        </div>
+        <div class="account-switcher hidden" id="account-switcher">
+          <button type="button" class="account-switcher-trigger" id="account-switcher-trigger" aria-haspopup="true" aria-expanded="false">
+            <span class="account-switcher-label" id="account-switcher-label" data-i18n="accounts.switcher.label">Account</span>
+            <span class="account-switcher-caret" aria-hidden="true">
+              <svg viewBox="0 0 12 12" width="10" height="10" fill="currentColor">
+                <path d="M2.146 4.646a.5.5 0 0 1 .708 0L6 7.793l3.146-3.147a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 0 1 0-.708z"></path>
+              </svg>
+            </span>
+          </button>
+          <div class="account-switcher-dropdown" id="account-switcher-dropdown" role="menu" aria-hidden="true">
+            <div class="account-switcher-empty" id="account-switcher-empty" data-i18n="accounts.switcher.empty">No other accounts</div>
+            <ul class="account-switcher-list" id="account-switcher-list"></ul>
           </div>
         </div>
   <a href="#" class="nav-action nav-settings hidden" id="settings-btn" data-i18n="navigation.settings" data-i18n-title="navigation.settings">Settings</a>
@@ -304,6 +327,14 @@
               <button type="button" class="quick-insert-btn" data-editor-insert="balanced" data-i18n="strategy.labels.balanced">Balanced</button>
               <button type="button" class="quick-insert-btn" data-editor-insert="aggressive" data-i18n="strategy.labels.aggressive">Aggressive</button>
             </div>
+            <button type="button" class="quick-insert-btn variable-guide-trigger" id="prompt-variable-guide-btn" aria-haspopup="dialog" aria-controls="variable-guide-modal">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 0.667a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0-0.667a6.667 6.667 0 1 1 0 13.334A6.667 6.667 0 0 1 8 0z" fill="currentColor" opacity="0.6"/>
+                <path d="M8 4.667a1 1 0 0 1 .948.684c.117.353.052.742-.17 1.032L8.2 7a1 1 0 0 0-.2.6V8h1v-.4l.578-.77c.43-.574.547-1.324.318-2.005A2 2 0 0 0 8 3.667a2 2 0 0 0-2 2h1a1 1 0 0 1 1-1z" fill="currentColor"/>
+                <circle cx="8" cy="10.8" r="0.8" fill="currentColor" />
+              </svg>
+              <span data-i18n="strategyEditor.variableGuide.button">Prompt Variables</span>
+            </button>
           </div>
         </header>
 
@@ -324,13 +355,74 @@
             <textarea id="strategy-exit" class="code-editor" spellcheck="false"></textarea>
           </section>
 
-          <section class="editor-section">
-            <div class="editor-section-header">
-              <h4 data-i18n="strategyEditor.variables">Prompt Variables</h4>
-              <p class="editor-desc" data-i18n="strategyEditor.variablesDesc">Define variables to be used in the prompt.</p>
+        </div>
+
+        <div class="variable-modal" id="variable-guide-modal" aria-hidden="true">
+          <div class="variable-modal-backdrop" data-variable-modal-close></div>
+          <div class="variable-modal-panel" role="dialog" aria-modal="true" aria-labelledby="variable-guide-title" tabindex="-1">
+            <button type="button" class="variable-modal-close" data-variable-modal-close aria-label="Close" data-i18n-aria="common.close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+            <h3 id="variable-guide-title" data-i18n="strategyEditor.variables">Prompt Variables</h3>
+            <p class="variable-modal-desc" data-i18n="strategyEditor.variablesDesc">These placeholders are auto-injected and can be referenced directly inside your instructions.</p>
+            <div class="variable-guide" aria-live="polite">
+              <p class="variable-guide-intro" data-i18n="strategyEditor.variableGuide.intro">All presets below are available without extra configuration:</p>
+              <dl class="variable-list">
+                <div class="variable-item">
+                  <dt>{{STRATEGY_ID}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.strategyId">Current strategy file name.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{TRADING_INTERVAL_MINUTES}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.interval">Configured trading loop interval (minutes).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MAX_HOLDING_HOURS}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.maxHolding">Maximum holding hours from risk config.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MIN_HOLDING_MINUTES}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.minHolding">Minimum holding minutes constraint.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MAX_HOLDING_CYCLES}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.maxCycles">Maximum holding cycles before forced exit.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MAX_POSITIONS}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.maxPositions">Position cap applied to the strategy.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{EXTREME_STOP_LOSS_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.extremeStop">Emergency stop-loss threshold (percent).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_STOP_LOSS_USDT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.accountSl">Account-wide stop loss in USDT (Disabled if empty).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_TAKE_PROFIT_USDT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.accountTp">Account-wide take profit in USDT (Disabled if empty).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.ddWarning">Drawdown warning threshold (percent).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.ddPause">Drawdown level that blocks new positions.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.ddClose">Drawdown level that forces liquidation.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{SYMBOL_LIST}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.symbolList">Comma-separated tradable symbols with locale-aware formatting.</dd>
+                </div>
+              </dl>
             </div>
-            <textarea id="strategy-variables" class="code-editor" spellcheck="false"></textarea>
-          </section>
+          </div>
         </div>
       </section>
 
@@ -368,6 +460,10 @@
 
           <div class="strategy-config-group">
             <p class="strategy-config-group-title" data-i18n="settings.tradingConfig">Trading Config</p>
+            <div class="strategy-config-field">
+              <label for="st-symbols" data-i18n="strategyEditor.tradingSymbols">Trading Symbols (comma separated)</label>
+              <input type="text" id="st-symbols" class="form-input" placeholder="BTC,ETH,SOL,XRP,BNB" data-i18n-placeholder="strategyEditor.tradingSymbolsPlaceholder" />
+            </div>
             <div class="strategy-config-field">
               <label for="st-leverage" data-i18n="settings.leverage">Max Leverage</label>
               <input type="number" id="st-leverage" class="form-input" min="1" max="125" />

@@ -141,6 +141,11 @@
 	"accounts": {
 		"addAccount": "+ アカウント追加",
 		"empty": "アカウントが設定されていません",
+		"switcher": {
+			"label": "アカウント",
+			"noActive": "アクティブなアカウントなし",
+			"empty": "他のアカウントはありません"
+		},
 		"providers": {
 			"okx": "OKX",
 			"binance": "Binance",
@@ -790,7 +795,24 @@
 		"exitLogic": "エグジットロジック",
 		"exitDesc": "ポジションをクローズする条件を記述します。",
 		"variables": "プロンプト変数",
-		"variablesDesc": "プロンプトで使用する変数を定義します。",
+		"variablesDesc": "以下のプレースホルダーは自動で提供され、指示文の中でそのまま参照できます。",
+		"variableGuide": {
+			"button": "変数リファレンス",
+			"intro": "追加設定なしで常に利用できるシステム変数：",
+			"strategyId": "現在の戦略ファイル名。ログや識別に活用できます。",
+			"interval": "戦略に設定された取引ループ間隔（分）。",
+			"maxHolding": "許容される最長保有時間（時間）。",
+			"minHolding": "最短保有時間（分）。",
+			"maxCycles": "ポジションが維持できる最大サイクル数。",
+			"maxPositions": "同時保有可能なポジション数の上限。",
+			"extremeStop": "グローバル極限ストップロス率。",
+			"accountSl": "口座全体のストップロス（USDT、未設定時は Disabled）。",
+			"accountTp": "口座全体のテイクプロフィット（USDT、未設定時は Disabled）。",
+			"ddWarning": "ドローダウン警告しきい値（%）。",
+			"ddPause": "このドローダウンで新規建てを停止。",
+			"ddClose": "このドローダウンで強制クローズ。",
+			"symbolList": "UI 言語に合わせた取引可能シンボルの一覧。"
+		},
 		"configTitle": "設定",
 		"loading": "戦略を読み込み中...",
 		"requireLogin": "戦略を管理するにはログインしてください。",
@@ -809,7 +831,9 @@
 			"label": "説明",
 			"placeholder": "戦略の狙いや適した市況を記述してください",
 			"hint": "戦略ファイルに保存され、メンバーが意図を把握できます。"
-		}
+		},
+		"tradingSymbols": "取引シンボル（カンマ区切り）",
+		"tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB"
 	},
 	"aiModels": {
 		"addModel": "+ AIモデルを追加",

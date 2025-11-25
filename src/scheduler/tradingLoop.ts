@@ -27,12 +27,13 @@ import type { AccountRiskConfig } from "../agents/tradingAgent";
 import { createOkxClient, createExchangeClientFromActiveAccount } from "../services/okxClient";
 import { getActiveAccount } from "../services/accountConfigService";
 import { getChinaTimeISO } from "../utils/timeUtils";
-import { RISK_PARAMS } from "../config/riskParams.new";
+import { RISK_PARAMS, getConfigStringValue } from "../config/riskParams.new";
 import { getExchangeProvider } from "../config/exchange";
 import { ensureAgentDecisionExecutionColumn, ensureAgentRequestLogsTable } from "../database/migrations";
 import { websocketService } from "../services/websocketService";
 import { insertAgentRequestLog } from "../database/agent-request-logs";
 import { getQuantoMultiplier } from "../utils/contractUtils";
+import { StrategyFileManager } from "../services/strategyFileManager";
 
 const logger = createLogger({
   name: "trading-loop",
@@ -74,6 +75,49 @@ let lastExecutionStatus: ExecutionStatus | null = null;
 
 function getConfiguredSymbols(): string[] {
   return [...RISK_PARAMS.TRADING_SYMBOLS];
+}
+
+/**
+ * 获取当前激活策略中配置的交易币种
+ * 优先使用策略文件中的 tradingSymbols，若无则回退到全局 RISK_PARAMS
+ */
+async function getStrategyTradingSymbols(): Promise<string[]> {
+  try {
+    const activeStrategyName = getConfigStringValue("ACTIVE_STRATEGY_NAME", "");
+    if (!activeStrategyName) {
+      logger.debug("无激活策略，使用全局配置的交易币种");
+      return getConfiguredSymbols();
+    }
+
+    const strategy = await StrategyFileManager.loadStrategy(activeStrategyName);
+    if (!strategy) {
+      logger.warn(`无法加载策略 ${activeStrategyName}，使用全局配置的交易币种`);
+      return getConfiguredSymbols();
+    }
+
+    const tradingSymbols = strategy.params?.tradingSymbols?.trim();
+    if (!tradingSymbols) {
+      logger.debug(`策略 ${activeStrategyName} 未配置交易币种，使用全局配置`);
+      return getConfiguredSymbols();
+    }
+
+    // 解析逗号分隔的币种列表
+    const symbols = tradingSymbols
+      .split(",")
+      .map((s) => s.trim().toUpperCase())
+      .filter((s) => s.length > 0);
+
+    if (symbols.length === 0) {
+      logger.debug(`策略 ${activeStrategyName} 的交易币种解析为空，使用全局配置`);
+      return getConfiguredSymbols();
+    }
+
+    logger.info(`使用策略 ${activeStrategyName} 配置的交易币种: ${symbols.join(", ")}`);
+    return symbols;
+  } catch (error) {
+    logger.error("获取策略交易币种失败，使用全局配置", error);
+    return getConfiguredSymbols();
+  }
 }
 
 function resolveIntervalMinutes(): number {
@@ -472,7 +516,7 @@ function createTradeActionSummary(actions: TradeActionRecord[]): { message: stri
 async function collectMarketData() {
   const okxClient = await createExchangeClientFromActiveAccount();
   const marketData: Record<string, any> = {};
-  const symbols = getConfiguredSymbols();
+  const symbols = await getStrategyTradingSymbols();
 
   for (const symbol of symbols) {
     try {
@@ -1553,9 +1597,10 @@ async function fixHistoricalPnlRecords() {
       const openTrade = openResult.rows[0];
       const openPrice = Number.parseFloat(openTrade.price as string);
 
-      // 获取合约乘数
+      // 获取合约乘数（Bitget/Binance 的数量已是币数量，乘数应为1）
       const contract = `${symbol}_USDT`;
-      const quantoMultiplier = await getQuantoMultiplier(contract);
+      const fixProvider = getExchangeProvider();
+      const quantoMultiplier = fixProvider === "okx" ? await getQuantoMultiplier(contract) : 1;
 
       // 重新计算正确的盈亏
       const priceChange = side === "long" 
@@ -1748,7 +1793,7 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
     
     try {
       marketData = await collectMarketData();
-      const configuredSymbols = getConfiguredSymbols();
+      const configuredSymbols = await getStrategyTradingSymbols();
       const validSymbols = configuredSymbols.filter((symbol) => {
         const data = marketData[symbol];
         if (!data || data.price === 0) {
@@ -1952,8 +1997,9 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
                 actualQuantity = filledSize > 0 ? filledSize : totalSize;
                 orderFilled = true;
                 
-                // 获取合约乘数
-                const quantoMultiplier = await getQuantoMultiplier(contract);
+                // 获取合约乘数（Bitget/Binance 的数量已是币数量，乘数应为1）
+                const currentProvider = getExchangeProvider();
+                const quantoMultiplier = currentProvider === "okx" ? await getQuantoMultiplier(contract) : 1;
                 
                 // 计算盈亏
                 const entryPrice = pos.entry_price;
@@ -1983,7 +2029,8 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
           try {
             // 关键验证：检查盈亏计算是否正确
             const finalPrice = actualExitPrice || pos.current_price;
-            const quantoMultiplier = await getQuantoMultiplier(contract);
+            const verifyProvider = getExchangeProvider();
+            const quantoMultiplier = verifyProvider === "okx" ? await getQuantoMultiplier(contract) : 1;
             const notionalValue = finalPrice * actualQuantity * quantoMultiplier;
             const priceChangeCheck = side === "long" 
               ? (finalPrice - pos.entry_price) 

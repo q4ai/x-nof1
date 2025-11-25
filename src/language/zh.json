@@ -121,6 +121,11 @@
 		"account": {
 			"title": "账户配置"
 		},
+			"switcher": {
+				"label": "账户",
+				"noActive": "未选择账户",
+				"empty": "暂无其他账户"
+			},
 		"accountsList": {
 			"title": "账户管理"
 		},
@@ -832,7 +837,24 @@
 		"exitLogic": "出场逻辑",
 		"exitDesc": "描述平仓的条件和逻辑。",
 		"variables": "提示词变量",
-		"variablesDesc": "定义在提示词中使用的变量。",
+		"variablesDesc": "下列占位符由系统自动注入，可直接在入场/出场指令中引用。",
+		"variableGuide": {
+			"button": "提示词变量",
+			"intro": "无需额外配置，即可随时使用这些预设变量：",
+			"strategyId": "当前策略文件名，便于提示词中标记或记录。",
+			"interval": "策略运行的循环频率（分钟）。",
+			"maxHolding": "允许持仓的最长期限（小时）。",
+			"minHolding": "强制持仓的最短时间（分钟）。",
+			"maxCycles": "单笔持仓能经历的最大循环次数。",
+			"maxPositions": "该策略允许的同时持仓数量上限。",
+			"extremeStop": "全局极限止损百分比。",
+			"accountSl": "账户级止损（USDT，未配置时为 Disabled）。",
+			"accountTp": "账户级止盈（USDT，未配置时为 Disabled）。",
+			"ddWarning": "回撤预警阈值（百分比）。",
+			"ddPause": "达到该回撤后禁止新增仓位。",
+			"ddClose": "达到该回撤后强制平仓。",
+			"symbolList": "根据界面语言输出的可交易合约列表。"
+		},
 		"configTitle": "参数配置",
 		"loading": "正在加载策略...",
 		"requireLogin": "请先登录以管理策略。",
@@ -851,7 +873,9 @@
 			"label": "策略描述",
 			"placeholder": "简要说明策略核心思路与适用行情",
 			"hint": "会写入策略文件，便于团队成员理解策略目标。"
-		}
+		},
+		"tradingSymbols": "交易币种（逗号分隔）",
+		"tradingSymbolsPlaceholder": "BTC,ETH,SOL,XRP,BNB"
 	},
 	"aiModels": {
 		"addModel": "+ 添加 AI 模型",

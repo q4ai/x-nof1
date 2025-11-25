@@ -2530,6 +2530,27 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   /**
+   * 保存用户语言偏好
+   */
+  app.post("/api/user/language", requireAuth, async (c) => {
+    try {
+      const body = await c.req.json();
+      const requestedLang = typeof body?.language === "string" ? body.language.trim().toLowerCase() : "";
+      const validLanguages = ["en", "zh", "ja"];
+      const language = validLanguages.includes(requestedLang) ? requestedLang : "en";
+
+      const { setConfigValue } = await import("../database/init-config");
+      await setConfigValue("UI_LANGUAGE", language);
+
+      return c.json({ success: true, language });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("保存语言偏好失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
    * 获取策略默认提示词（需要鉴权）
    */
   app.get("/api/strategy/default-prompts", requireAuth, async (c) => {
@@ -3293,7 +3314,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         // 提示词
         PROMPT_SECTION_ENTRY: strategy.prompts.entryLogic,
         PROMPT_SECTION_EXIT: strategy.prompts.exitLogic,
-        PROMPT_SECTION_VARIABLES: strategy.prompts.variables,
+        PROMPT_SECTION_VARIABLES: "",
         
         // 保存激活的策略名称
         ACTIVE_STRATEGY_NAME: name,

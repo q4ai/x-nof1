@@ -30,6 +30,7 @@ import { RISK_PARAMS, getConfigStringValue } from "../config/riskParams.new";
 import { getStrategyProfile } from "../strategies";
 import type { StrategyLanguage, TradingStrategy } from "../config/strategyTypes";
 import { DEFAULT_PROMPT_ENTRY, DEFAULT_PROMPT_EXIT, DEFAULT_PROMPT_VARIABLES } from "../config/promptDefaults";
+import { StrategyFileManager } from "../services/strategyFileManager";
 
 const logger = createPinoLogger({
 	name: "trading-agent",
@@ -191,9 +192,12 @@ function buildBasePromptVariables(
 	intervalMinutes: number,
 	riskConfig: AccountRiskConfig,
 	language: StrategyLanguage,
+	tradingSymbols?: string[],
 ): PromptVariables {
 	const symbolSeparator = language === "zh" ? "、" : ", ";
-	const symbolList = RISK_PARAMS.TRADING_SYMBOLS.join(symbolSeparator);
+	// 优先使用策略中配置的交易币种，若无则回退到全局配置
+	const symbols = tradingSymbols && tradingSymbols.length > 0 ? tradingSymbols : RISK_PARAMS.TRADING_SYMBOLS;
+	const symbolList = symbols.join(symbolSeparator);
 	return {
 		STRATEGY_ID: strategyId,
 		TRADING_INTERVAL_MINUTES: formatNumber(intervalMinutes, 0),
@@ -703,7 +707,20 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 	const language = await getPromptLanguage();
 	const strategyName = getActiveStrategyName();
 	const riskConfig = getRiskConfigSnapshot();
-	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language);
+	
+	// 加载策略配置的交易币种
+	let tradingSymbols: string[] | undefined;
+	if (strategyName) {
+		const strategy = await StrategyFileManager.loadStrategy(strategyName);
+		if (strategy?.params?.tradingSymbols) {
+			tradingSymbols = strategy.params.tradingSymbols
+				.split(",")
+				.map((s) => s.trim().toUpperCase())
+				.filter((s) => s.length > 0);
+		}
+	}
+	
+	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
 	const sections = buildConfiguredSections(baseVariables);
 
 	const templateVariables: PromptVariables = {
@@ -735,7 +752,20 @@ async function generateInstructions(intervalMinutes: number): Promise<string> {
 	const language = await getPromptLanguage();
 	const strategyName = getActiveStrategyName();
 	const riskConfig = await getAccountRiskConfig();
-	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language);
+	
+	// 加载策略配置的交易币种
+	let tradingSymbols: string[] | undefined;
+	if (strategyName) {
+		const strategy = await StrategyFileManager.loadStrategy(strategyName);
+		if (strategy?.params?.tradingSymbols) {
+			tradingSymbols = strategy.params.tradingSymbols
+				.split(",")
+				.map((s) => s.trim().toUpperCase())
+				.filter((s) => s.length > 0);
+		}
+	}
+	
+	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
 	const sections = buildConfiguredSections(baseVariables);
 
 	const template = await loadInstructionsTemplate(language);

@@ -982,8 +982,8 @@ export async function executeClosePosition({
               logger.warn(`使用预估值继续: 数量=${closeSize}, 价格=${currentPrice}`);
               actualCloseSize = closeSize;
               actualExitPrice = currentPrice;
-              // 重新计算盈亏（需要乘以合约乘数）
-              const quantoMultiplier = await getQuantoMultiplier(contract);
+              // 重新计算盈亏（Bitget/Binance 的数量已是币数量，乘数应为1）
+              const quantoMultiplier = exchangeProvider === "okx" ? await getQuantoMultiplier(contract) : 1;
               const priceChange = side === "long" 
                 ? (actualExitPrice - entryPrice) 
                 : (entryPrice - actualExitPrice);
@@ -1014,8 +1014,8 @@ export async function executeClosePosition({
       const totalBalance = Number.parseFloat(account.total || "0");
       
       //  计算总手续费（开仓 + 平仓）用于数据库记录
-      // 需要获取合约乘数
-      const dbQuantoMultiplier = await getQuantoMultiplier(contract);
+      // 需要获取合约乘数（Bitget/Binance 的数量已是币数量，乘数应为1）
+      const dbQuantoMultiplier = exchangeProvider === "okx" ? await getQuantoMultiplier(contract) : 1;
 
       // 🚨 最终安全检查：如果平仓价格仍为0，尝试再次获取行情
       if (actualExitPrice === 0) {

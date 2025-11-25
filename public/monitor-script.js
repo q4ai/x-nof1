@@ -41,10 +41,10 @@ const DEFAULT_STRATEGY_LABELS = {
 const STRATEGY_DEFAULT_PROMPTS = Object.freeze({
   entryLogic: "",
   exitLogic: "",
-  variables: "",
 });
 
 const STRATEGY_DEFAULT_PARAMS = Object.freeze({
+  tradingSymbols: "BTC,ETH,SOL",
   intervalMinutes: 20,
   leverage: 10,
   maxPositions: 5,
@@ -57,6 +57,23 @@ const STRATEGY_DEFAULT_PARAMS = Object.freeze({
   drawdownNoNew: 15,
   drawdownForceClose: 25,
 });
+
+const STRATEGY_PARAM_FIELD_IDS = [
+  "st-symbols",
+  "st-interval",
+  "st-leverage",
+  "st-max-positions",
+  "st-max-holding",
+  "st-min-holding",
+  "st-extreme-stop",
+  "st-stop-loss",
+  "st-take-profit",
+  "st-dd-warning",
+  "st-dd-pause",
+  "st-dd-close",
+];
+
+const STRATEGY_EDITOR_STORAGE_KEY = "strategyEditorDraft";
 
 const REFRESH_INTERVAL = 15000; // ms between dashboard refreshes
 const DEFAULT_INTERVAL = "1m";
@@ -361,6 +378,13 @@ function updateLanguageSelectorUI() {
 }
 
 async function syncLanguagePreferenceFromBackend() {
+  // 如果本地已有语言偏好，优先使用本地设置
+  const localLang = getCurrentLanguage();
+  if (localLang && localLang !== DEFAULT_LANGUAGE) {
+    // 本地已有非默认语言设置，不从后端同步
+    return false;
+  }
+
   try {
     const response = await fetch("/api/user/language", {
       cache: "no-store",
@@ -373,7 +397,8 @@ async function syncLanguagePreferenceFromBackend() {
 
     const data = await response.json();
     const backendLang = normalizeLanguageCode(data?.language);
-    if (backendLang && backendLang !== getCurrentLanguage()) {
+    // 只有当后端有明确的非默认语言设置，且本地是默认语言时才同步
+    if (backendLang && backendLang !== DEFAULT_LANGUAGE && backendLang !== localLang) {
       setLanguage(backendLang);
       return true;
     }
@@ -504,6 +529,13 @@ class TradingMonitor {
     this.settingsBtn = document.getElementById("settings-btn");
     this.logoutBtn = document.getElementById("logout-btn");
   this.tradingLoopToggle = document.getElementById("trading-loop-toggle");
+    this.accountSwitcherEl = document.getElementById("account-switcher");
+    this.accountSwitcherTrigger = document.getElementById("account-switcher-trigger");
+    this.accountSwitcherLabel = document.getElementById("account-switcher-label");
+    this.accountSwitcherDropdown = document.getElementById("account-switcher-dropdown");
+    this.accountSwitcherList = document.getElementById("account-switcher-list");
+    this.accountSwitcherEmpty = document.getElementById("account-switcher-empty");
+    this.accountSwitcherCloseTimer = null;
     this.aiOverlay = null;
     this.aiOverlayText = null;
     this.aiOverlayIcon = null;
@@ -544,6 +576,11 @@ class TradingMonitor {
     this.strategyPromptCache = new Map();
     this.strategyDeleteActivePopover = null;
     this.strategyDeleteOutsideHandler = null;
+    this.variableGuideModal = null;
+    this.variableGuideTrigger = null;
+    this.variableGuideEscHandler = null;
+    this.strategyDraftSaveTimer = null;
+    this.isStrategyDraftSyncSuspended = false;
 
     this.isAuthenticated = false;
 
@@ -564,6 +601,9 @@ class TradingMonitor {
     this.bindExchangeControls();
     this.setupPrivacyControls();
     this.setupStrategyEditorQuickInsert();
+    this.initAccountSwitcher();
+    this.initStrategyDraftPersistence();
+    this.setupVariableGuideModal();
     this.initAiModelOverlay();
     this.bindViewSwitcher(); // 绑定视图切换
     void this.fetchPublicModelInfo();
@@ -1131,6 +1171,171 @@ class TradingMonitor {
     }
   }
 
+  initStrategyDraftPersistence() {
+    if (!this.strategyEditorEl || !window?.localStorage) {
+      return;
+    }
+
+    const selectors = [
+      "#strategy-filename",
+      "#strategy-description",
+      "#strategy-entry",
+      "#strategy-exit",
+      ...STRATEGY_PARAM_FIELD_IDS.map((id) => `#${id}`),
+    ];
+
+    const handleChange = () => {
+      if (this.isStrategyDraftSyncSuspended) {
+        return;
+      }
+      this.scheduleStrategyDraftSave();
+    };
+
+    selectors.forEach((selector) => {
+      const element = document.querySelector(selector);
+      if (!element || element.dataset.strategyDraftBound === "true") {
+        return;
+      }
+      element.dataset.strategyDraftBound = "true";
+      const eventName = element.tagName === "SELECT" ? "change" : "input";
+      element.addEventListener(eventName, handleChange);
+    });
+
+    this.restoreStrategyDraft();
+  }
+
+  scheduleStrategyDraftSave() {
+    if (!window?.localStorage) {
+      return;
+    }
+
+    if (this.strategyDraftSaveTimer) {
+      clearTimeout(this.strategyDraftSaveTimer);
+    }
+
+    this.strategyDraftSaveTimer = window.setTimeout(() => {
+      this.strategyDraftSaveTimer = null;
+      this.saveStrategyDraft();
+    }, 400);
+  }
+
+  collectStrategyEditorState() {
+    if (!this.strategyEditorEl) {
+      return null;
+    }
+
+    const filename = document.getElementById("strategy-filename")?.value ?? "";
+    const description = document.getElementById("strategy-description")?.value ?? "";
+    const entryLogic = document.getElementById("strategy-entry")?.value ?? "";
+    const exitLogic = document.getElementById("strategy-exit")?.value ?? "";
+
+    const params = {};
+    STRATEGY_PARAM_FIELD_IDS.forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) {
+        return;
+      }
+      params[id] = el.value ?? "";
+    });
+
+    return {
+      meta: {
+        name: filename,
+        description,
+      },
+      prompts: {
+        entryLogic,
+        exitLogic,
+      },
+      params,
+      currentStrategyName: this.currentStrategyName || filename || "",
+      updatedAt: Date.now(),
+    };
+  }
+
+  saveStrategyDraft() {
+    if (!window?.localStorage) {
+      return;
+    }
+    const payload = this.collectStrategyEditorState();
+    if (!payload) {
+      return;
+    }
+    try {
+      window.localStorage.setItem(STRATEGY_EDITOR_STORAGE_KEY, JSON.stringify(payload));
+    } catch (error) {
+      console.warn("[strategy-editor] 写入草稿失败", error);
+    }
+  }
+
+  restoreStrategyDraft() {
+    if (!this.strategyEditorEl || !window?.localStorage) {
+      return;
+    }
+
+    let rawDraft = null;
+    try {
+      rawDraft = window.localStorage.getItem(STRATEGY_EDITOR_STORAGE_KEY);
+    } catch (error) {
+      console.warn("[strategy-editor] 读取草稿失败", error);
+      return;
+    }
+
+    if (!rawDraft) {
+      return;
+    }
+
+    let draft;
+    try {
+      draft = JSON.parse(rawDraft);
+    } catch (error) {
+      console.warn("[strategy-editor] 解析草稿失败", error);
+      return;
+    }
+
+    this.isStrategyDraftSyncSuspended = true;
+    try {
+      const nameInput = document.getElementById("strategy-filename");
+      if (nameInput) {
+        nameInput.value = draft?.meta?.name || "";
+      }
+
+      const descInput = document.getElementById("strategy-description");
+      if (descInput) {
+        descInput.value = draft?.meta?.description || "";
+      }
+
+      const entryField = document.getElementById("strategy-entry");
+      if (entryField) {
+        entryField.value = draft?.prompts?.entryLogic || "";
+      }
+
+      const exitField = document.getElementById("strategy-exit");
+      if (exitField) {
+        exitField.value = draft?.prompts?.exitLogic || "";
+      }
+
+      if (draft?.params && typeof draft.params === "object") {
+        STRATEGY_PARAM_FIELD_IDS.forEach((id) => {
+          const el = document.getElementById(id);
+          if (!el) {
+            return;
+          }
+          if (Object.prototype.hasOwnProperty.call(draft.params, id)) {
+            el.value = draft.params[id] ?? "";
+          }
+        });
+      }
+    } finally {
+      this.isStrategyDraftSyncSuspended = false;
+    }
+
+    if (typeof draft?.currentStrategyName === "string") {
+      this.currentStrategyName = draft.currentStrategyName;
+      this.updateStrategyListHighlight(this.currentStrategyName);
+    }
+  }
+
   setupStrategyEditorQuickInsert() {
     if (!this.strategyEditorEl) {
       return;
@@ -1151,6 +1356,246 @@ class TradingMonitor {
         void this.applyStrategyTemplateToEditor(button, strategy);
       });
     });
+  }
+
+  setupVariableGuideModal() {
+    this.variableGuideModal = document.getElementById("variable-guide-modal");
+    this.variableGuideTrigger = document.getElementById("prompt-variable-guide-btn");
+
+    if (!this.variableGuideModal || !this.variableGuideTrigger) {
+      return;
+    }
+
+    this.variableGuideEscHandler = (event) => {
+      if (event && event.key === "Escape") {
+        event.preventDefault();
+        this.closeVariableGuideModal();
+      }
+    };
+
+    const closeTargets = this.variableGuideModal.querySelectorAll("[data-variable-modal-close]");
+    closeTargets.forEach((element) => {
+      element.addEventListener("click", (event) => {
+        event.preventDefault();
+        this.closeVariableGuideModal();
+      });
+    });
+
+    this.variableGuideTrigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      this.openVariableGuideModal();
+    });
+  }
+
+  openVariableGuideModal() {
+    if (!this.variableGuideModal) {
+      return;
+    }
+
+    if (this.variableGuideModal.classList.contains("is-visible")) {
+      return;
+    }
+
+    this.variableGuideModal.classList.add("is-visible");
+    this.variableGuideModal.setAttribute("aria-hidden", "false");
+    this.variableGuideTrigger?.setAttribute("aria-expanded", "true");
+
+    if (this.variableGuideEscHandler) {
+      document.addEventListener("keydown", this.variableGuideEscHandler);
+    }
+
+    window.requestAnimationFrame(() => {
+      const panel = this.variableGuideModal?.querySelector(".variable-modal-panel");
+      if (panel) {
+        panel.focus();
+      }
+    });
+  }
+
+  closeVariableGuideModal() {
+    if (!this.variableGuideModal) {
+      return;
+    }
+
+    this.variableGuideModal.classList.remove("is-visible");
+    this.variableGuideModal.setAttribute("aria-hidden", "true");
+    this.variableGuideTrigger?.setAttribute("aria-expanded", "false");
+    if (this.variableGuideEscHandler) {
+      document.removeEventListener("keydown", this.variableGuideEscHandler);
+    }
+
+    if (document.activeElement && this.variableGuideModal.contains(document.activeElement)) {
+      this.variableGuideTrigger?.focus({ preventScroll: true });
+    }
+  }
+
+  initAccountSwitcher() {
+    if (!this.accountSwitcherEl || !this.accountSwitcherTrigger) {
+      return;
+    }
+
+    const handleMouseEnter = () => {
+      this.clearAccountSwitcherCloseTimer();
+      this.toggleAccountSwitcher(true);
+    };
+    const handleMouseLeave = () => {
+      this.scheduleAccountSwitcherClose();
+    };
+
+    this.accountSwitcherEl.addEventListener("mouseenter", handleMouseEnter);
+    this.accountSwitcherEl.addEventListener("mouseleave", handleMouseLeave);
+    this.accountSwitcherDropdown?.addEventListener("mouseenter", handleMouseEnter);
+    this.accountSwitcherDropdown?.addEventListener("mouseleave", handleMouseLeave);
+
+    this.accountSwitcherEl.addEventListener("focusin", () => {
+      this.clearAccountSwitcherCloseTimer();
+      this.toggleAccountSwitcher(true);
+    });
+
+    this.accountSwitcherEl.addEventListener("focusout", (event) => {
+      const nextFocused = event?.relatedTarget;
+      if (nextFocused && this.accountSwitcherEl.contains(nextFocused)) {
+        return;
+      }
+      this.scheduleAccountSwitcherClose();
+    });
+
+    this.accountSwitcherTrigger.addEventListener("click", (event) => {
+      event.preventDefault();
+      const nextState = !this.accountSwitcherEl.classList.contains("is-open");
+      this.toggleAccountSwitcher(nextState);
+    });
+
+    if (this.accountSwitcherList) {
+      this.accountSwitcherList.addEventListener("click", (event) => {
+        const button = event.target.closest("button[data-account-id]");
+        if (!button) {
+          return;
+        }
+        event.preventDefault();
+        const accountId = Number(button.dataset.accountId);
+        if (!Number.isFinite(accountId)) {
+          return;
+        }
+        this.toggleAccountSwitcher(false);
+        void this.handleAccountSwitcherSelect(accountId, button);
+      });
+    }
+  }
+
+  toggleAccountSwitcher(isOpen) {
+    if (!this.accountSwitcherEl || !this.accountSwitcherTrigger) {
+      return;
+    }
+    this.clearAccountSwitcherCloseTimer();
+    const open = Boolean(isOpen);
+    this.accountSwitcherEl.classList.toggle("is-open", open);
+    this.accountSwitcherTrigger.setAttribute("aria-expanded", open ? "true" : "false");
+    if (this.accountSwitcherDropdown) {
+      this.accountSwitcherDropdown.setAttribute("aria-hidden", open ? "false" : "true");
+    }
+  }
+
+  updateAccountSwitcherDisplay() {
+    if (!this.accountSwitcherEl || !this.accountSwitcherLabel) {
+      return;
+    }
+
+    if (!this.isAuthenticated) {
+      this.accountSwitcherLabel.textContent = this.translate("accounts.switcher.label", "Account");
+      this.toggleAccountSwitcher(false);
+      return;
+    }
+
+    const accounts = Array.isArray(this.accountsCache) ? this.accountsCache : [];
+    const activeAccount = accounts.find((account) => account?.is_active);
+    const activeLabel = activeAccount?.name || this.translate("accounts.switcher.noActive", "No active account");
+    this.accountSwitcherLabel.textContent = activeLabel;
+
+    if (!this.accountSwitcherList) {
+      return;
+    }
+
+    const otherAccounts = accounts.filter((account) => !account?.is_active);
+    if (!otherAccounts.length) {
+      if (this.accountSwitcherEmpty) {
+        this.accountSwitcherEmpty.classList.remove("hidden");
+        this.accountSwitcherEmpty.textContent = this.translate("accounts.switcher.empty", "No other accounts");
+      }
+    } else {
+      this.accountSwitcherEmpty?.classList.add("hidden");
+    }
+
+    const currentLabel = this.translate("accounts.actions.current", "Current");
+    const items = [];
+
+    if (activeAccount) {
+      const activeProviderLabel = this.translate(
+        `accounts.providers.${activeAccount.provider}`,
+        activeAccount.provider?.toUpperCase() || "OKX",
+      );
+      const activePaperBadge = activeAccount.use_paper
+        ? `<span class="account-switcher-badge">${this.escapeHtml(this.translate("accounts.badges.paper", "Paper"))}</span>`
+        : "";
+      const activeMeta = `${this.escapeHtml(activeProviderLabel)}`;
+      items.push(`
+        <li>
+          <button type="button" class="account-switcher-item is-current" data-account-id="${activeAccount.id}" disabled aria-disabled="true">
+            <span class="account-switcher-name">${this.escapeHtml(activeAccount.name || activeProviderLabel)}</span>
+            <span class="account-switcher-meta">${activeMeta}${activePaperBadge ? ` ${activePaperBadge}` : ""}</span>
+            <span class="account-switcher-tag">${this.escapeHtml(currentLabel)}</span>
+          </button>
+        </li>
+      `);
+    }
+
+    items.push(
+      ...otherAccounts.map((account) => {
+        const providerLabel = this.translate(`accounts.providers.${account.provider}`, account.provider?.toUpperCase() || "OKX");
+        const paperBadge = account.use_paper
+          ? `<span class="account-switcher-badge">${this.escapeHtml(this.translate("accounts.badges.paper", "Paper"))}</span>`
+          : "";
+        const meta = `${this.escapeHtml(providerLabel)}`;
+        return `
+          <li>
+            <button type="button" class="account-switcher-item" data-account-id="${account.id}">
+              <span class="account-switcher-name">${this.escapeHtml(account.name || providerLabel)}</span>
+              <span class="account-switcher-meta">${meta}${paperBadge ? ` ${paperBadge}` : ""}</span>
+            </button>
+          </li>
+        `;
+      }),
+    );
+
+    this.accountSwitcherList.innerHTML = items.join("");
+  }
+
+  async handleAccountSwitcherSelect(accountId, triggerBtn) {
+    if (!Number.isFinite(accountId)) {
+      return;
+    }
+
+    const target = this.accountsCache?.find((account) => account.id === accountId);
+    if (!target || target.is_active) {
+      return;
+    }
+
+    await this.activateAccount(accountId, triggerBtn);
+  }
+
+  clearAccountSwitcherCloseTimer() {
+    if (this.accountSwitcherCloseTimer) {
+      window.clearTimeout(this.accountSwitcherCloseTimer);
+      this.accountSwitcherCloseTimer = null;
+    }
+  }
+
+  scheduleAccountSwitcherClose() {
+    this.clearAccountSwitcherCloseTimer();
+    this.accountSwitcherCloseTimer = window.setTimeout(() => {
+      this.toggleAccountSwitcher(false);
+      this.accountSwitcherCloseTimer = null;
+    }, 180);
   }
 
   resolveStrategyLabel(strategy) {
@@ -1198,8 +1643,7 @@ class TradingMonitor {
 
     const entryField = document.getElementById("strategy-entry");
     const exitField = document.getElementById("strategy-exit");
-    const variablesField = document.getElementById("strategy-variables");
-    if (!entryField || !exitField || !variablesField) {
+    if (!entryField || !exitField) {
       console.warn("[strategy-editor] 缺少必要的文本区域");
       return;
     }
@@ -1222,9 +1666,8 @@ class TradingMonitor {
 
       entryField.value = typeof sections.entry === "string" ? sections.entry : "";
       exitField.value = typeof sections.exit === "string" ? sections.exit : "";
-      variablesField.value = typeof sections.variables === "string" ? sections.variables : "";
 
-      [entryField, exitField, variablesField].forEach((field) => {
+      [entryField, exitField].forEach((field) => {
         field.dispatchEvent(new Event("input", { bubbles: true }));
       });
 
@@ -4671,13 +5114,7 @@ class TradingMonitor {
             }
           });
 
-          // Load AI models list when switching to AI tab
-          if (targetTab === "ai") {
-            this.loadAiModelsList();
-          } else if (targetTab === "account") {
-            this.loadAccountsList();
-            this.bindAccountsListEvents();
-          }
+          this.prepareSettingsTab(targetTab);
         });
       }
     }
@@ -4696,7 +5133,27 @@ class TradingMonitor {
         this.hideModal(this.settingsModal);
       });
     }
+  }
 
+
+  prepareSettingsTab(targetTab) {
+    if (!targetTab) {
+      return;
+    }
+
+    if (targetTab === "account") {
+      this.bindAccountsListEvents();
+      void this.loadAccountsList();
+      return;
+    }
+
+    if (targetTab === "ai") {
+      this.bindAiModelAddButton();
+      void this.loadAiModelsList();
+    }
+  }
+  
+  bindExchangeControls() {
     if (this.testOkxBtn) {
       this.testOkxBtn.addEventListener("click", (event) => {
         event.preventDefault();
@@ -4738,9 +5195,7 @@ class TradingMonitor {
         void this.handleResetLiveData();
       });
     }
-  }
 
-  bindExchangeControls() {
     if (!this.exchangeSelect) {
       return;
     }
@@ -4921,6 +5376,9 @@ class TradingMonitor {
       if (this.isAuthenticated) {
         void this.fetchFullConfig(true); // 强制刷新完整配置，覆盖公开配置缓存
         void this.fetchTradingLoopStatus();
+        void this.loadAccountsList();
+      } else {
+        this.accountsCache = [];
       }
       // 未登录时不调用 updateAiOverlay()，保持 fetchPublicModelInfo() 设置的模型信息
     } catch (error) {
@@ -4947,14 +5405,23 @@ class TradingMonitor {
     toggle(this.settingsBtn);
     toggle(this.logoutBtn);
     toggle(this.tradingLoopToggle);
+    toggle(this.accountSwitcherEl);
     
     // Show/hide language selector based on authentication
     const languageSelector = document.getElementById('language-selector');
-    toggle(languageSelector);
-    if (!shouldShow && languageSelector) {
-      languageSelector.classList.remove("is-open");
+    if (languageSelector) {
+      languageSelector.classList.remove("hidden");
+      if (!shouldShow) {
+        languageSelector.classList.remove("is-open");
+      }
     }
     updateLanguageSelectorUI();
+
+    if (!shouldShow) {
+      this.toggleAccountSwitcher(false);
+    }
+
+    this.updateAccountSwitcherDisplay();
 
     // 更新 AI 图标的可点击状态
     this.updateAiOverlayClickable();
@@ -5816,6 +6283,11 @@ class TradingMonitor {
       } else {
         baseUrlPreset.value = "";
       }
+    }
+
+    const activeTabBtn = document.querySelector("#settings-tabs .settings-tab-btn.active");
+    if (activeTabBtn) {
+      this.prepareSettingsTab(activeTabBtn.dataset.settingsTab);
     }
     
     this.showModal(this.settingsModal);
@@ -6887,6 +7359,7 @@ class TradingMonitor {
       const data = await response.json();
       const accounts = data.accounts || [];
       this.accountsCache = accounts;
+      this.updateAccountSwitcherDisplay();
 
       if (loading) {
         loading.style.display = "none";
@@ -6911,6 +7384,7 @@ class TradingMonitor {
     } catch (error) {
       console.error("加载账户列表失败:", error);
       this.accountsCache = [];
+      this.updateAccountSwitcherDisplay();
       if (loading) {
         loading.style.display = "none";
       }
@@ -7704,6 +8178,7 @@ class TradingMonitor {
             <div class="empty-accounts-hint">${this.escapeHtml(emptyHint)}</div>
           </div>
         `;
+        this.bindAiModelCardEvents();
         return;
       }
       
@@ -7800,12 +8275,16 @@ class TradingMonitor {
     `;
   }
 
-  bindAiModelCardEvents() {
+  bindAiModelAddButton() {
     const addBtn = document.getElementById("add-ai-model-btn");
     if (addBtn && !addBtn.dataset.bound) {
       addBtn.dataset.bound = "true";
       addBtn.addEventListener("click", () => this.openAiModelFormModal());
     }
+  }
+
+  bindAiModelCardEvents() {
+    this.bindAiModelAddButton();
 
     const container = document.getElementById("ai-models-list-container");
     if (!container) return;
@@ -8310,6 +8789,7 @@ class TradingMonitor {
         void this.loadStrategyList();
         if (!this.currentStrategyName) {
           this.populateStrategyEditor(this.getBlankStrategyTemplate());
+          this.saveStrategyDraft();
         }
       }
     });
@@ -8411,10 +8891,9 @@ class TradingMonitor {
         }
         item.dataset.name = name;
 
-        item.innerHTML = `
-          <span class="strategy-item-name">${this.escapeHtml(name)}</span>
-          ${isActive ? `<span class="strategy-active-badge">${this.escapeHtml(activeBadgeLabel)}</span>` : ""}
-          <div class="strategy-item-actions">
+        const deleteControls = isActive
+          ? ""
+          : `
             <div class="strategy-delete-wrapper">
               <button class="strategy-item-btn delete-strategy-btn" data-name="${this.escapeHtml(name)}" title="${this.escapeHtml(deleteLabel)}">
                 <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2.5 2.5h7v1h-7zM3.5 4.5h5v6h-5zM4.5 0.5h3v1h-3z"/></svg>
@@ -8427,6 +8906,13 @@ class TradingMonitor {
                 </div>
               </div>
             </div>
+          `;
+
+        item.innerHTML = `
+          <span class="strategy-item-name">${this.escapeHtml(name)}</span>
+          ${isActive ? `<span class="strategy-active-badge">${this.escapeHtml(activeBadgeLabel)}</span>` : ""}
+          <div class="strategy-item-actions">
+            ${deleteControls}
           </div>
         `;
 
@@ -8563,6 +9049,7 @@ class TradingMonitor {
 
       const loadedMessage = this.translate("strategyEditor.loadSuccess", 'Strategy "{{name}}" loaded.', { name: this.currentStrategyName });
       this.showToast("success", this.translate("common.success", "Success"), loadedMessage);
+      this.saveStrategyDraft();
     } catch (error) {
       console.error("Error loading strategy file:", error);
       const message = this.translate("strategyEditor.loadFailed", "Failed to load strategy file.");
@@ -8574,6 +9061,7 @@ class TradingMonitor {
     this.populateStrategyEditor(this.getBlankStrategyTemplate());
     this.currentStrategyName = "";
     this.updateStrategyListHighlight("");
+    this.saveStrategyDraft();
   }
 
   async saveCurrentStrategy() {
@@ -8599,9 +9087,9 @@ class TradingMonitor {
       prompts: {
         entryLogic: document.getElementById("strategy-entry")?.value || "",
         exitLogic: document.getElementById("strategy-exit")?.value || "",
-        variables: document.getElementById("strategy-variables")?.value || "",
       },
       params: {
+        tradingSymbols: document.getElementById("st-symbols")?.value?.trim() || "",
         intervalMinutes: this.getNumberInputValue("st-interval", STRATEGY_DEFAULT_PARAMS.intervalMinutes),
         leverage: this.getNumberInputValue("st-leverage", STRATEGY_DEFAULT_PARAMS.leverage),
         maxPositions: this.getNumberInputValue("st-max-positions", STRATEGY_DEFAULT_PARAMS.maxPositions),
@@ -8635,6 +9123,7 @@ class TradingMonitor {
       this.currentStrategyName = name;
       this.updateStrategyListHighlight(name);
       await this.loadStrategyList();
+      this.saveStrategyDraft();
 
       const successMessage = this.translate("strategyEditor.saveSuccess", 'Strategy "{{name}}" saved.', { name });
       this.showToast("success", this.translate("common.success", "Success"), successMessage);
@@ -8708,6 +9197,7 @@ class TradingMonitor {
       this.activeStrategyName = name;
       this.updateActiveStrategyLabel(name);
       await this.loadStrategyList();
+      this.saveStrategyDraft();
 
       const successMessage = this.translate("strategyEditor.activateSuccess", 'Strategy "{{name}}" is now active.', { name });
       this.showToast("success", this.translate("common.success", "Success"), successMessage);
@@ -8761,8 +9251,12 @@ class TradingMonitor {
     if (entry) entry.value = prompts?.entryLogic || "";
     const exit = document.getElementById("strategy-exit");
     if (exit) exit.value = prompts?.exitLogic || "";
-    const variables = document.getElementById("strategy-variables");
-    if (variables) variables.value = prompts?.variables || "";
+
+    // 加载交易币种
+    const symbolsInput = document.getElementById("st-symbols");
+    if (symbolsInput) {
+      symbolsInput.value = params?.tradingSymbols || "";
+    }
 
     const mappings = [
       ["st-interval", params?.intervalMinutes, STRATEGY_DEFAULT_PARAMS.intervalMinutes],
@@ -8922,9 +9416,6 @@ window.addEventListener("DOMContentLoaded", async () => {
     };
 
     const openLanguageMenu = () => {
-      if (languageSelector.classList.contains("hidden")) {
-        return;
-      }
       setMenuState(true);
       updateLanguageSelectorUI();
     };
@@ -8971,9 +9462,6 @@ window.addEventListener("DOMContentLoaded", async () => {
 
     languageToggle.addEventListener("click", (event) => {
       event.preventDefault();
-      if (languageSelector.classList.contains("hidden")) {
-        return;
-      }
       if (languageSelector.classList.contains("is-open")) {
         closeLanguageMenu();
       } else {
