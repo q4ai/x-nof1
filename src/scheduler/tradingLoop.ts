@@ -22,7 +22,7 @@
 import cron, { ScheduledTask } from "node-cron";
 import { createLogger } from "../utils/loggerUtils";
 import { createClient } from "@libsql/client";
-import { createTradingAgent, generateTradingPrompt, getAccountRiskConfig, getTradingStrategy } from "../agents/tradingAgent";
+import { createTradingAgent, generateTradingPrompt, getAccountRiskConfig } from "../agents/tradingAgent";
 import type { AccountRiskConfig } from "../agents/tradingAgent";
 import { createOkxClient, createExchangeClientFromActiveAccount } from "../services/okxClient";
 import { getActiveAccount } from "../services/accountConfigService";
@@ -1904,19 +1904,6 @@ export async function executeTradingDecision(trigger: "manual" | "scheduled" = "
         shouldClose = true;
         closeReason = `触发极端止损保护 (${pnlPercent.toFixed(2)}% ≤ ${EXTREME_STOP_LOSS}%，防止爆仓)`;
         logger.error(`${closeReason}`);
-      }
-      
-      // c) 超短线策略专属风控规则
-      const strategy = getTradingStrategy();
-      if (strategy === 'ultra-short' && !shouldClose) {
-        const holdingMinutes = holdingHours * 60;
-        
-        // 计算手续费成本（开仓 + 平仓，总共约 0.1%）
-        // 考虑杠杆后，需要的盈利百分比 = 0.1% * 杠杆
-        const feeThreshold = 0.1 * leverage;
-        
-        // 注意：超短线盈利锁定逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
-        // 之前的硬编码规则（周期锁利、30分钟平仓等）已废弃
       }
       
       // d) 其他风控检查已移除，交由AI全权决策

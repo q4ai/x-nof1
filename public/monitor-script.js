@@ -38,250 +38,31 @@ const DEFAULT_STRATEGY_LABELS = {
   aggressive: "Aggressive",
 };
 
-const i18n = {};
-let languageLoadPromise = null;
+const STRATEGY_DEFAULT_PROMPTS = Object.freeze({
+  entryLogic: "",
+  exitLogic: "",
+  variables: "",
+});
 
-async function loadLanguagePack(lang) {
-  if (!SUPPORTED_LANGUAGES.includes(lang)) {
-    console.warn(`[i18n] Attempted to load unsupported language: ${lang}`);
-    return null;
-  }
+const STRATEGY_DEFAULT_PARAMS = Object.freeze({
+  intervalMinutes: 20,
+  leverage: 10,
+  maxPositions: 5,
+  maxHoldingHours: 36,
+  minHoldingMinutes: 1,
+  extremeStopLossPercent: 12.5,
+  accountStopLoss: 1000,
+  accountTakeProfit: 5000,
+  drawdownWarning: 10,
+  drawdownNoNew: 15,
+  drawdownForceClose: 25,
+});
 
-  if (i18n[lang]) {
-    return i18n[lang];
-  }
-
-  try {
-    const response = await fetch(`${LANGUAGE_ENDPOINT}/${lang}`);
-    if (!response.ok) {
-      throw new Error(`HTTP ${response.status}`);
-    }
-
-    const data = await response.json();
-    i18n[lang] = data ?? {};
-    return i18n[lang];
-  } catch (error) {
-    console.error(`[i18n] Failed to load language pack "${lang}"`, error);
-    if (!i18n[lang]) {
-      i18n[lang] = {};
-    }
-    return i18n[lang];
-  }
-}
-
-async function ensureLanguageResources() {
-  if (!languageLoadPromise) {
-    languageLoadPromise = Promise.all(
-      SUPPORTED_LANGUAGES.map((lang) => loadLanguagePack(lang))
-    ).then(() => undefined);
-  }
-  return languageLoadPromise;
-}
-
-function getCurrentLanguage() {
-  const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-  if (stored && SUPPORTED_LANGUAGES.includes(stored)) {
-    return stored;
-  }
-  return DEFAULT_LANGUAGE;
-}
-
-// Set language and persist to localStorage
-function setLanguage(lang) {
-  if (!SUPPORTED_LANGUAGES.includes(lang)) {
-    console.warn(`Unsupported language: ${lang}, falling back to ${DEFAULT_LANGUAGE}`);
-    lang = DEFAULT_LANGUAGE;
-  }
-  localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
-  return lang;
-}
-
-async function syncLanguagePreferenceFromBackend() {
-  try {
-    const response = await fetch("/api/user/language", {
-      method: "GET",
-      cache: "no-store",
-      credentials: "include",
-    });
-
-    if (response.status === 401 || response.status === 403) {
-      return false;
-    }
-
-    if (!response.ok) {
-      console.warn(`[i18n] Failed to sync language preference: HTTP ${response.status}`);
-      return false;
-    }
-
-    const payload = await response.json().catch(() => null);
-    if (!payload || typeof payload.language !== "string" || payload.language.length === 0) {
-      return false;
-    }
-
-    const previous = getCurrentLanguage();
-    const normalized = setLanguage(payload.language);
-    if (normalized !== previous) {
-      console.log(`[i18n] Language preference synced from backend: ${previous} -> ${normalized}`);
-      return true;
-    }
-  } catch (error) {
-    console.warn("[i18n] Unable to sync language preference", error);
-  }
-  return false;
-}
-
-function getLanguageLabel(lang) {
-  if (lang && Object.prototype.hasOwnProperty.call(LANGUAGE_LABELS, lang)) {
-    return LANGUAGE_LABELS[lang];
-  }
-  if (typeof lang === "string" && lang.length) {
-    return lang.toUpperCase();
-  }
-  return lang;
-}
-
-function updateLanguageSelectorUI() {
-  const selector = document.getElementById("language-selector");
-  if (!selector) {
-    return;
-  }
-  const currentLang = getCurrentLanguage();
-  const toggle = document.getElementById("language-toggle");
-  const labelEl = toggle ? toggle.querySelector(".language-label") : null;
-  const languageLabel = getLanguageLabel(currentLang) ?? "";
-  if (labelEl) {
-    labelEl.textContent = languageLabel;
-  }
-  if (toggle) {
-    toggle.setAttribute("data-current-lang", currentLang);
-    const isOpen = selector.classList.contains("is-open");
-    toggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
-    const tooltipText = t("navigation.languageTooltip", { language: languageLabel });
-    toggle.setAttribute("title", tooltipText);
-    toggle.setAttribute("aria-label", tooltipText);
-  }
-  selector.querySelectorAll(".language-option").forEach((option) => {
-    const optionLang = option.getAttribute("data-lang");
-    option.classList.toggle("is-active", optionLang === currentLang);
-  });
-}
-
-function t(key, replacements = null) {
-  if (!key) {
-    return key;
-  }
-
-  const lang = getCurrentLanguage();
-  const segments = String(key).split(".");
-
-  const resolveValue = (source) => {
-    let current = source;
-    for (const segment of segments) {
-      if (current && typeof current === "object" && segment in current) {
-        current = current[segment];
-      } else {
-        return undefined;
-      }
-    }
-    return current;
-  };
-
-  let value = resolveValue(i18n[lang]);
-  if (value === undefined && lang !== DEFAULT_LANGUAGE) {
-    value = resolveValue(i18n[DEFAULT_LANGUAGE]);
-  }
-  if (value === undefined) {
-    return key;
-  }
-
-  if (typeof value === "string" && replacements && typeof replacements === "object") {
-    return value.replace(/\{\{(\w+)\}\}/g, (match, token) => {
-      if (Object.prototype.hasOwnProperty.call(replacements, token)) {
-        return String(replacements[token]);
-      }
-      return match;
-    });
-  }
-
-  return value;
-}
-
-// Apply i18n translations to DOM elements
-function applyI18nToDOM() {
-  // Update all elements with data-i18n attribute
-  document.querySelectorAll('[data-i18n]').forEach(element => {
-    const key = element.getAttribute('data-i18n');
-    if (key) {
-      element.textContent = t(key);
-    }
-  });
-  
-  // Update all elements with data-i18n-placeholder attribute
-  document.querySelectorAll('[data-i18n-placeholder]').forEach(element => {
-    const key = element.getAttribute('data-i18n-placeholder');
-    if (key) {
-      element.placeholder = t(key);
-    }
-  });
-  
-  // Update all elements with data-i18n-html attribute
-  document.querySelectorAll('[data-i18n-html]').forEach(element => {
-    const key = element.getAttribute('data-i18n-html');
-    if (key) {
-      element.innerHTML = t(key);
-    }
-  });
-  
-  // Update all elements with data-i18n-title attribute
-  document.querySelectorAll('[data-i18n-title]').forEach(element => {
-    const key = element.getAttribute('data-i18n-title');
-    if (key) {
-      element.title = t(key);
-    }
-  });
-  
-  document.querySelectorAll('[data-i18n-aria]').forEach(element => {
-    const key = element.getAttribute('data-i18n-aria');
-    if (key) {
-      element.setAttribute('aria-label', t(key));
-    }
-  });
-  
-  // Update strategy labels dynamically
-  updateStrategyLabels();
-  updateLanguageSelectorUI();
-}
-
-// Update strategy labels based on current language
-function updateStrategyLabels() {
-  const lang = getCurrentLanguage();
-  const langPack = i18n[lang];
-  const defaultPack = i18n[DEFAULT_LANGUAGE];
-  const fallbackLabels =
-    defaultPack?.strategy?.labelMap ||
-    defaultPack?.strategyLabels ||
-    DEFAULT_STRATEGY_LABELS;
-
-  const labels =
-    langPack?.strategy?.labelMap ||
-    langPack?.strategyLabels ||
-    fallbackLabels;
-
-  if (labels) {
-    STRATEGY_LABELS = {
-      ...DEFAULT_STRATEGY_LABELS,
-      ...labels,
-    };
-  }
-}
-
-// ========== End of Language & i18n ==========
-
-const DEFAULT_SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"];
-const REFRESH_INTERVAL = 20000;
-const PRICE_REFRESH_INTERVAL = 10000;
+const REFRESH_INTERVAL = 15000; // ms between dashboard refreshes
 const DEFAULT_INTERVAL = "1m";
-const CANDLE_LIMIT = 200;
+const DEFAULT_SYMBOL = "BTC";
+const CANDLE_LIMIT = 500;
+const DEFAULT_AI_ICON = "/static/icons/openai.png";
 const ACCOUNT_CONFIG_KEYS = [
   "EXCHANGE_PROVIDER",
   "OKX_API_KEY",
@@ -296,25 +77,6 @@ const ACCOUNT_CONFIG_KEYS = [
   "ACCOUNT_TAKE_PROFIT_USDT",
 ];
 
-const STRATEGY_CONFIG_KEYS = [
-  "TRADING_SYMBOLS",
-  "TRADING_MARGIN_MODE",
-  "TRADING_INTERVAL_MINUTES",
-  "MAX_LEVERAGE",
-  "MAX_POSITIONS",
-  "MAX_HOLDING_HOURS",
-  "MIN_HOLDING_MINUTES",
-  "EXTREME_STOP_LOSS_PERCENT",
-  "ACCOUNT_DRAWDOWN_WARNING_PERCENT",
-  "ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT",
-  "ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT",
-  "PROMPT_SECTION_ENTRY",
-  "PROMPT_SECTION_EXIT",
-  "PROMPT_SECTION_VARIABLES",
-];
-
-// Strategy labels - will be updated by i18n
-let STRATEGY_LABELS = { ...DEFAULT_STRATEGY_LABELS };
 
 const SETTINGS_CONFIG_KEYS = [
   "OPENAI_API_KEY",
@@ -324,6 +86,8 @@ const SETTINGS_CONFIG_KEYS = [
   "COMMUNITY_REPORT_ENABLED",
   "COMMUNITY_SHARE_PROMPTS",
 ];
+
+let STRATEGY_LABELS = { ...DEFAULT_STRATEGY_LABELS };
 
 const CLIENT_NUMERIC_KEYS = new Set([
   "TRADING_INTERVAL_MINUTES",
@@ -354,17 +118,294 @@ const MODEL_ICON_MATCHERS = [
   { pattern: /gpt|openai|openrouter/i, icon: "/static/icons/openai.png" },
 ];
 
-const DEFAULT_AI_ICON = "/static/icons/openai.png";
+let defaultLanguagePack = {};
+let activeLanguagePack = {};
+let activeLanguage = DEFAULT_LANGUAGE;
+let languageLoadPromise = null;
+
+function normalizeLanguageCode(lang) {
+  if (typeof lang !== "string") {
+    return DEFAULT_LANGUAGE;
+  }
+  const trimmed = lang.trim().toLowerCase();
+  if (SUPPORTED_LANGUAGES.includes(trimmed)) {
+    return trimmed;
+  }
+  if (trimmed.startsWith("zh")) {
+    return "zh";
+  }
+  if (trimmed.startsWith("ja")) {
+    return "ja";
+  }
+  return DEFAULT_LANGUAGE;
+}
+
+function getCurrentLanguage() {
+  try {
+    const stored = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
+    if (stored) {
+      return normalizeLanguageCode(stored);
+    }
+  } catch (error) {
+    console.warn("[i18n] 读取本地语言偏好失败", error);
+  }
+  return DEFAULT_LANGUAGE;
+}
+
+function setLanguage(lang) {
+  const normalized = normalizeLanguageCode(lang);
+  try {
+    window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, normalized);
+  } catch (error) {
+    console.warn("[i18n] 写入语言偏好失败", error);
+  }
+  activeLanguage = normalized;
+  return normalized;
+}
+
+function resolveLanguageValue(pack, key) {
+  if (!pack || typeof pack !== "object" || !key) {
+    return undefined;
+  }
+  return key.split(".").reduce((acc, segment) => {
+    if (acc && Object.prototype.hasOwnProperty.call(acc, segment)) {
+      return acc[segment];
+    }
+    return undefined;
+  }, pack);
+}
+
+function formatLanguageValue(value, replacements) {
+  if (typeof value !== "string" || !replacements) {
+    return value;
+  }
+  return value.replace(/\{\{(\w+)\}\}/g, (match, token) => {
+    if (Object.prototype.hasOwnProperty.call(replacements, token)) {
+      return String(replacements[token]);
+    }
+    return match;
+  });
+}
+
+function t(key, replacements) {
+  if (!key) {
+    return "";
+  }
+  let value = resolveLanguageValue(activeLanguagePack, key);
+  if (value === undefined) {
+    value = resolveLanguageValue(defaultLanguagePack, key);
+  }
+  if (value === undefined) {
+    return typeof key === "string" ? key : "";
+  }
+  if (typeof value === "string") {
+    return formatLanguageValue(value, replacements);
+  }
+  return value;
+}
+
+async function fetchLanguagePack(lang) {
+  const normalized = normalizeLanguageCode(lang);
+  const response = await fetch(`${LANGUAGE_ENDPOINT}/${normalized}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load language pack ${normalized}: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+async function ensureLanguageResources(force = false) {
+  const storedLang = normalizeLanguageCode(getCurrentLanguage());
+  if (!force && !languageLoadPromise) {
+    const hasDefault = Object.keys(defaultLanguagePack).length > 0;
+    const hasActive = Object.keys(activeLanguagePack).length > 0;
+    if (hasDefault && hasActive && activeLanguage === storedLang) {
+      return;
+    }
+  }
+
+  if (!languageLoadPromise) {
+    languageLoadPromise = (async () => {
+      const targetLang = storedLang;
+
+      if (force || !Object.keys(defaultLanguagePack).length) {
+        try {
+          defaultLanguagePack = await fetchLanguagePack(DEFAULT_LANGUAGE);
+        } catch (error) {
+          console.error("[i18n] 载入默认语言包失败", error);
+          defaultLanguagePack = {};
+        }
+      }
+
+      if (targetLang === DEFAULT_LANGUAGE) {
+        activeLanguagePack = defaultLanguagePack;
+        activeLanguage = DEFAULT_LANGUAGE;
+        return;
+      }
+
+      try {
+        activeLanguagePack = await fetchLanguagePack(targetLang);
+        activeLanguage = targetLang;
+      } catch (error) {
+        console.warn(`[i18n] 载入语言 "${targetLang}" 失败，回退到默认`, error);
+        activeLanguagePack = defaultLanguagePack;
+        activeLanguage = DEFAULT_LANGUAGE;
+        setLanguage(DEFAULT_LANGUAGE);
+      }
+    })().finally(() => {
+      languageLoadPromise = null;
+    });
+  }
+
+  return languageLoadPromise;
+}
+
+function applyI18nToDOM(root = document) {
+  const scope = root || document;
+  const langCode = activeLanguage || getCurrentLanguage();
+  const htmlLang = langCode === "zh" ? "zh-CN" : langCode === "ja" ? "ja-JP" : langCode;
+  if (document?.documentElement) {
+    document.documentElement.lang = htmlLang;
+  }
+
+  scope.querySelectorAll("[data-i18n]").forEach((element) => {
+    const key = element.getAttribute("data-i18n");
+    if (!key) return;
+    const translation = t(key);
+    if (typeof translation === "string") {
+      element.textContent = translation;
+    }
+  });
+
+  scope.querySelectorAll("[data-i18n-html]").forEach((element) => {
+    const key = element.getAttribute("data-i18n-html");
+    if (!key) return;
+    const translation = t(key);
+    if (typeof translation === "string") {
+      element.innerHTML = translation;
+    }
+  });
+
+  const attrMappings = [
+    ["data-i18n-placeholder", "placeholder"],
+    ["data-i18n-title", "title"],
+    ["data-i18n-aria", "aria-label"],
+    ["data-i18n-aria-label", "aria-label"],
+    ["data-i18n-aria-description", "aria-description"],
+    ["data-i18n-value", "value"],
+  ];
+
+  attrMappings.forEach(([dataAttr, targetAttr]) => {
+    scope.querySelectorAll(`[${dataAttr}]`).forEach((element) => {
+      const key = element.getAttribute(dataAttr);
+      if (!key) return;
+      const translation = t(key);
+      if (typeof translation === "string") {
+        element.setAttribute(targetAttr, translation);
+      }
+    });
+  });
+
+  updateStrategyLabels();
+  updateLanguageSelectorUI();
+}
+
+function updateStrategyLabels() {
+  const fallbackLabels =
+    defaultLanguagePack?.strategy?.labelMap ||
+    defaultLanguagePack?.strategyLabels ||
+    DEFAULT_STRATEGY_LABELS;
+
+  const activeLabels =
+    activeLanguagePack?.strategy?.labelMap ||
+    activeLanguagePack?.strategyLabels ||
+    fallbackLabels;
+
+  if (activeLabels && typeof activeLabels === "object") {
+    STRATEGY_LABELS = {
+      ...DEFAULT_STRATEGY_LABELS,
+      ...(fallbackLabels || {}),
+      ...activeLabels,
+    };
+  } else {
+    STRATEGY_LABELS = { ...DEFAULT_STRATEGY_LABELS };
+  }
+}
+
+function updateLanguageSelectorUI() {
+  const selector = document.getElementById("language-selector");
+  const toggle = document.getElementById("language-toggle");
+  const label = toggle?.querySelector(".language-label");
+  const currentLang = activeLanguage || getCurrentLanguage();
+  const labelText = LANGUAGE_LABELS[currentLang] || currentLang.toUpperCase();
+
+  if (label) {
+    label.textContent = labelText;
+  }
+
+  const menu = document.getElementById("language-menu");
+  if (menu) {
+    menu.querySelectorAll(".language-option").forEach((option) => {
+      const optionLang = option.getAttribute("data-lang");
+      const isActive = optionLang === currentLang;
+      option.classList.toggle("is-active", isActive);
+      option.setAttribute("aria-selected", isActive ? "true" : "false");
+    });
+  }
+
+  if (selector) {
+    selector.setAttribute("data-current-lang", currentLang);
+  }
+}
+
+async function syncLanguagePreferenceFromBackend() {
+  try {
+    const response = await fetch("/api/user/language", {
+      cache: "no-store",
+      credentials: "same-origin",
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const data = await response.json();
+    const backendLang = normalizeLanguageCode(data?.language);
+    if (backendLang && backendLang !== getCurrentLanguage()) {
+      setLanguage(backendLang);
+      return true;
+    }
+  } catch (error) {
+    console.warn("[i18n] 同步后端语言偏好失败", error);
+  }
+  return false;
+}
+
+function createDefaultStrategyContent(rawName = "") {
+  const normalizedName = typeof rawName === "string" && rawName.trim() ? rawName.trim() : "strategy";
+  return {
+    meta: {
+      name: normalizedName,
+      version: "1.0",
+      updatedAt: new Date().toISOString(),
+      description: "",
+    },
+    prompts: { ...STRATEGY_DEFAULT_PROMPTS },
+    params: { ...STRATEGY_DEFAULT_PARAMS },
+  };
+}
 
 class TradingMonitor {
   constructor() {
-    this.activeSymbol = DEFAULT_SYMBOLS[0];
+    this.activeSymbol = DEFAULT_SYMBOL;
     this.activeInterval = DEFAULT_INTERVAL;
-    this.availableSymbols = new Set(DEFAULT_SYMBOLS);
-    this.symbolOrder = [...DEFAULT_SYMBOLS];
     this.prices = new Map();
     this.priceDeltas = new Map();
     this.priceChanges = new Map();
+    this.availableSymbols = new Set();
+    this.symbolOrder = [];
     this.chart = null;
     this.candleSeries = null;
     this.pendingCandleSymbol = this.activeSymbol;
@@ -389,6 +430,12 @@ class TradingMonitor {
     this.chartTitleEl = document.getElementById("chart-title");
     this.chartIntervalEl = document.getElementById("chart-interval");
     this.klineChartEl = document.getElementById("kline-chart");
+    this.strategyEditorEl = document.getElementById("strategy-editor-view");
+    this.tradingDashboardEl = document.querySelector(".main-content");
+    this.bottomTabsEl = document.querySelector(".bottom-tabs");
+    this.strategyActiveLabelEl = document.getElementById("active-strategy-label");
+    this.currentStrategyName = "";
+    this.activeStrategyName = "";
     this.decisionListEl = document.getElementById("decision-list");
     this.decisionUpdatedEl = document.getElementById("decision-updated");
     this.positionsContainerEl = document.getElementById("positions-container");
@@ -454,7 +501,6 @@ class TradingMonitor {
     this.decisionsViewAllLink = null;
     this.decisionRequestsViewAllLink = null;
     // this.accountBtn = document.getElementById("account-btn"); // Removed
-    this.strategyBtn = document.getElementById("strategy-btn");
     this.settingsBtn = document.getElementById("settings-btn");
     this.logoutBtn = document.getElementById("logout-btn");
   this.tradingLoopToggle = document.getElementById("trading-loop-toggle");
@@ -465,18 +511,14 @@ class TradingMonitor {
     // this.accountModal = document.getElementById("account-modal"); // Removed
     // this.accountsListModal = document.getElementById("accounts-list-modal"); // Removed
     this.accountFormModal = document.getElementById("account-form-modal");
-    this.strategyModal = document.getElementById("strategy-modal");
     this.settingsModal = document.getElementById("settings-modal");
     this.statisticsModal = document.getElementById("statistics-modal");
     this.decisionRequestModal = document.getElementById("decision-request-modal");
     this.decisionRequestDetailEl = document.getElementById("decision-request-detail");
     this.accountForm = document.getElementById("account-form");
     this.accountEditForm = document.getElementById("account-edit-form");
-    this.strategyForm = document.getElementById("strategy-form");
     this.settingsForm = document.getElementById("settings-form");
-    this.strategyPreviewEl = document.getElementById("strategy-preview");
     this.accountCancelBtn = document.getElementById("account-cancel");
-    this.strategyCancelBtn = document.getElementById("strategy-cancel");
     this.settingsCancelBtn = document.getElementById("settings-cancel");
     this.exchangeSelect = document.getElementById("exchange-provider");
     this.exchangePanels = document.querySelectorAll("[data-exchange-panel]");
@@ -500,6 +542,8 @@ class TradingMonitor {
   this.aiModelsCache = [];
 
     this.strategyPromptCache = new Map();
+    this.strategyDeleteActivePopover = null;
+    this.strategyDeleteOutsideHandler = null;
 
     this.isAuthenticated = false;
 
@@ -519,9 +563,9 @@ class TradingMonitor {
     this.bindSettingsForms();
     this.bindExchangeControls();
     this.setupPrivacyControls();
-  this.setupStrategyTabs();
-  this.setupStrategyPromptEditors();
+    this.setupStrategyEditorQuickInsert();
     this.initAiModelOverlay();
+    this.bindViewSwitcher(); // 绑定视图切换
     void this.fetchPublicModelInfo();
     
     // 立即初始化图表，确保在数据加载前就准备好
@@ -605,7 +649,6 @@ class TradingMonitor {
       // this.accountModal, // Removed
       // this.accountsListModal, // Removed
       this.accountFormModal,
-      this.strategyModal,
       this.settingsModal,
       this.statisticsModal,
       this.recordsModal,
@@ -1088,31 +1131,12 @@ class TradingMonitor {
     }
   }
 
-  activateStrategyTab(tab) {
-    if (!this.strategyModal) {
+  setupStrategyEditorQuickInsert() {
+    if (!this.strategyEditorEl) {
       return;
     }
 
-    const buttons = this.strategyModal.querySelectorAll("[data-strategy-tab]");
-    const panels = this.strategyModal.querySelectorAll("[data-strategy-panel]");
-
-    buttons.forEach((btn) => {
-      const target = btn.dataset.strategyTab;
-      btn.classList.toggle("active", target === tab);
-    });
-
-    panels.forEach((panel) => {
-      const target = panel.dataset.strategyPanel;
-      panel.classList.toggle("active", target === tab);
-    });
-  }
-
-  setupStrategyTabs() {
-    if (!this.strategyModal) {
-      return;
-    }
-
-    const buttons = this.strategyModal.querySelectorAll("[data-strategy-tab]");
+    const buttons = this.strategyEditorEl.querySelectorAll("[data-editor-insert]");
     if (!buttons || buttons.length === 0) {
       return;
     }
@@ -1120,94 +1144,11 @@ class TradingMonitor {
     buttons.forEach((button) => {
       button.addEventListener("click", (event) => {
         event.preventDefault();
-        const tab = button.dataset.strategyTab;
-        if (!tab) {
+        const strategy = button.dataset.editorInsert;
+        if (!strategy) {
           return;
         }
-        this.activateStrategyTab(tab);
-      });
-    });
-  }
-
-  setupStrategyPromptEditors() {
-    if (!this.strategyForm) {
-      return;
-    }
-
-    const fields = [
-      "PROMPT_SECTION_ENTRY",
-      "PROMPT_SECTION_EXIT",
-      "PROMPT_SECTION_VARIABLES",
-    ];
-
-    fields.forEach((name) => {
-      const field = this.strategyForm.querySelector(`[name="${name}"]`);
-      if (!field) {
-        return;
-      }
-      field.addEventListener("input", () => {
-        this.updateStrategyPreview();
-      });
-    });
-
-    this.setupQuickInsertButtons();
-    this.updateStrategyPreview();
-  }
-
-  updateStrategyPreview() {
-    if (!this.strategyForm || !this.strategyPreviewEl) {
-      return;
-    }
-
-    const getValue = (name) => {
-      const element = this.strategyForm.querySelector(`[name="${name}"]`);
-      if (!element || typeof element.value !== "string") {
-        return "";
-      }
-      return element.value.trim();
-    };
-
-    const entry = getValue("PROMPT_SECTION_ENTRY");
-    const exit = getValue("PROMPT_SECTION_EXIT");
-    const variables = getValue("PROMPT_SECTION_VARIABLES");
-
-    const segments = [];
-    if (entry) {
-      segments.push(`【策略入场逻辑】\n${entry}`);
-    }
-    if (exit) {
-      segments.push(`【策略出场与持仓管理】\n${exit}`);
-    }
-    if (variables) {
-      segments.push(`【策略变量参考】\n${variables}`);
-    }
-
-    if (segments.length === 0) {
-      this.strategyPreviewEl.textContent = "尚无内容";
-    } else {
-      this.strategyPreviewEl.textContent = segments.join("\n\n");
-    }
-  }
-
-  setupQuickInsertButtons() {
-    if (!this.strategyForm) {
-      return;
-    }
-
-    const buttons = this.strategyForm.querySelectorAll("[data-strategy-insert][data-target-field]");
-    if (!buttons || buttons.length === 0) {
-      return;
-    }
-
-    buttons.forEach((button) => {
-      button.addEventListener("click", (event) => {
-        event.preventDefault();
-        const strategy = button.dataset.strategyInsert;
-        const targetField = button.dataset.targetField;
-        if (!strategy || !targetField) {
-          return;
-        }
-        void this.handleQuickInsertStrategy(button, strategy, targetField);
+        void this.applyStrategyTemplateToEditor(button, strategy);
       });
     });
   }
@@ -1220,19 +1161,6 @@ class TradingMonitor {
       return strategy;
     }
     return t("strategy.labels.unknown");
-  }
-
-  resolveFieldLabel(fieldName) {
-    switch (fieldName) {
-      case "PROMPT_SECTION_ENTRY":
-        return t("strategy.fieldNames.entry");
-      case "PROMPT_SECTION_EXIT":
-        return t("strategy.fieldNames.exit");
-      case "PROMPT_SECTION_VARIABLES":
-        return t("strategy.fieldNames.variables");
-      default:
-        return t("strategy.fieldNames.default");
-    }
   }
 
   getStrategyPromptCacheKey(strategy, interval) {
@@ -1263,22 +1191,20 @@ class TradingMonitor {
     return data.sections;
   }
 
-  async handleQuickInsertStrategy(button, strategy, targetField) {
+  async applyStrategyTemplateToEditor(button, strategy) {
     if (!this.ensureAuthenticated()) {
       return;
     }
 
-    if (!this.strategyForm) {
+    const entryField = document.getElementById("strategy-entry");
+    const exitField = document.getElementById("strategy-exit");
+    const variablesField = document.getElementById("strategy-variables");
+    if (!entryField || !exitField || !variablesField) {
+      console.warn("[strategy-editor] 缺少必要的文本区域");
       return;
     }
 
-    const field = this.strategyForm.querySelector(`[name="${targetField}"]`);
-    if (!field) {
-      console.warn(`[quick-insert] 未找到目标字段 ${targetField}`);
-      return;
-    }
-
-    const intervalInput = this.strategyForm.querySelector('[name="TRADING_INTERVAL_MINUTES"]');
+    const intervalInput = document.getElementById("st-interval");
     const intervalValue = intervalInput && typeof intervalInput.value === "string" ? intervalInput.value.trim() : "";
 
     const originalText = button.dataset.originalLabel || button.textContent || t("strategy.fieldNames.default");
@@ -1290,39 +1216,27 @@ class TradingMonitor {
     try {
       const sections = await this.fetchStrategySections(strategy, intervalValue);
       if (!sections) {
-        this.showToast(
-          "error",
-          t("notifications.loadFailedTitle"),
-          t("notifications.loadFailedDefault"),
-        );
+        this.showToast("error", t("notifications.loadFailedTitle"), t("notifications.loadFailedDefault"));
         return;
       }
 
-      let nextValue = "";
-      if (targetField === "PROMPT_SECTION_ENTRY") {
-        nextValue = sections.entry ?? "";
-      } else if (targetField === "PROMPT_SECTION_EXIT") {
-        nextValue = sections.exit ?? "";
-      } else if (targetField === "PROMPT_SECTION_VARIABLES") {
-        nextValue = sections.variables ?? "";
-      } else {
-        console.warn(`[quick-insert] 未知的目标字段 ${targetField}`);
-        return;
-      }
+      entryField.value = typeof sections.entry === "string" ? sections.entry : "";
+      exitField.value = typeof sections.exit === "string" ? sections.exit : "";
+      variablesField.value = typeof sections.variables === "string" ? sections.variables : "";
 
-      field.value = typeof nextValue === "string" ? nextValue : "";
-      field.dispatchEvent(new Event("input", { bubbles: true }));
-      this.updateStrategyPreview();
+      [entryField, exitField, variablesField].forEach((field) => {
+        field.dispatchEvent(new Event("input", { bubbles: true }));
+      });
 
       const strategyLabel = this.resolveStrategyLabel(strategy);
-      const fieldLabel = this.resolveFieldLabel(targetField);
+      const fieldLabel = t("strategy.fieldNames.all");
       this.showToast(
         "success",
         t("notifications.templateInsertedTitle"),
         t("notifications.templateInsertedMessage", { strategy: strategyLabel, field: fieldLabel }),
       );
     } catch (error) {
-      console.error("[quick-insert] 获取策略模板失败:", error);
+      console.error("[strategy-editor] 获取策略模板失败:", error);
       const fallbackMessage = t("notifications.loadFailedDefault");
       const message = error instanceof Error ? error.message : fallbackMessage;
       this.showToast("error", t("notifications.loadFailedTitle"), message);
@@ -4678,7 +4592,6 @@ class TradingMonitor {
     };
 
     bind(this.accountBtn, this.openAccountModal);
-    bind(this.strategyBtn, this.openStrategyModal);
     bind(this.settingsBtn, this.openSettingsModal);
     bind(this.tradingLoopToggle, this.handleTradingLoopToggle);
 
@@ -4695,13 +4608,6 @@ class TradingMonitor {
       this.accountForm.addEventListener("submit", (event) => {
         event.preventDefault();
         void this.submitAccountForm();
-      });
-    }
-
-    if (this.strategyForm) {
-      this.strategyForm.addEventListener("submit", (event) => {
-        event.preventDefault();
-        void this.submitStrategyForm();
       });
     }
 
@@ -4780,13 +4686,6 @@ class TradingMonitor {
       this.accountCancelBtn.addEventListener("click", (event) => {
         event.preventDefault();
         this.hideModal(this.accountModal);
-      });
-    }
-
-    if (this.strategyCancelBtn) {
-      this.strategyCancelBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        this.hideModal(this.strategyModal);
       });
     }
 
@@ -5045,7 +4944,6 @@ class TradingMonitor {
     };
 
     toggle(this.accountBtn);
-    toggle(this.strategyBtn);
     toggle(this.settingsBtn);
     toggle(this.logoutBtn);
     toggle(this.tradingLoopToggle);
@@ -5881,32 +5779,6 @@ class TradingMonitor {
     }
   }
 
-  async openStrategyModal() {
-    if (!this.ensureAuthenticated() || !this.strategyModal || !this.strategyForm) {
-      console.warn("[openStrategyModal] 前置条件不满足:", {
-        authenticated: this.isAuthenticated,
-        hasModal: !!this.strategyModal,
-        hasForm: !!this.strategyForm
-      });
-      return;
-    }
-
-    console.log("[openStrategyModal] 打开策略配置弹窗");
-    const config = await this.fetchFullConfig(true); // 强制刷新确保获取完整配置
-    if (!config) {
-      console.error("[openStrategyModal] 配置获取失败");
-      this.showToast("error", "加载失败", "无法加载配置,请稍后重试。");
-      return;
-    }
-
-    console.log("[openStrategyModal] 配置已获取，开始填充表单");
-    this.populateForm(this.strategyForm, config, STRATEGY_CONFIG_KEYS);
-    this.activateStrategyTab("basic");
-    this.updateStrategyPreview();
-    this.showModal(this.strategyModal);
-    console.log("[openStrategyModal] 弹窗已显示");
-  }
-
   async openSettingsModal() {
     if (!this.ensureAuthenticated() || !this.settingsModal || !this.settingsForm) {
       console.warn("[openSettingsModal] 前置条件不满足:", {
@@ -6242,74 +6114,6 @@ class TradingMonitor {
       await this.refreshAll();
     } catch (error) {
       console.error("[account] 保存配置失败", error);
-      this.showToast(
-        "error",
-        t("notifications.saveExceptionTitle"),
-        t("notifications.saveExceptionMessage"),
-      );
-    }
-  }
-
-  async submitStrategyForm() {
-    if (!this.ensureAuthenticated() || !this.strategyForm) {
-      return;
-    }
-
-    const payload = this.collectFormValues(this.strategyForm, STRATEGY_CONFIG_KEYS);
-    if (!payload) {
-      this.showToast(
-        "info",
-        t("notifications.noChangesTitle"),
-        t("notifications.noChangesMessage"),
-      );
-      return;
-    }
-
-    // 调试日志：查看 payload 内容
-    console.log("[strategy] 提交的 payload:", payload);
-    console.log("[strategy] TRADING_SYMBOLS 值:", payload.TRADING_SYMBOLS);
-    console.log("[strategy] TRADING_SYMBOLS 是否存在:", payload.hasOwnProperty('TRADING_SYMBOLS'));
-
-    // 验证交易币种：只在 payload 中包含 TRADING_SYMBOLS 时才验证（如果不包含说明值未改变）
-    if (payload.hasOwnProperty('TRADING_SYMBOLS')) {
-      if (!payload.TRADING_SYMBOLS || typeof payload.TRADING_SYMBOLS !== 'string' || payload.TRADING_SYMBOLS.trim() === '') {
-        this.showToast(
-          "warning",
-          t("notifications.fieldMissingTitle"),
-          t("notifications.tradingSymbolsRequired"),
-        );
-        return;
-      }
-    }
-
-    try {
-      const updateResult = await this.sendConfigUpdate(payload);
-      if (!updateResult.success) {
-        const message = updateResult.error || t("notifications.saveFailedDefault");
-        this.showToast("error", t("notifications.saveFailedTitle"), message);
-        return;
-      }
-
-      const reloadResult = await this.triggerConfigReload();
-      if (reloadResult.success) {
-        this.showToast(
-          "success",
-          t("notifications.strategySaveTitle"),
-          t("notifications.strategySaveMessage"),
-        );
-      } else if (reloadResult.error) {
-        this.showToast(
-          "warning",
-          t("notifications.reloadFailedTitle"),
-          t("notifications.reloadFailedMessage", { error: reloadResult.error }),
-        );
-      }
-
-      this.hideModal(this.strategyModal);
-      await this.fetchFullConfig(true);
-      await this.refreshAll();
-    } catch (error) {
-      console.error("[strategy] 保存配置失败", error);
       this.showToast(
         "error",
         t("notifications.saveExceptionTitle"),
@@ -7860,6 +7664,7 @@ class TradingMonitor {
     }
   }
 
+
   // ========== AI 模型管理 ==========
 
   async loadAiModelsList() {
@@ -8476,6 +8281,590 @@ class TradingMonitor {
     } finally {
       this.setButtonLoading(triggerBtn, false);
     }
+  }
+
+  // ==================== Strategy Editor Methods ====================
+
+  bindViewSwitcher() {
+    const toggle = document.getElementById("view-mode-toggle");
+    const modeButtons = document.querySelectorAll(".view-switcher .view-switcher-label");
+
+    if (!toggle || !this.strategyEditorEl || !this.tradingDashboardEl) {
+      return;
+    }
+
+    const updateButtonState = (isStrategyMode) => {
+      modeButtons.forEach((btn) => {
+        const targetMode = btn?.dataset?.mode;
+        const isActive = isStrategyMode ? targetMode === "strategy" : targetMode === "trading";
+        btn.classList.toggle("active", isActive);
+        btn.setAttribute("aria-pressed", isActive ? "true" : "false");
+      });
+    };
+
+    toggle.addEventListener("change", (event) => {
+      const isStrategyMode = event?.target?.checked ?? toggle.checked;
+      updateButtonState(isStrategyMode);
+      this.toggleStrategyView(Boolean(isStrategyMode));
+      if (isStrategyMode) {
+        void this.loadStrategyList();
+        if (!this.currentStrategyName) {
+          this.populateStrategyEditor(this.getBlankStrategyTemplate());
+        }
+      }
+    });
+
+    modeButtons.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const shouldStrategy = btn?.dataset?.mode === "strategy";
+        if (toggle.checked === shouldStrategy) {
+          return;
+        }
+        toggle.checked = shouldStrategy;
+        toggle.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    });
+
+    updateButtonState(toggle.checked);
+
+    const newBtn = document.getElementById("new-strategy-btn");
+    if (newBtn) {
+      newBtn.addEventListener("click", () => this.resetStrategyEditor());
+    }
+
+    const saveBtn = document.getElementById("strategy-save-btn");
+    if (saveBtn) {
+      saveBtn.addEventListener("click", () => {
+        void this.saveCurrentStrategy();
+      });
+    }
+
+    const activateBtn = document.getElementById("strategy-activate-btn");
+    if (activateBtn) {
+      activateBtn.addEventListener("click", () => {
+        void this.activateCurrentStrategy();
+      });
+    }
+  }
+
+  async loadStrategyList() {
+    const listContainer = document.getElementById("strategy-list");
+    if (!listContainer) return;
+
+    this.hideStrategyDeleteConfirm();
+
+    const loadingText = this.translate("strategyEditor.loading", "Loading strategies...");
+    listContainer.innerHTML = `<p class="loading">${this.escapeHtml(loadingText)}</p>`;
+
+    try {
+      const response = await fetch("/api/strategies", {
+        credentials: "include",
+      });
+
+      if (response.status === 401) {
+        const loginText = this.translate("strategyEditor.requireLogin", "Please sign in to manage strategies.");
+        listContainer.innerHTML = `<p class="error-hint">${this.escapeHtml(loginText)}</p>`;
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+      const strategies = Array.isArray(data?.strategies) ? data.strategies : [];
+
+      if (strategies.length === 0) {
+        const emptyText = this.translate("strategyEditor.empty", "No strategies yet. Click “New Strategy” to create one.");
+        listContainer.innerHTML = `<p class="empty-hint">${this.escapeHtml(emptyText)}</p>`;
+        this.activeStrategyName = "";
+        this.updateActiveStrategyLabel("");
+        return;
+      }
+
+      const deleteLabel = this.translate("common.delete", "Delete");
+      const activeBadgeLabel = this.translate("strategyEditor.active", "Active");
+      strategies.sort((a, b) => a.name.localeCompare(b.name));
+      listContainer.innerHTML = "";
+      let activeName = "";
+
+      strategies.forEach((strategyInfo) => {
+        const name = strategyInfo?.name || "";
+        const isActive = Boolean(strategyInfo?.isActive);
+        if (isActive) {
+          activeName = name;
+        }
+
+        const confirmMessage = this.escapeHtml(
+          this.translate("strategyEditor.deleteConfirm", 'Delete strategy "{{name}}"?', { name })
+        );
+        const confirmLabel = this.escapeHtml(this.translate("common.confirm", "Confirm"));
+        const cancelLabel = this.escapeHtml(this.translate("common.cancel", "Cancel"));
+
+        const item = document.createElement("div");
+        item.className = "strategy-item";
+        if (isActive) {
+          item.classList.add("active");
+        }
+        if (name && name === this.currentStrategyName) {
+          item.classList.add("selected");
+        }
+        item.dataset.name = name;
+
+        item.innerHTML = `
+          <span class="strategy-item-name">${this.escapeHtml(name)}</span>
+          ${isActive ? `<span class="strategy-active-badge">${this.escapeHtml(activeBadgeLabel)}</span>` : ""}
+          <div class="strategy-item-actions">
+            <div class="strategy-delete-wrapper">
+              <button class="strategy-item-btn delete-strategy-btn" data-name="${this.escapeHtml(name)}" title="${this.escapeHtml(deleteLabel)}">
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true"><path d="M2.5 2.5h7v1h-7zM3.5 4.5h5v6h-5zM4.5 0.5h3v1h-3z"/></svg>
+              </button>
+              <div class="strategy-delete-popover" role="alert" aria-hidden="true" data-strategy-name="${this.escapeHtml(name)}">
+                <p class="strategy-delete-text">${confirmMessage}</p>
+                <div class="strategy-delete-actions">
+                  <button type="button" class="link-button cancel-delete-strategy">${cancelLabel}</button>
+                  <button type="button" class="btn-danger btn-small confirm-delete-strategy" data-name="${this.escapeHtml(name)}">${confirmLabel}</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        item.addEventListener("click", (event) => {
+          if (event.target.closest(".strategy-item-btn")) {
+            return;
+          }
+          this.loadStrategyFile(name);
+        });
+
+        const deleteBtn = item.querySelector(".delete-strategy-btn");
+        if (deleteBtn) {
+          deleteBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            this.showStrategyDeleteConfirm(name, deleteBtn);
+          });
+        }
+
+        const confirmBtn = item.querySelector(".confirm-delete-strategy");
+        if (confirmBtn) {
+          confirmBtn.addEventListener("click", async (event) => {
+            event.stopPropagation();
+            confirmBtn.disabled = true;
+            confirmBtn.classList.add("is-loading");
+            try {
+              await this.deleteStrategy(name);
+            } finally {
+              confirmBtn.disabled = false;
+              confirmBtn.classList.remove("is-loading");
+              this.hideStrategyDeleteConfirm();
+            }
+          });
+        }
+
+        const cancelBtn = item.querySelector(".cancel-delete-strategy");
+        if (cancelBtn) {
+          cancelBtn.addEventListener("click", (event) => {
+            event.stopPropagation();
+            this.hideStrategyDeleteConfirm();
+          });
+        }
+
+        listContainer.appendChild(item);
+      });
+
+      this.activeStrategyName = activeName;
+      this.updateActiveStrategyLabel(activeName);
+      this.updateStrategyListHighlight(this.currentStrategyName);
+    } catch (error) {
+      console.error("Error loading strategies:", error);
+      const errorText = this.translate("strategyEditor.errorLoading", "Failed to load strategies.");
+      listContainer.innerHTML = `<p class="error-hint">${this.escapeHtml(errorText)}</p>`;
+    }
+  }
+
+  showStrategyDeleteConfirm(name, triggerBtn) {
+    if (!name || !triggerBtn) {
+      return;
+    }
+
+    this.hideStrategyDeleteConfirm();
+
+    const wrapper = triggerBtn.closest(".strategy-delete-wrapper") || triggerBtn.closest(".strategy-item-actions");
+    if (!wrapper) {
+      return;
+    }
+
+    const popover = wrapper.querySelector(".strategy-delete-popover");
+    if (!popover) {
+      return;
+    }
+
+    popover.classList.add("is-visible");
+    popover.setAttribute("aria-hidden", "false");
+    this.strategyDeleteActivePopover = popover;
+
+    this.strategyDeleteOutsideHandler = (event) => {
+      if (!event) return;
+      const target = event.target;
+      if (!target) return;
+      if (wrapper.contains(target)) {
+        return;
+      }
+      this.hideStrategyDeleteConfirm();
+    };
+
+    window.setTimeout(() => {
+      if (this.strategyDeleteOutsideHandler) {
+        document.addEventListener("click", this.strategyDeleteOutsideHandler);
+      }
+    }, 0);
+  }
+
+  hideStrategyDeleteConfirm() {
+    if (this.strategyDeleteActivePopover) {
+      this.strategyDeleteActivePopover.classList.remove("is-visible");
+      this.strategyDeleteActivePopover.setAttribute("aria-hidden", "true");
+      this.strategyDeleteActivePopover = null;
+    }
+
+    if (this.strategyDeleteOutsideHandler) {
+      document.removeEventListener("click", this.strategyDeleteOutsideHandler);
+      this.strategyDeleteOutsideHandler = null;
+    }
+  }
+
+  async loadStrategyFile(name) {
+    if (!name) return;
+    try {
+      const response = await fetch(`/api/strategies/${encodeURIComponent(name)}`, {
+        credentials: "include",
+      });
+
+      if (response.status === 401) {
+        const loginText = this.translate("strategyEditor.requireLogin", "Please sign in to manage strategies.");
+        this.showToast("error", this.translate("common.error", "Error"), loginText);
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error("Failed to load strategy file");
+      }
+
+      const data = await response.json();
+      const strategy = this.normalizeStrategyPayload(data?.strategy ?? data, name);
+
+      if (!strategy) {
+        throw new Error("Missing strategy payload");
+      }
+
+      this.populateStrategyEditor(strategy);
+      this.currentStrategyName = strategy.meta?.name || name;
+      this.updateStrategyListHighlight(this.currentStrategyName);
+
+      const loadedMessage = this.translate("strategyEditor.loadSuccess", 'Strategy "{{name}}" loaded.', { name: this.currentStrategyName });
+      this.showToast("success", this.translate("common.success", "Success"), loadedMessage);
+    } catch (error) {
+      console.error("Error loading strategy file:", error);
+      const message = this.translate("strategyEditor.loadFailed", "Failed to load strategy file.");
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
+  resetStrategyEditor() {
+    this.populateStrategyEditor(this.getBlankStrategyTemplate());
+    this.currentStrategyName = "";
+    this.updateStrategyListHighlight("");
+  }
+
+  async saveCurrentStrategy() {
+    const nameInput = document.getElementById("strategy-filename");
+    const name = nameInput?.value?.trim() || "";
+
+    if (!name) {
+      const message = this.translate("strategyEditor.nameRequired", "Please enter a strategy file name.");
+      this.showToast("error", this.translate("common.error", "Error"), message);
+      if (nameInput) {
+        nameInput.focus();
+      }
+      return false;
+    }
+
+    const content = {
+      meta: {
+        name,
+        version: "1.0",
+        updatedAt: new Date().toISOString(),
+        description: document.getElementById("strategy-description")?.value?.trim() || "",
+      },
+      prompts: {
+        entryLogic: document.getElementById("strategy-entry")?.value || "",
+        exitLogic: document.getElementById("strategy-exit")?.value || "",
+        variables: document.getElementById("strategy-variables")?.value || "",
+      },
+      params: {
+        intervalMinutes: this.getNumberInputValue("st-interval", STRATEGY_DEFAULT_PARAMS.intervalMinutes),
+        leverage: this.getNumberInputValue("st-leverage", STRATEGY_DEFAULT_PARAMS.leverage),
+        maxPositions: this.getNumberInputValue("st-max-positions", STRATEGY_DEFAULT_PARAMS.maxPositions),
+        maxHoldingHours: this.getNumberInputValue("st-max-holding", STRATEGY_DEFAULT_PARAMS.maxHoldingHours),
+        minHoldingMinutes: this.getNumberInputValue("st-min-holding", STRATEGY_DEFAULT_PARAMS.minHoldingMinutes),
+        extremeStopLossPercent: this.getNumberInputValue("st-extreme-stop", STRATEGY_DEFAULT_PARAMS.extremeStopLossPercent),
+        accountStopLoss: this.getNumberInputValue("st-stop-loss", STRATEGY_DEFAULT_PARAMS.accountStopLoss),
+        accountTakeProfit: this.getNumberInputValue("st-take-profit", STRATEGY_DEFAULT_PARAMS.accountTakeProfit),
+        drawdownWarning: this.getNumberInputValue("st-dd-warning", STRATEGY_DEFAULT_PARAMS.drawdownWarning),
+        drawdownNoNew: this.getNumberInputValue("st-dd-pause", STRATEGY_DEFAULT_PARAMS.drawdownNoNew),
+        drawdownForceClose: this.getNumberInputValue("st-dd-close", STRATEGY_DEFAULT_PARAMS.drawdownForceClose),
+      },
+    };
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/strategies/${encodeURIComponent(name)}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+        body: JSON.stringify(content),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to save strategy");
+      }
+
+      this.currentStrategyName = name;
+      this.updateStrategyListHighlight(name);
+      await this.loadStrategyList();
+
+      const successMessage = this.translate("strategyEditor.saveSuccess", 'Strategy "{{name}}" saved.', { name });
+      this.showToast("success", this.translate("common.success", "Success"), successMessage);
+      return true;
+    } catch (error) {
+      console.error("Error saving strategy:", error);
+      const message = this.translate("strategyEditor.saveFailed", "Failed to save strategy.");
+      this.showToast("error", this.translate("common.error", "Error"), message);
+      return false;
+    }
+  }
+
+  async deleteStrategy(name) {
+    if (!name) return;
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/strategies/${encodeURIComponent(name)}`, {
+        method: "DELETE",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to delete strategy");
+      }
+
+      if (this.currentStrategyName === name) {
+        this.resetStrategyEditor();
+      }
+
+      const successMessage = this.translate("strategyEditor.deleteSuccess", 'Strategy "{{name}}" deleted.', { name });
+      this.showToast("success", this.translate("common.success", "Success"), successMessage);
+      await this.loadStrategyList();
+    } catch (error) {
+      console.error("Error deleting strategy:", error);
+      const message = this.translate("strategyEditor.deleteFailed", "Failed to delete strategy.");
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
+  async activateCurrentStrategy() {
+    const name = document.getElementById("strategy-filename")?.value?.trim();
+    if (!name) {
+      const reminder = this.translate("strategyEditor.saveBeforeActivate", "Please save the strategy before activating it.");
+      this.showToast("error", this.translate("common.error", "Error"), reminder);
+      return;
+    }
+
+    const saved = await this.saveCurrentStrategy();
+    if (!saved) {
+      return;
+    }
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/strategies/${encodeURIComponent(name)}/activate`, {
+        method: "POST",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to activate strategy");
+      }
+
+      this.activeStrategyName = name;
+      this.updateActiveStrategyLabel(name);
+      await this.loadStrategyList();
+
+      const successMessage = this.translate("strategyEditor.activateSuccess", 'Strategy "{{name}}" is now active.', { name });
+      this.showToast("success", this.translate("common.success", "Success"), successMessage);
+    } catch (error) {
+      console.error("Error activating strategy:", error);
+      const message = this.translate("strategyEditor.activateFailed", "Failed to activate strategy.");
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
+  toggleStrategyView(isStrategyMode) {
+    if (!this.strategyEditorEl || !this.tradingDashboardEl) return;
+
+    if (isStrategyMode) {
+      this.tradingDashboardEl.style.display = "none";
+      if (this.bottomTabsEl) {
+        this.bottomTabsEl.style.display = "none";
+      }
+      this.strategyEditorEl.classList.add("active");
+      this.strategyEditorEl.setAttribute("aria-hidden", "false");
+    } else {
+      this.hideStrategyDeleteConfirm();
+      this.tradingDashboardEl.style.display = "";
+      if (this.bottomTabsEl) {
+        this.bottomTabsEl.style.display = "";
+      }
+      this.strategyEditorEl.classList.remove("active");
+      this.strategyEditorEl.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  getBlankStrategyTemplate() {
+    return createDefaultStrategyContent("");
+  }
+
+  populateStrategyEditor(strategy) {
+    if (!strategy) return;
+    const { meta, prompts, params } = strategy;
+
+    const nameInput = document.getElementById("strategy-filename");
+    if (nameInput) {
+      nameInput.value = meta?.name || "";
+    }
+
+    const descriptionInput = document.getElementById("strategy-description");
+    if (descriptionInput) {
+      descriptionInput.value = meta?.description || "";
+    }
+
+    const entry = document.getElementById("strategy-entry");
+    if (entry) entry.value = prompts?.entryLogic || "";
+    const exit = document.getElementById("strategy-exit");
+    if (exit) exit.value = prompts?.exitLogic || "";
+    const variables = document.getElementById("strategy-variables");
+    if (variables) variables.value = prompts?.variables || "";
+
+    const mappings = [
+      ["st-interval", params?.intervalMinutes, STRATEGY_DEFAULT_PARAMS.intervalMinutes],
+      ["st-leverage", params?.leverage, STRATEGY_DEFAULT_PARAMS.leverage],
+      ["st-max-positions", params?.maxPositions, STRATEGY_DEFAULT_PARAMS.maxPositions],
+      ["st-max-holding", params?.maxHoldingHours, STRATEGY_DEFAULT_PARAMS.maxHoldingHours],
+      ["st-min-holding", params?.minHoldingMinutes, STRATEGY_DEFAULT_PARAMS.minHoldingMinutes],
+      ["st-extreme-stop", params?.extremeStopLossPercent, STRATEGY_DEFAULT_PARAMS.extremeStopLossPercent],
+      ["st-stop-loss", params?.accountStopLoss, STRATEGY_DEFAULT_PARAMS.accountStopLoss],
+      ["st-take-profit", params?.accountTakeProfit, STRATEGY_DEFAULT_PARAMS.accountTakeProfit],
+      ["st-dd-warning", params?.drawdownWarning, STRATEGY_DEFAULT_PARAMS.drawdownWarning],
+      ["st-dd-pause", params?.drawdownNoNew, STRATEGY_DEFAULT_PARAMS.drawdownNoNew],
+      ["st-dd-close", params?.drawdownForceClose, STRATEGY_DEFAULT_PARAMS.drawdownForceClose],
+    ];
+
+    mappings.forEach(([id, value, fallback]) => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.value = Number.isFinite(Number(value)) ? value : fallback;
+      }
+    });
+  }
+
+  updateStrategyListHighlight(name) {
+    const listContainer = document.getElementById("strategy-list");
+    if (!listContainer) return;
+    listContainer.querySelectorAll(".strategy-item").forEach((el) => {
+      if (!name) {
+        el.classList.remove("selected");
+        return;
+      }
+      if (el.dataset.name === name) {
+        el.classList.add("selected");
+      } else {
+        el.classList.remove("selected");
+      }
+    });
+  }
+
+  updateActiveStrategyLabel(name) {
+    if (!this.strategyActiveLabelEl) return;
+    const displayName = name || this.translate("strategyEditor.none", "Not set");
+    this.strategyActiveLabelEl.textContent = displayName;
+  }
+
+  normalizeStrategyPayload(payload, fallbackName = "") {
+    if (!payload) return null;
+    const name = payload?.meta?.name || payload?.name || fallbackName;
+    const defaults = createDefaultStrategyContent(name);
+
+    let params = {
+      ...defaults.params,
+      ...(payload.params || {}),
+    };
+
+    if (!payload.params && payload.config) {
+      params = {
+        ...params,
+        ...this.mapLegacyConfigToParams(payload.config),
+      };
+    }
+
+    return {
+      meta: {
+        ...defaults.meta,
+        ...payload.meta,
+        name,
+      },
+      prompts: {
+        ...defaults.prompts,
+        ...(payload.prompts || {}),
+      },
+      params,
+    };
+  }
+
+  mapLegacyConfigToParams(config = {}) {
+    const parsed = {};
+    const toNumber = (value, fallback) => {
+      const num = Number(value);
+      return Number.isFinite(num) ? num : fallback;
+    };
+
+    if (config.TRADING_INTERVAL_MINUTES !== undefined) parsed.intervalMinutes = toNumber(config.TRADING_INTERVAL_MINUTES, STRATEGY_DEFAULT_PARAMS.intervalMinutes);
+    if (config.MAX_LEVERAGE !== undefined) parsed.leverage = toNumber(config.MAX_LEVERAGE, STRATEGY_DEFAULT_PARAMS.leverage);
+    if (config.MAX_POSITIONS !== undefined) parsed.maxPositions = toNumber(config.MAX_POSITIONS, STRATEGY_DEFAULT_PARAMS.maxPositions);
+    if (config.MAX_HOLDING_HOURS !== undefined) parsed.maxHoldingHours = toNumber(config.MAX_HOLDING_HOURS, STRATEGY_DEFAULT_PARAMS.maxHoldingHours);
+    if (config.MIN_HOLDING_MINUTES !== undefined) parsed.minHoldingMinutes = toNumber(config.MIN_HOLDING_MINUTES, STRATEGY_DEFAULT_PARAMS.minHoldingMinutes);
+    if (config.EXTREME_STOP_LOSS_PERCENT !== undefined) parsed.extremeStopLossPercent = toNumber(config.EXTREME_STOP_LOSS_PERCENT, STRATEGY_DEFAULT_PARAMS.extremeStopLossPercent);
+    if (config.ACCOUNT_STOP_LOSS_USDT !== undefined) parsed.accountStopLoss = toNumber(config.ACCOUNT_STOP_LOSS_USDT, STRATEGY_DEFAULT_PARAMS.accountStopLoss);
+    if (config.ACCOUNT_TAKE_PROFIT_USDT !== undefined) parsed.accountTakeProfit = toNumber(config.ACCOUNT_TAKE_PROFIT_USDT, STRATEGY_DEFAULT_PARAMS.accountTakeProfit);
+    if (config.ACCOUNT_DRAWDOWN_WARNING_PERCENT !== undefined) parsed.drawdownWarning = toNumber(config.ACCOUNT_DRAWDOWN_WARNING_PERCENT, STRATEGY_DEFAULT_PARAMS.drawdownWarning);
+    if (config.ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT !== undefined) parsed.drawdownNoNew = toNumber(config.ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT, STRATEGY_DEFAULT_PARAMS.drawdownNoNew);
+    if (config.ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT !== undefined) parsed.drawdownForceClose = toNumber(config.ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT, STRATEGY_DEFAULT_PARAMS.drawdownForceClose);
+    return parsed;
+  }
+
+  getNumberInputValue(id, fallback) {
+    const el = document.getElementById(id);
+    if (!el) return fallback;
+    const value = Number(el.value);
+    return Number.isFinite(value) ? value : fallback;
   }
 }
 

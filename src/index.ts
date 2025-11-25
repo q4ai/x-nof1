@@ -29,9 +29,8 @@ import { startContractMultiplierSync, stopContractMultiplierSync } from "./sched
 import { startBinancePrecisionSync, stopBinancePrecisionSync } from "./scheduler/binancePrecisionSync";
 import { startCommunityReporter, stopCommunityReporter } from "./scheduler/communityReporter";
 import { initDatabase } from "./database/init";
-import { RISK_PARAMS } from "./config/riskParams.new";
-import { getAccountRiskConfig, getTradingStrategy } from "./agents/tradingAgent";
-import { getStrategyLabel } from "./config/strategyTypes";
+import { RISK_PARAMS, getConfigStringValue } from "./config/riskParams.new";
+import { getAccountRiskConfig } from "./agents/tradingAgent";
 // 注意：strategyControls.ts 中的硬编码参数已废弃，改为在策略提示词中定义
 // import { SWING_TREND_TRAILING_STOP_CONFIG, SWING_TREND_STOP_LOSS_CONFIG } from "./config/strategyControls";
 import { initializeTerminalEncoding } from "./utils/encodingUtils";
@@ -140,16 +139,14 @@ async function main() {
   logger.info("启动 Binance 合约精度同步定时任务...");
   binancePrecisionSyncTimer = startBinancePrecisionSync(1);
   
-  const strategy = getTradingStrategy();
-  const strategyLabel = getStrategyLabel(strategy);
-  const isCodeLevelEnabled = strategy === "swing-trend";
+  const activeStrategyName = getConfigStringValue("ACTIVE_STRATEGY_NAME", "custom");
   const accountRisk = await getAccountRiskConfig();
 
   logger.info("\n" + "=".repeat(80));
   logger.info("系统启动完成！");
   logger.info("=".repeat(80));
   logger.info(`\n监控界面: http://localhost:${port}/`);
-  logger.info(`交易策略: ${strategyLabel} (AI主导控制)`);
+  logger.info(`交易策略: ${activeStrategyName || "custom"} (AI主导控制)`);
   logger.info(`交易间隔: ${RISK_PARAMS.TRADING_INTERVAL_MINUTES} 分钟`);
   logger.info(`账户记录间隔: ${process.env.ACCOUNT_RECORD_INTERVAL_MINUTES || 10} 分钟`);
   

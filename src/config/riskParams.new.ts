@@ -126,11 +126,6 @@ export const RISK_PARAMS = {
     return Number.parseInt(getConfig("ACCOUNT_DRAWDOWN_WARNING_PERCENT", "20"), 10);
   },
   
-  // 交易策略
-  get TRADING_STRATEGY(): string {
-    return getConfig("TRADING_STRATEGY", "balanced");
-  },
-
   // 提示词语言
   get PROMPT_LANGUAGE(): StrategyLanguage {
     return normalizeStrategyLanguage(getConfig("PROMPT_LANGUAGE", DEFAULT_STRATEGY_LANGUAGE));

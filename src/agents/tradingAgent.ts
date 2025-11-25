@@ -29,6 +29,7 @@ import { formatChinaTime } from "../utils/timeUtils";
 import { RISK_PARAMS, getConfigStringValue } from "../config/riskParams.new";
 import { getStrategyProfile } from "../strategies";
 import type { StrategyLanguage, TradingStrategy } from "../config/strategyTypes";
+import { DEFAULT_PROMPT_ENTRY, DEFAULT_PROMPT_EXIT, DEFAULT_PROMPT_VARIABLES } from "../config/promptDefaults";
 
 const logger = createPinoLogger({
 	name: "trading-agent",
@@ -52,6 +53,11 @@ async function getPromptLanguage(): Promise<StrategyLanguage> {
 		// Silently fail and use default
 	}
 	return RISK_PARAMS.PROMPT_LANGUAGE;
+}
+
+function getActiveStrategyName(): string {
+	const name = getConfigStringValue("ACTIVE_STRATEGY_NAME", "custom");
+	return name?.trim() || "custom";
 }
 
 async function loadInstructionsTemplate(language: StrategyLanguage): Promise<string> {
@@ -152,21 +158,6 @@ function getRiskConfigSnapshot(): AccountRiskConfig {
 	};
 }
 
-export function getTradingStrategy(): TradingStrategy {
-	const strategy = RISK_PARAMS.TRADING_STRATEGY;
-	if (
-		strategy === "conservative" ||
-		strategy === "balanced" ||
-		strategy === "aggressive" ||
-		strategy === "ultra-short" ||
-		strategy === "swing-trend"
-	) {
-		return strategy;
-	}
-	logger.warn(`未知的交易策略: ${strategy}，回退使用 balanced`);
-	return "balanced";
-}
-
 function formatNumber(value: number, decimals = 0): string {
 	if (!Number.isFinite(value)) {
 		return "0";
@@ -196,7 +187,7 @@ function applyTemplateVariables(template: string, variables: PromptVariables): s
 }
 
 function buildBasePromptVariables(
-	strategy: TradingStrategy,
+	strategyId: string,
 	intervalMinutes: number,
 	riskConfig: AccountRiskConfig,
 	language: StrategyLanguage,
@@ -204,7 +195,7 @@ function buildBasePromptVariables(
 	const symbolSeparator = language === "zh" ? "、" : ", ";
 	const symbolList = RISK_PARAMS.TRADING_SYMBOLS.join(symbolSeparator);
 	return {
-		STRATEGY_ID: strategy,
+		STRATEGY_ID: strategyId,
 		TRADING_INTERVAL_MINUTES: formatNumber(intervalMinutes, 0),
 		MAX_HOLDING_HOURS: formatNumber(RISK_PARAMS.MAX_HOLDING_HOURS, 0),
 		MIN_HOLDING_MINUTES: formatNumber(RISK_PARAMS.MIN_HOLDING_MINUTES, 0),
@@ -226,10 +217,13 @@ function buildBasePromptVariables(
 	};
 }
 
-function buildDefaultSections(profile: ReturnType<typeof getStrategyProfile>, baseVariables: PromptVariables): PromptSections {
-	const entry = applyTemplateVariables(normalizeTemplateInput(profile.prompts.entryPrompt), baseVariables);
-	const exit = applyTemplateVariables(normalizeTemplateInput(profile.prompts.exitPrompt), baseVariables);
-	const variables = applyTemplateVariables(normalizeTemplateInput(profile.prompts.varPrompt), baseVariables);
+function buildSectionsFromPrompts(
+	prompts: { entryPrompt: string; exitPrompt: string; varPrompt: string },
+	baseVariables: PromptVariables,
+): PromptSections {
+	const entry = applyTemplateVariables(normalizeTemplateInput(prompts.entryPrompt), baseVariables);
+	const exit = applyTemplateVariables(normalizeTemplateInput(prompts.exitPrompt), baseVariables);
+	const variables = applyTemplateVariables(normalizeTemplateInput(prompts.varPrompt), baseVariables);
 	return { entry, exit, variables };
 }
 
@@ -261,6 +255,22 @@ function mergeUserPromptSections(baseVariables: PromptVariables, defaultSections
 	};
 }
 
+function getFallbackPromptSections(baseVariables: PromptVariables): PromptSections {
+	return buildSectionsFromPrompts(
+		{
+			entryPrompt: DEFAULT_PROMPT_ENTRY,
+			exitPrompt: DEFAULT_PROMPT_EXIT,
+			varPrompt: DEFAULT_PROMPT_VARIABLES,
+		},
+		baseVariables,
+	);
+}
+
+function buildConfiguredSections(baseVariables: PromptVariables): PromptSections {
+	const fallback = getFallbackPromptSections(baseVariables);
+	return mergeUserPromptSections(baseVariables, fallback);
+}
+
 function withSectionVariables(baseVariables: PromptVariables, sections: PromptSections): PromptVariables {
 	return {
 		...baseVariables,
@@ -279,7 +289,7 @@ export async function getStrategyPromptDefaultSections(
 	const profile = getStrategyProfile(strategy, actualLanguage);
 	const riskConfig = await getAccountRiskConfig();
 	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, actualLanguage);
-	return buildDefaultSections(profile, baseVariables);
+	return buildSectionsFromPrompts(profile.prompts, baseVariables);
 }
 
 interface TradingPromptInput {
@@ -690,13 +700,11 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 		recentDecisions,
 	} = input;
 
-	const strategy = getTradingStrategy();
 	const language = await getPromptLanguage();
-	const profile = getStrategyProfile(strategy, language);
+	const strategyName = getActiveStrategyName();
 	const riskConfig = getRiskConfigSnapshot();
-	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, language);
-	const defaultSections = buildDefaultSections(profile, baseVariables);
-	const sections = mergeUserPromptSections(baseVariables, defaultSections);
+	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language);
+	const sections = buildConfiguredSections(baseVariables);
 
 	const templateVariables: PromptVariables = {
 		...withSectionVariables(baseVariables, sections),
@@ -723,13 +731,12 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 	return sectionsOutput.filter(Boolean).join("\n\n");
 }
 
-async function generateInstructions(strategy: TradingStrategy, intervalMinutes: number): Promise<string> {
+async function generateInstructions(intervalMinutes: number): Promise<string> {
 	const language = await getPromptLanguage();
-	const profile = getStrategyProfile(strategy, language);
+	const strategyName = getActiveStrategyName();
 	const riskConfig = await getAccountRiskConfig();
-	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, language);
-	const defaultSections = buildDefaultSections(profile, baseVariables);
-	const sections = mergeUserPromptSections(baseVariables, defaultSections);
+	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language);
+	const sections = buildConfiguredSections(baseVariables);
 
 	const template = await loadInstructionsTemplate(language);
 	const variables = withSectionVariables(baseVariables, sections);
@@ -788,10 +795,10 @@ export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAg
 		}),
 	});
 
-	const strategy = getTradingStrategy();
-	logger.info(`初始化交易 Agent，策略=${strategy}，模型=${modelName}`);
+	const strategyName = getActiveStrategyName();
+	logger.info(`初始化交易 Agent，策略=${strategyName}，模型=${modelName}`);
 
-	const instructions = await generateInstructions(strategy, intervalMinutes);
+	const instructions = await generateInstructions(intervalMinutes);
 
 	const agentInstance = new Agent({
 		name: "trading-agent",

@@ -22,7 +22,6 @@ const DEFAULT_CONFIG = {
   TRADING_SYMBOLS: process.env.TRADING_SYMBOLS || "BTC,ETH,SOL,XRP,BNB,BCH",
   TRADING_INTERVAL_MINUTES: process.env.TRADING_INTERVAL_MINUTES || "20",
   TRADING_MARGIN_MODE: process.env.TRADING_MARGIN_MODE || "cross",
-  TRADING_STRATEGY: process.env.TRADING_STRATEGY || "balanced",
   
   // 风险参数
   MAX_LEVERAGE: process.env.MAX_LEVERAGE || "10",
@@ -224,6 +223,50 @@ export async function updateConfig(config: Record<string, string>): Promise<void
     logger.info(`已更新 ${Object.keys(config).length} 个配置项`);
   } catch (error) {
     logger.error("批量更新配置失败:", error);
+    throw error;
+  }
+}
+
+/**
+ * 更新系统配置
+ * @param updates 键值对对象
+ */
+export async function updateSystemConfig(updates: Record<string, string>) {
+  try {
+    const now = new Date().toISOString();
+    
+    // 使用事务批量更新
+    const transaction = await dbClient.transaction("write");
+    
+    try {
+      for (const [key, value] of Object.entries(updates)) {
+        // 检查键是否存在
+        const check = await transaction.execute({
+          sql: "SELECT 1 FROM system_config WHERE key = ?",
+          args: [key],
+        });
+        
+        if (check.rows.length > 0) {
+          await transaction.execute({
+            sql: "UPDATE system_config SET value = ?, updated_at = ? WHERE key = ?",
+            args: [value, now, key],
+          });
+        } else {
+          await transaction.execute({
+            sql: "INSERT INTO system_config (key, value, updated_at) VALUES (?, ?, ?)",
+            args: [key, value, now],
+          });
+        }
+      }
+      
+      await transaction.commit();
+      logger.info(`已更新 ${Object.keys(updates).length} 项系统配置`);
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+  } catch (error) {
+    logger.error("更新系统配置失败:", error);
     throw error;
   }
 }

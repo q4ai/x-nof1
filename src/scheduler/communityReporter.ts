@@ -115,7 +115,7 @@ interface ReportPayload {
     symbolsCount: number;
   };
   config: {
-    tradingStrategy: string;
+    activeStrategyName: string;
     intervalMinutes: number;
     symbols: string[];
     aiModel: string;
@@ -403,7 +403,7 @@ function buildReportPayload(params: {
       symbolsCount: symbols.length,
     },
     config: {
-      tradingStrategy: config.TRADING_STRATEGY || "",
+      activeStrategyName: config.ACTIVE_STRATEGY_NAME || "",
       intervalMinutes: Number.parseInt(config.TRADING_INTERVAL_MINUTES || "20", 10),
       symbols,
       aiModel: config.AI_MODEL_NAME || "",

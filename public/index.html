@@ -20,7 +20,17 @@
     <header class="top-bar">
       <div class="logo-section">
         <h1 class="logo">Q4</h1>
-  <span class="tagline" data-i18n="tagline">AI Trading Platform</span>
+        <span class="tagline" data-i18n="tagline">AI Trading Platform</span>
+        
+        <!-- 视图切换开关 -->
+        <div class="view-switcher" role="group" aria-label="View Mode">
+          <input type="checkbox" id="view-mode-toggle" class="view-switcher-input" aria-hidden="true">
+          <div class="view-switcher-inner">
+            <span class="view-switcher-highlight" aria-hidden="true"></span>
+            <button type="button" class="view-switcher-label" data-mode="trading" data-i18n="viewMode.trading">Trading</button>
+            <button type="button" class="view-switcher-label" data-mode="strategy" data-i18n="viewMode.strategy">Strategy</button>
+          </div>
+        </div>
       </div>
       <nav class="nav-links">
         <a href="https://github.com/q4ai/x-nof1" target="_blank" rel="noopener noreferrer">
@@ -45,7 +55,6 @@
             <button type="button" class="language-option" data-lang="ja" role="menuitem">日本語</button>
           </div>
         </div>
-  <a href="#" class="nav-action nav-strategy hidden" id="strategy-btn" data-i18n="navigation.strategy" data-i18n-title="navigation.strategy">Strategy</a>
   <a href="#" class="nav-action nav-settings hidden" id="settings-btn" data-i18n="navigation.settings" data-i18n-title="navigation.settings">Settings</a>
   <a href="#" class="nav-action nav-logout hidden" id="logout-btn" data-i18n="navigation.logout" data-i18n-title="navigation.logout">Logout</a>
       </nav>
@@ -264,6 +273,161 @@
         </div>
       </aside>
     </main>
+
+    <!-- 策略编辑器视图（默认隐藏，切换到“策略”模式时显示） -->
+    <section class="strategy-editor-view" id="strategy-editor-view" aria-hidden="true">
+      <!-- 左侧：策略文件列表 -->
+      <aside class="strategy-sidebar">
+        <div class="strategy-sidebar-header">
+          <h3 data-i18n="strategyEditor.listTitle">Strategy Files</h3>
+          <button type="button" class="icon-btn" id="new-strategy-btn" title="New" data-i18n-title="strategyEditor.new" aria-label="New strategy">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z" />
+            </svg>
+          </button>
+        </div>
+        <div class="strategy-list" id="strategy-list">
+          <p class="empty-hint" data-i18n="strategyEditor.empty">No strategies yet. Click “New Strategy” to create one.</p>
+        </div>
+      </aside>
+
+      <!-- 中间：策略内容编辑 -->
+      <section class="strategy-main">
+        <header class="editor-header">
+          <div class="strategy-quick-insert quick-insert-row" id="strategy-editor-quick-insert">
+            <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
+            <div class="quick-insert-buttons">
+              <button type="button" class="quick-insert-btn" data-editor-insert="ultra-short" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="swing-trend" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="dca" data-i18n="strategy.labels.dca">DCA</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="conservative" data-i18n="strategy.labels.conservative">Conservative</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="balanced" data-i18n="strategy.labels.balanced">Balanced</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="aggressive" data-i18n="strategy.labels.aggressive">Aggressive</button>
+            </div>
+          </div>
+        </header>
+
+        <div class="editor-scroll-area">
+          <section class="editor-section">
+            <div class="editor-section-header">
+              <h4 data-i18n="strategyEditor.entryLogic">Entry Logic</h4>
+              <p class="editor-desc" data-i18n="strategyEditor.entryDesc">Describe the conditions for opening a position.</p>
+            </div>
+            <textarea id="strategy-entry" class="code-editor" spellcheck="false"></textarea>
+          </section>
+
+          <section class="editor-section">
+            <div class="editor-section-header">
+              <h4 data-i18n="strategyEditor.exitLogic">Exit Logic</h4>
+              <p class="editor-desc" data-i18n="strategyEditor.exitDesc">Describe the conditions for closing a position.</p>
+            </div>
+            <textarea id="strategy-exit" class="code-editor" spellcheck="false"></textarea>
+          </section>
+
+          <section class="editor-section">
+            <div class="editor-section-header">
+              <h4 data-i18n="strategyEditor.variables">Prompt Variables</h4>
+              <p class="editor-desc" data-i18n="strategyEditor.variablesDesc">Define variables to be used in the prompt.</p>
+            </div>
+            <textarea id="strategy-variables" class="code-editor" spellcheck="false"></textarea>
+          </section>
+        </div>
+      </section>
+
+      <!-- 右侧：策略参数配置 -->
+      <aside class="strategy-config-sidebar">
+        <div class="strategy-config-header">
+          <h3 data-i18n="strategyEditor.configTitle">Configuration</h3>
+        </div>
+        <div class="strategy-meta-panel">
+          <div class="strategy-meta">
+            <label for="strategy-filename" data-i18n="strategyEditor.fileName">File Name:</label>
+            <input type="text" id="strategy-filename" placeholder="strategy_name" data-i18n-placeholder="strategyEditor.filePlaceholder" />
+            <span class="extension">.json</span>
+          </div>
+          <div class="strategy-meta-footer">
+            <div class="strategy-active-indicator">
+              <span data-i18n="strategyEditor.currentActive">Active Strategy:</span>
+              <strong id="active-strategy-label">--</strong>
+            </div>
+            <div class="editor-actions strategy-actions-inline">
+              <button type="button" class="btn btn-primary" id="strategy-save-btn" data-i18n="strategyEditor.save">Save Strategy</button>
+              <button type="button" class="btn btn-success" id="strategy-activate-btn" data-i18n="strategyEditor.activate">Activate</button>
+            </div>
+          </div>
+        </div>
+        <div class="strategy-config-content">
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="strategyEditor.description.title">Strategy Description</p>
+            <div class="strategy-config-field">
+              <label for="strategy-description" data-i18n="strategyEditor.description.label">Description</label>
+              <textarea id="strategy-description" class="form-input" rows="3" placeholder="Describe this strategy" data-i18n-placeholder="strategyEditor.description.placeholder"></textarea>
+              <p class="field-hint" data-i18n="strategyEditor.description.hint">Explain the core logic; this will be saved with the strategy.</p>
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.tradingConfig">Trading Config</p>
+            <div class="strategy-config-field">
+              <label for="st-leverage" data-i18n="settings.leverage">Max Leverage</label>
+              <input type="number" id="st-leverage" class="form-input" min="1" max="125" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-max-positions" data-i18n="settings.maxPositions">Max Positions</label>
+              <input type="number" id="st-max-positions" class="form-input" min="1" max="50" />
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.executionInterval">Execution Interval</p>
+            <div class="strategy-config-field">
+              <label for="st-interval" data-i18n="settings.intervalMinutes">Interval (Min)</label>
+              <input type="number" id="st-interval" class="form-input" min="1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-min-holding" data-i18n="settings.minHolding">Min Holding (Min)</label>
+              <input type="number" id="st-min-holding" class="form-input" min="0" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-max-holding" data-i18n="settings.maxHolding">Max Holding (Hours)</label>
+              <input type="number" id="st-max-holding" class="form-input" min="1" />
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.riskParams">Risk Parameters</p>
+            <div class="strategy-config-field">
+              <label for="st-stop-loss" data-i18n="settings.stopLoss">Stop Loss (USDT)</label>
+              <input type="number" id="st-stop-loss" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-take-profit" data-i18n="settings.takeProfit">Take Profit (USDT)</label>
+              <input type="number" id="st-take-profit" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-extreme-stop" data-i18n="settings.extremeStopLoss">Extreme Stop Loss (%)</label>
+              <input type="number" id="st-extreme-stop" class="form-input" step="0.1" />
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.drawdownControl">Drawdown Control</p>
+            <div class="strategy-config-field">
+              <label for="st-dd-warning" data-i18n="settings.drawdownWarning">Warning Threshold (%)</label>
+              <input type="number" id="st-dd-warning" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-dd-pause" data-i18n="settings.drawdownPause">Pause Threshold (%)</label>
+              <input type="number" id="st-dd-pause" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-dd-close" data-i18n="settings.drawdownClose">Force Close Threshold (%)</label>
+              <input type="number" id="st-dd-close" class="form-input" step="0.1" />
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
 
     <!-- 底部：当前持仓 / 交易历史 / 交易日志 -->
     <footer class="bottom-tabs">
@@ -723,155 +887,6 @@
     </div>
   </div>
 
-  <!-- 策略配置弹窗 -->
-  <div class="modal settings-modal" id="strategy-modal">
-    <div class="modal-overlay"></div>
-    <div class="modal-content">
-      <div class="modal-header">
-  <h3 data-i18n="modals.strategy.title">Strategy Settings</h3>
-        <button class="modal-close">&times;</button>
-      </div>
-      <div class="modal-body" id="strategy-body">
-        <form id="strategy-form" class="settings-form">
-
-          <div class="settings-tabs" id="strategy-tabs">
-            <button type="button" class="settings-tab-btn active" data-strategy-tab="basic" data-i18n="strategy.tabs.basic">Basic Parameters</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="entry" data-i18n="strategy.tabs.entry">Entry Logic</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="exit" data-i18n="strategy.tabs.exit">Exit Logic</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="variables" data-i18n="strategy.tabs.variables">Prompt Variables</button>
-            <button type="button" class="settings-tab-btn" data-strategy-tab="preview" data-i18n="strategy.tabs.preview">Preview</button>
-          </div>
-
-          <div class="settings-tab-panels">
-            <div class="settings-tab-panel active" data-strategy-panel="basic">
-              <!-- 交易配置 -->
-              <div class="settings-section">
-                <h4 data-i18n-html="strategy.basic.tradeSection">💼 Trading Configuration</h4>
-                <div class="form-row">
-                  <div class="form-group form-group--wide">
-                    <label data-i18n="strategy.basic.tradingSymbols">Trading Symbols (comma separated)</label>
-                    <input type="text" name="TRADING_SYMBOLS" placeholder="BTC,ETH,SOL,XRP,BNB" data-i18n-placeholder="strategy.basic.tradingSymbolsPlaceholder" />
-                  </div>
-                  <div class="form-group form-group--narrow">
-                    <label data-i18n="strategy.basic.marginMode">Margin Mode</label>
-                    <select name="TRADING_MARGIN_MODE">
-                      <option value="cross" data-i18n="tables.positions.marginMode.cross">Cross</option>
-                      <option value="isolated" data-i18n="tables.positions.marginMode.isolated">Isolated</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              <div class="settings-section">
-                <h4 data-i18n-html="strategy.basic.executionSection">⏱️ Execution Cycle</h4>
-                <div class="form-group form-group-compact">
-                  <label data-i18n="strategy.basic.interval">Trading Interval (minutes)</label>
-                  <input type="number" name="TRADING_INTERVAL_MINUTES" min="1" max="1440" data-i18n-placeholder="strategy.basic.intervalPlaceholder" placeholder="Enter minutes" />
-                </div>
-              </div>
-
-              <!-- 风险参数 -->
-              <div class="settings-section">
-                <h4 data-i18n-html="strategy.basic.riskSection">⚠️ Risk Parameters</h4>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.maxLeverage">Max Leverage</label>
-                    <input type="number" name="MAX_LEVERAGE" min="1" max="125" data-i18n-placeholder="strategy.basic.maxLeveragePlaceholder" placeholder="Enter max leverage" />
-                  </div>
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.maxPositions">Max Positions</label>
-                    <input type="number" name="MAX_POSITIONS" min="1" max="20" data-i18n-placeholder="strategy.basic.maxPositionsPlaceholder" placeholder="Enter max positions" />
-                  </div>
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.maxHoldingHours">Max Holding Time (hours)</label>
-                    <input type="number" name="MAX_HOLDING_HOURS" min="1" max="168" data-i18n-placeholder="strategy.basic.maxHoldingHoursPlaceholder" placeholder="Enter hours" />
-                  </div>
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.minHoldingMinutes">Min Holding Time (minutes)</label>
-                    <input type="number" name="MIN_HOLDING_MINUTES" min="0" max="1440" data-i18n-placeholder="strategy.basic.minHoldingMinutesPlaceholder" placeholder="Enter minutes" />
-                  </div>
-                </div>
-                <div class="form-group form-group-compact">
-                  <label data-i18n="strategy.basic.extremeStopLoss">Extreme Stop Loss (%)</label>
-                  <input type="number" name="EXTREME_STOP_LOSS_PERCENT" min="-100" max="0" data-i18n-placeholder="strategy.basic.extremeStopLossPlaceholder" placeholder="Enter percentage" />
-                </div>
-              </div>
-
-              <!-- 回撤风控 -->
-              <div class="settings-section">
-                <h4 data-i18n-html="strategy.basic.drawdownSection">📉 Drawdown Controls</h4>
-                <div class="form-row">
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.drawdownWarning">Warning Threshold (%)</label>
-                    <input type="number" name="ACCOUNT_DRAWDOWN_WARNING_PERCENT" min="0" max="100" data-i18n-placeholder="strategy.basic.drawdownWarningPlaceholder" placeholder="Enter percentage" />
-                  </div>
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.drawdownNoNew">No New Position Threshold (%)</label>
-                    <input type="number" name="ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT" min="0" max="100" data-i18n-placeholder="strategy.basic.drawdownNoNewPlaceholder" placeholder="Enter percentage" />
-                  </div>
-                  <div class="form-group">
-                    <label data-i18n="strategy.basic.drawdownForceClose">Force Close Threshold (%)</label>
-                    <input type="number" name="ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT" min="0" max="100" data-i18n-placeholder="strategy.basic.drawdownForceClosePlaceholder" placeholder="Enter percentage" />
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="settings-tab-panel" data-strategy-panel="entry">
-              <div class="prompt-section">
-                <div class="form-group">
-                  <label data-i18n="strategy.entry.promptLabel">Entry Prompt</label>
-                  <textarea name="PROMPT_SECTION_ENTRY" rows="12" placeholder="Describe entry logic with {{VARIABLE}} placeholders" data-i18n-placeholder="strategy.entry.promptPlaceholder"></textarea>
-                  <p class="field-hint" data-i18n="strategy.entry.promptHint">Tip: Describe entry conditions and use {{VARIABLE}} placeholders. Built-in validations (no hedging, scaling rules, etc.) are injected automatically.</p>
-                  <div class="quick-insert-row" data-quick-insert="entry">
-                    <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
-                    <div class="quick-insert-buttons">
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="dca" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.dca">DCA</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.conservative">Conservative</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.balanced">Balanced</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_ENTRY" data-i18n="strategy.labels.aggressive">Aggressive</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="settings-tab-panel" data-strategy-panel="exit">
-              <div class="prompt-section">
-                <div class="form-group">
-                  <label data-i18n="strategy.exit.promptLabel">Exit Prompt</label>
-                  <textarea name="PROMPT_SECTION_EXIT" rows="12" placeholder="Define exit, partial take-profit, and trailing strategies" data-i18n-placeholder="strategy.exit.promptPlaceholder"></textarea>
-                  <p class="field-hint" data-i18n="strategy.exit.promptHint">Tip: List stop-loss/take-profit rules and drawdown requirements. Built-in validations (no hedging, scaling rules, etc.) are injected automatically.</p>
-                  <div class="quick-insert-row" data-quick-insert="exit">
-                    <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
-                    <div class="quick-insert-buttons">
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="dca" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.dca">DCA</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.conservative">Conservative</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.balanced">Balanced</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_EXIT" data-i18n="strategy.labels.aggressive">Aggressive</button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="settings-tab-panel" data-strategy-panel="variables">
-              <div class="prompt-section">
-                <div class="form-group">
-                  <label data-i18n="strategy.variables.promptLabel">Variable Notes / Extra Text</label>
-                  <textarea name="PROMPT_SECTION_VARIABLES" rows="10" placeholder="Optional: Provide variable descriptions or additional notes" data-i18n-placeholder="strategy.variables.promptPlaceholder"></textarea>
-                  <p class="field-hint" data-i18n="strategy.variables.promptHint">The system shows auto-generated variable lists; you can extend or override them.</p>
-                  <div class="quick-insert-row" data-quick-insert="variables">
-                    <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
-                    <div class="quick-insert-buttons">
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="ultra-short" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="swing-trend" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="dca" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.dca">DCA</button>
-                      <button type="button" class="quick-insert-btn" data-strategy-insert="conservative" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.conservative">Conservative</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.balanced">Balanced</button>
                       <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.aggressive">Aggressive</button>
                     </div>
@@ -1074,7 +1089,6 @@
       </div>
     </div>
   </div>
-
   <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>

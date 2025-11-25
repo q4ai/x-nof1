@@ -270,7 +270,6 @@ open-nof1.ai/
 | 变量 | 说明 | 默认值 | 是否必需 |
 |------|------|--------|---------|
 | `PORT` | HTTP 服务器端口 | 3100 | 否 |
-| `TRADING_STRATEGY` | 交易策略(`ultra-short`/`swing-trend`/`conservative`/`balanced`/`aggressive`) | balanced | 否 |
 | `TRADING_INTERVAL_MINUTES` | 交易循环间隔(分钟) | 5 | 否 |
 | `MAX_LEVERAGE` | 最大杠杆倍数 | 10 | 否 |
 | `MAX_POSITIONS` | 最大持仓数量 | 5 | 否 |
@@ -288,9 +287,11 @@ open-nof1.ai/
 | `ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT` | 禁止开仓阈值：停止开新仓位，只允许平仓(%) | 30 | 否 |
 | `ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT` | 强制平仓阈值：自动平掉所有仓位，保护剩余资金(%) | 50 | 否 |
 
+> ⚠️ **提示**：策略切换与提示词配置现已迁移到前端「策略编辑器」。请通过 Web 界面保存/激活策略，或使用 Quick Insert 模板加载官方策略；环境变量 `TRADING_STRATEGY` 已废弃。
+
 ### 交易策略说明
 
-系统支持5种交易策略，适应不同的市场环境和风险偏好：
+策略编辑器内置 5 套官方策略模板，可通过 Quick Insert 一键填入提示词，覆盖不同市场环境与风险偏好：
 
 | 策略代码 | 策略名称 | 执行周期 | 持仓时长 | 风险等级 | 特点 |
 |---------|---------|---------|---------|---------|------|
@@ -301,12 +302,9 @@ open-nof1.ai/
 | `aggressive` | 激进 | 5-15分钟 | 数小时-24小时 | 高 | 追求高收益，承担高风险 |
 
 **推荐配置 - 波段趋势策略**（适合中长线稳健成长）：
-```bash
-TRADING_STRATEGY=swing-trend
-TRADING_INTERVAL_MINUTES=20
-MAX_LEVERAGE=10
-MAX_POSITIONS=3
-```
+1. 打开策略编辑器，点击「Quick Insert」选择 `Swing Trend` 模板。
+2. 将 `TRADING_INTERVAL_MINUTES` 调整为 20，`MAX_POSITIONS` 调整为 3，并根据账户规模设置杠杆。
+3. 保存并激活策略，系统会自动更新数据库配置。
 
 详细策略说明请参考：[交易策略配置指南](./docs/TRADING_STRATEGIES_ZH.md)
 

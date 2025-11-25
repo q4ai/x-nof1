@@ -37,7 +37,7 @@ import { getQuantoMultiplier } from "../utils/contractUtils";
 import { executeClosePosition, executeOpenPosition } from "../tools/trading";
 import type { AdminAuthConfig } from "../utils/adminAuth";
 import type { TradingStrategy } from "../config/strategyTypes";
-import { getStrategyPromptDefaultSections, getTradingStrategy } from "../agents/tradingAgent";
+import { getStrategyPromptDefaultSections } from "../agents/tradingAgent";
 import { RISK_PARAMS, reloadRiskParams } from "../config/riskParams.new";
 import { resetLiveDataToDefaults } from "../database/reset-live-data";
 import { getExchangeProxy } from "../config/exchange";
@@ -74,6 +74,9 @@ const CSRF_HEADER = "x-csrf-token";
 
 const DISALLOWED_HOSTNAMES = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
 
+// 允许本地访问的白名单
+const ALLOWED_LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1", "0.0.0.0"]);
+
 const CONFIG_NUMERIC_KEYS = new Set([
   "TRADING_INTERVAL_MINUTES",
   "MAX_LEVERAGE",
@@ -92,7 +95,6 @@ const CONFIG_NUMERIC_KEYS = new Set([
 const CONFIG_BOOLEAN_KEYS = new Set(["OKX_USE_PAPER", "BINANCE_USE_TESTNET", "COMMUNITY_REPORT_ENABLED", "COMMUNITY_SHARE_PROMPTS"]);
 
 const CONFIG_ENUM_VALUES: Record<string, string[]> = {
-  TRADING_STRATEGY: ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"],
   PROMPT_LANGUAGE: ["zh", "en", "ja"],
   TRADING_MARGIN_MODE: ["cross", "isolated"],
   EXCHANGE_PROVIDER: ["okx", "binance", "bitget"],
@@ -102,7 +104,6 @@ const CONFIG_ALLOWED_KEYS = new Set([
   "TRADING_SYMBOLS",
   "TRADING_MARGIN_MODE",
   "TRADING_INTERVAL_MINUTES",
-  "TRADING_STRATEGY",
   "MAX_LEVERAGE",
   "MAX_POSITIONS",
   "MAX_HOLDING_HOURS",
@@ -172,6 +173,7 @@ function isSafeHttpUrl(value: string, options: { allowLocal?: boolean } = {}): b
     }
 
     if (!allowLocal) {
+      // 如果明确禁止本地访问，则检查黑名单
       if (DISALLOWED_HOSTNAMES.has(hostname)) {
         return false;
       }
@@ -188,6 +190,11 @@ function isSafeHttpUrl(value: string, options: { allowLocal?: boolean } = {}): b
         return false;
       }
       return true;
+    } else {
+      // 如果允许本地访问，则放行 localhost 等
+      if (ALLOWED_LOCAL_HOSTS.has(hostname) || hostname.startsWith("127.")) {
+        return true;
+      }
     }
 
     if (hostname === "0.0.0.0") {
@@ -2529,7 +2536,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     try {
       const requestedStrategy = c.req.query("strategy")?.trim().toLowerCase();
       const validStrategies: TradingStrategy[] = ["conservative", "balanced", "aggressive", "ultra-short", "swing-trend"];
-      const fallbackStrategy = getTradingStrategy();
+      const fallbackStrategy: TradingStrategy = "balanced";
       const strategy: TradingStrategy = requestedStrategy && validStrategies.includes(requestedStrategy as TradingStrategy)
         ? (requestedStrategy as TradingStrategy)
         : fallbackStrategy;
@@ -3129,6 +3136,181 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const message = error instanceof Error ? error.message : "未知错误";
       logger.error("重置实盘数据失败:", error);
       return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 策略文件管理 API
+   */
+  
+  // 获取策略列表
+  app.get("/api/strategies", requireAuth, async (c) => {
+    try {
+      const { StrategyFileManager } = await import("../services/strategyFileManager");
+      const strategyNames = await StrategyFileManager.listStrategies();
+      
+      // 获取当前激活的策略名称
+      const { getConfigValue } = await import("../database/init-config");
+      const activeStrategyName = await getConfigValue("ACTIVE_STRATEGY_NAME");
+      
+      // 构建策略列表,添加isActive标志
+      const strategies = strategyNames.map(name => ({
+        name: name,
+        isActive: name === activeStrategyName
+      }));
+      
+      return c.json({ strategies });
+    } catch (error) {
+      logger.error("获取策略列表失败:", error);
+      return c.json({ error: "获取策略列表失败" }, 500);
+    }
+  });
+
+  // 获取指定策略内容
+  app.get("/api/strategies/:name", requireAuth, async (c) => {
+    try {
+      const filename = c.req.param("name");
+      const name = filename.replace(/\.json$/, '');
+      const { StrategyFileManager } = await import("../services/strategyFileManager");
+      const strategy = await StrategyFileManager.loadStrategy(name);
+      
+      if (!strategy) {
+        return c.json({ error: "策略不存在" }, 404);
+      }
+      
+      // 将数据结构转换为前端期望的格式
+      const response = {
+        name: strategy.meta.name,
+        meta: strategy.meta,
+        prompts: strategy.prompts,
+        config: {
+          MAX_LEVERAGE: strategy.params.leverage,
+          MAX_POSITIONS: strategy.params.maxPositions,
+          TRADING_INTERVAL_MINUTES: strategy.params.intervalMinutes,
+          MIN_HOLDING_MINUTES: strategy.params.minHoldingMinutes ?? 0,
+          MAX_HOLDING_HOURS: strategy.params.maxHoldingHours,
+          ACCOUNT_STOP_LOSS_USDT: strategy.params.accountStopLoss,
+          ACCOUNT_TAKE_PROFIT_USDT: strategy.params.accountTakeProfit,
+          EXTREME_STOP_LOSS_PERCENT: strategy.params.extremeStopLossPercent,
+          ACCOUNT_DRAWDOWN_WARNING_PERCENT: strategy.params.drawdownWarning,
+          ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT: strategy.params.drawdownNoNew,
+          ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT: strategy.params.drawdownForceClose
+        }
+      };
+      
+      return c.json(response);
+    } catch (error) {
+      logger.error("获取策略内容失败:", error);
+      return c.json({ error: "获取策略内容失败" }, 500);
+    }
+  });
+
+  // 保存/更新策略
+  app.put("/api/strategies/:filename", requireAuthWithCsrf, async (c) => {
+    try {
+      const filename = c.req.param("filename");
+      const name = filename.replace(/\.json$/, '');
+      const body = await c.req.json();
+      const { tradingStrategy: _deprecatedStrategy, ...rawParams } = body.params || {};
+      
+      // 前端直接发送 StrategyFileContent 格式
+      const content: import('../services/strategyFileManager').StrategyFileContent = {
+        meta: {
+          name: body.meta?.name || name,
+          version: body.meta?.version || "1.0",
+          updatedAt: new Date().toISOString(),
+          description: body.meta?.description
+        },
+        prompts: body.prompts,
+        params: rawParams
+      };
+      
+      const { StrategyFileManager } = await import("../services/strategyFileManager");
+      const success = await StrategyFileManager.saveStrategy(name, content);
+      
+      if (!success) {
+        return c.json({ error: "保存策略失败" }, 500);
+      }
+      
+      return c.json({ success: true });
+    } catch (error) {
+      logger.error("保存策略失败:", error);
+      return c.json({ error: "保存策略失败" }, 500);
+    }
+  });
+
+  // 删除策略
+  app.delete("/api/strategies/:filename", requireAuthWithCsrf, async (c) => {
+    try {
+      const filename = c.req.param("filename");
+      const name = filename.replace(/\.json$/, '');
+      const { StrategyFileManager } = await import("../services/strategyFileManager");
+      const success = await StrategyFileManager.deleteStrategy(name);
+      
+      if (!success) {
+        return c.json({ error: "删除策略失败" }, 500);
+      }
+      
+      return c.json({ success: true });
+    } catch (error) {
+      logger.error("删除策略失败:", error);
+      return c.json({ error: "删除策略失败" }, 500);
+    }
+  });
+
+  // 激活策略（将策略内容应用到系统配置）
+  app.post("/api/strategies/:filename/activate", requireAuthWithCsrf, async (c) => {
+    try {
+      const filename = c.req.param("filename");
+      const name = filename.replace(/\.json$/, '');
+      const { StrategyFileManager } = await import("../services/strategyFileManager");
+      const strategy = await StrategyFileManager.loadStrategy(name);
+      
+      if (!strategy) {
+        return c.json({ error: "策略不存在" }, 404);
+      }
+      
+      // 1. 更新数据库中的系统配置
+      const { updateSystemConfig } = await import("../database/init-config");
+      
+      // 映射策略参数到系统配置键
+      const configUpdates: Record<string, string> = {
+        // 交易参数
+        TRADING_INTERVAL_MINUTES: String(strategy.params.intervalMinutes),
+        MAX_LEVERAGE: String(strategy.params.leverage),
+        MAX_POSITIONS: String(strategy.params.maxPositions),
+        MAX_HOLDING_HOURS: String(strategy.params.maxHoldingHours),
+        MIN_HOLDING_MINUTES: String(strategy.params.minHoldingMinutes ?? 0),
+        EXTREME_STOP_LOSS_PERCENT: String(strategy.params.extremeStopLossPercent),
+        
+        // 账户风控
+        ACCOUNT_STOP_LOSS_USDT: String(strategy.params.accountStopLoss),
+        ACCOUNT_TAKE_PROFIT_USDT: String(strategy.params.accountTakeProfit),
+        ACCOUNT_DRAWDOWN_WARNING_PERCENT: String(strategy.params.drawdownWarning),
+        ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT: String(strategy.params.drawdownNoNew),
+        ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT: String(strategy.params.drawdownForceClose),
+        
+        // 提示词
+        PROMPT_SECTION_ENTRY: strategy.prompts.entryLogic,
+        PROMPT_SECTION_EXIT: strategy.prompts.exitLogic,
+        PROMPT_SECTION_VARIABLES: strategy.prompts.variables,
+        
+        // 保存激活的策略名称
+        ACTIVE_STRATEGY_NAME: name,
+      };
+      
+      await updateSystemConfig(configUpdates);
+      
+      // 2. 重新加载配置并重启交易循环
+      await reloadRiskParams();
+      await restartTradingLoop();
+      
+      logger.info(`已激活策略: ${name}`);
+      
+      return c.json({ success: true });
+    } catch (error) {
+      logger.error("激活策略失败:", error);
+      return c.json({ error: "激活策略失败" }, 500);
     }
   });
 
