@@ -12,7 +12,7 @@ const logger = createLogger({
 });
 
 async function migrate() {
-  const dbPath = process.env.DATABASE_PATH || "./db/trading.db";
+  const dbPath = process.env.DATABASE_PATH || "./data/database/trading.db";
   
   const client = createClient({
     url: `file:${dbPath}`,

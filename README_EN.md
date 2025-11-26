@@ -214,6 +214,16 @@ npm run dev
 npm run trading:start
 ```
 
+### First Launch: Installation Wizard
+
+- When the server starts for the first time (or `data/database/sqlite.db` is missing), it automatically serves `http://localhost:3100/install` (or your custom `PORT`).
+- Complete the guided flow with three steps:
+  1. **Basic Settings** – Trading interval, leverage, symbol list plus optional proxy & privacy switches.
+  2. **Account Setup** – Register at least one OKX/Binance/Bitget account, including optional stop-loss/take-profit thresholds.
+  3. **AI Model Setup** – Provide an OpenAI-compatible model name, API key, and optional base URL.
+- After submitting, the wizard initializes the database, persists the configs, and restarts the main service automatically.
+- If validation fails, the error is displayed inline so you can adjust the inputs and retry immediately.
+
 ### Access Web Dashboard
 
 Navigate to `http://localhost:3100` in your browser.

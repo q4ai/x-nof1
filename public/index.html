@@ -542,6 +542,7 @@
       <nav class="tab-nav">
         <button class="tab-btn active" data-tab="all-tasks" data-i18n="instances.allTasks.title">All Tasks</button>
         <button class="tab-btn" data-tab="running-tasks" data-i18n="instances.runningTasks.title">Running Tasks</button>
+        <button class="tab-btn add-task-btn" id="strategy-add-task-btn" data-i18n="instances.actions.add">Add Task</button>
       </nav>
       <div class="tab-content">
         <div class="tab-panel active" id="tab-all-tasks">
@@ -1051,6 +1052,8 @@
             <button type="button" class="settings-tab-btn active" data-settings-tab="basic" data-i18n="settings.tabs.basic">Basic Settings</button>
             <button type="button" class="settings-tab-btn" data-settings-tab="account" data-i18n="settings.tabs.account">Account Config</button>
             <button type="button" class="settings-tab-btn" data-settings-tab="ai" data-i18n="settings.tabs.aiModel">AI Config</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="notification" data-i18n="settings.tabs.notification">Notification</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="backup" data-i18n="settings.tabs.backup">Data Backup</button>
           </div>
 
           <div class="settings-tab-panels">
@@ -1118,6 +1121,68 @@
               </div>
               <div class="accounts-list-container" id="ai-models-list-container">
                 <div class="loading-spinner" id="ai-models-loading" data-i18n="loading">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Tab 4: 通知设置 -->
+            <div class="settings-tab-panel" data-settings-panel="notification">
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.emergency.sectionTitle">🚨 Emergency Notification</h4>
+                <p class="field-hint" data-i18n="settings.emergency.noticeUrlHint">AI will call this URL when critical situations occur (e.g., repeated trading failures). Leave empty to disable.</p>
+                <div class="form-group">
+                  <label data-i18n="settings.emergency.noticeUrl">Emergency Notice URL (GET request)</label>
+                  <div class="input-with-action">
+                    <input type="text" name="EMERGENCY_NOTICE_URL" placeholder="https://your-webhook-url.com/notify?key=xxx" data-i18n-placeholder="settings.emergency.noticeUrlPlaceholder" />
+                    <button type="button" class="btn-secondary btn-small" id="test-emergency-notice-btn" data-i18n="settings.emergency.testButton">🔔 Test</button>
+                  </div>
+                  <span id="emergency-test-result" class="test-result"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 5: 数据备份 -->
+            <div class="settings-tab-panel" data-settings-panel="backup">
+              <div class="backup-section">
+                <!-- 备份操作区 -->
+                <div class="backup-actions-header">
+                  <div class="backup-actions-left">
+                    <button type="button" class="btn-primary" id="create-backup-btn" data-i18n="backup.createBackup">
+                      <span class="btn-icon">💾</span> One-Click Backup
+                    </button>
+                  </div>
+                  <div class="backup-actions-right">
+                    <label class="btn-secondary import-btn">
+                      <span class="btn-icon">📥</span> <span data-i18n="backup.import">Import</span>
+                      <input type="file" id="import-backup-input" accept=".zip,.db,.sqlite,.backup" style="display: none;" />
+                    </label>
+                  </div>
+                </div>
+                
+                <!-- 备份列表 -->
+                <div class="backup-list-container" id="backup-list-container">
+                  <div class="loading-spinner" id="backup-loading" data-i18n="loading">Loading...</div>
+                  <table class="backup-table" id="backup-table" style="display: none;">
+                    <thead>
+                      <tr>
+                        <th data-i18n="backup.table.name">Backup Name</th>
+                        <th data-i18n="backup.table.time">Created At</th>
+                        <th data-i18n="backup.table.size">Size</th>
+                        <th data-i18n="backup.table.actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="backup-list-body">
+                    </tbody>
+                  </table>
+                  <div class="backup-empty-state" id="backup-empty-state" style="display: none;">
+                    <span class="empty-icon">📁</span>
+                    <p data-i18n="backup.noBackups">No backups found. Create your first backup to protect your data.</p>
+                  </div>
+                </div>
+                
+                <!-- 提示信息 -->
+                <div class="backup-hint">
+                  <p data-i18n="backup.hint">💡 Backups include the database (trading data, account configs, AI models) and custom strategy files, packaged as ZIP. Stored in the <code>data/backup</code> directory.</p>
+                </div>
               </div>
             </div>
           </div>

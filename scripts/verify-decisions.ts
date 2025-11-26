@@ -4,7 +4,7 @@ import { getActiveAccount } from "../src/services/accountConfigService";
 
 async function main() {
   const dbClient = createClient({
-    url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+    url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
   });
 
   const activeAccount = await getActiveAccount();

@@ -126,7 +126,7 @@ CREATE TABLE IF NOT EXISTS trade_logs (
  */
 async function resetDatabase() {
   try {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
     const initialBalance = Number.parseFloat(process.env.INITIAL_BALANCE || "1000");
 
     logger.info("⚠️  强制重新初始化数据库");

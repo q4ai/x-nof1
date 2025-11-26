@@ -5,7 +5,7 @@ import * as dotenv from "dotenv";
 dotenv.config();
 
 async function main() {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
   console.log(`Connecting to database: ${dbUrl}`);
   
   const client = createClient({ url: dbUrl });

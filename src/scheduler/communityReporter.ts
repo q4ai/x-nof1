@@ -16,7 +16,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+  url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
 });
 
 const REPORT_ENDPOINT = process.env.COMMUNITY_REPORT_URL || "http://report.q4.net/api/v1/competition";

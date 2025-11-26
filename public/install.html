@@ -1,0 +1,1556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Q4 系统安装</title>
+    <link rel="stylesheet" href="monitor-styles.css">
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 1.5rem;
+            overflow-y: auto;
+        }
+        .install-container {
+            background-color: var(--card-bg);
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 720px;
+            border: 1px solid var(--border-color);
+            margin: 2rem auto;
+        }
+        .install-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+        h1 {
+            margin: 0;
+            color: var(--accent-blue);
+            font-size: 1.8rem;
+        }
+        .subtitle {
+            color: var(--text-secondary);
+            margin: 0.3rem 0 0;
+            font-size: 0.95rem;
+        }
+        .language-switcher {
+            display: flex;
+            gap: 0.5rem;
+        }
+        .lang-btn {
+            padding: 0.35rem 0.9rem;
+            border-radius: 999px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            transition: all 0.2s ease;
+        }
+        .lang-btn.active {
+            background: var(--accent-blue);
+            color: #fff;
+            border-color: transparent;
+        }
+        .steps {
+            display: flex;
+            justify-content: space-between;
+            margin: 1.5rem 0 2rem;
+            position: relative;
+        }
+        .steps::before {
+            content: "";
+            position: absolute;
+            top: 20px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background-color: var(--border-color);
+            z-index: 0;
+        }
+        .step {
+            background-color: var(--card-bg);
+            z-index: 1;
+            padding: 0 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            text-align: center;
+            width: 33%;
+        }
+        .step-circle {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: var(--bg-tertiary);
+            border: 2px solid var(--border-color);
+            color: var(--text-secondary);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 0.5rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        .step.active .step-circle {
+            background-color: var(--accent-blue);
+            border-color: var(--accent-blue);
+            color: white;
+            box-shadow: 0 0 10px rgba(59, 130, 246, 0.3);
+        }
+        .step.active {
+            color: var(--text-primary);
+        }
+        .step.completed .step-circle {
+            background-color: var(--accent-green);
+            border-color: var(--accent-green);
+            color: white;
+        }
+        .step-section {
+            margin-bottom: 1.75rem;
+        }
+        .section-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+        .section-description {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+        .form-inline {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 1rem;
+        }
+        label {
+            display: block;
+            margin-bottom: 0.35rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+        input, select {
+            width: 100%;
+            padding: 0.7rem;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 0.6rem;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        input:focus, select:focus {
+            outline: none;
+            border-color: var(--accent-blue);
+        }
+        .checkbox-field {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.6rem;
+        }
+        .checkbox-field input {
+            width: auto;
+            margin-top: 0.35rem;
+        }
+        .helper-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-top: 0.25rem;
+        }
+        .btn-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 2rem;
+            gap: 1rem;
+        }
+        button {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.6rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 0.95rem;
+        }
+        .btn-primary {
+            background-color: var(--accent-blue);
+            color: white;
+            flex: 1;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background-color: #2563eb;
+        }
+        .btn-secondary {
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+        }
+        .btn-secondary:hover {
+            background-color: var(--hover-bg);
+            color: var(--text-primary);
+        }
+        .hidden {
+            display: none;
+        }
+        .info-box {
+            padding: 1rem 1.25rem;
+            border-radius: 0.75rem;
+            background: var(--bg-tertiary);
+            border: 1px dashed var(--border-color);
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+        .collapsible-section {
+            border: 1px solid var(--border-color);
+            border-radius: 0.6rem;
+            margin-top: 1.5rem;
+            overflow: hidden;
+        }
+        .collapsible-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            background: var(--bg-tertiary);
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .collapsible-header:hover {
+            background: var(--hover-bg);
+        }
+        .collapsible-header h3 {
+            margin: 0;
+            font-size: 1rem;
+            color: var(--text-primary);
+        }
+        .collapsible-icon {
+            transition: transform 0.3s;
+            font-size: 1.2rem;
+        }
+        .collapsible-section.expanded .collapsible-icon {
+            transform: rotate(180deg);
+        }
+        .collapsible-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+            padding: 0 1rem;
+        }
+        .collapsible-section.expanded .collapsible-content {
+            max-height: 500px;
+            padding: 1rem;
+        }
+        .provider-selector-install {
+            display: flex;
+            gap: 1rem;
+            margin-top: 0.5rem;
+        }
+        .provider-card-install {
+            flex: 1;
+            padding: 0.75rem;
+            border: 2px solid var(--border-color);
+            border-radius: 0.6rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: center;
+            background: var(--bg-secondary);
+        }
+        .provider-card-install:hover {
+            border-color: var(--accent-blue);
+            background: var(--hover-bg);
+        }
+        .provider-card-install.selected {
+            border-color: var(--accent-blue);
+            background: rgba(59, 130, 246, 0.1);
+        }
+        .provider-card-install img {
+            width: 32px;
+            height: 32px;
+            object-fit: contain;
+            margin-bottom: 0.35rem;
+        }
+        .provider-card-install span {
+            display: block;
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-primary);
+        }
+        .passphrase-group {
+            display: block;
+        }
+        .passphrase-group.hidden {
+            display: none;
+        }
+        .btn-test {
+            background-color: var(--accent-green);
+            color: white;
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.6rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            font-size: 0.95rem;
+        }
+        .btn-test:hover:not(:disabled) {
+            background-color: #059669;
+        }
+        .btn-test:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+        .test-result {
+            margin-top: 1rem;
+            padding: 0.75rem;
+            border-radius: 0.6rem;
+            font-size: 0.9rem;
+            display: none;
+        }
+        .test-result.success {
+            background: rgba(16, 185, 129, 0.1);
+            color: var(--accent-green);
+            border: 1px solid var(--accent-green);
+            display: block;
+        }
+        .test-result.error {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--accent-red);
+            border: 1px solid var(--accent-red);
+            display: block;
+        }
+        .error-msg {
+            color: var(--accent-red);
+            font-size: 0.875rem;
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background-color: rgba(239, 68, 68, 0.1);
+            border-radius: 0.5rem;
+            border: 1px solid rgba(239, 68, 68, 0.2);
+            display: none;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { 
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to { 
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        @media (max-width: 640px) {
+            body {
+                padding: 1rem;
+            }
+            .install-container {
+                padding: 1.5rem;
+            }
+            .steps {
+                flex-direction: column;
+                gap: 1rem;
+            }
+            .steps::before {
+                display: none;
+            }
+            .step {
+                width: 100%;
+                flex-direction: row;
+                justify-content: flex-start;
+                gap: 0.75rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="install-container">
+        <div class="install-header">
+            <div>
+                <h1 data-i18n="appName">Q4</h1>
+                <p class="subtitle" data-i18n="subtitle">AI 加密货币自动交易系统安装向导</p>
+            </div>
+            <div class="language-switcher" id="language-switcher">
+                <button type="button" class="lang-btn" data-lang="zh">中文</button>
+                <button type="button" class="lang-btn" data-lang="en">English</button>
+                <button type="button" class="lang-btn" data-lang="ja">日本語</button>
+            </div>
+        </div>
+
+        <div class="steps">
+            <div class="step active" id="step-indicator-1">
+                <div class="step-circle">1</div>
+                <span data-i18n="steps.basic">基础设置</span>
+            </div>
+            <div class="step" id="step-indicator-2">
+                <div class="step-circle">2</div>
+                <span data-i18n="steps.account">账户配置</span>
+            </div>
+            <div class="step" id="step-indicator-3">
+                <div class="step-circle">3</div>
+                <span data-i18n="steps.ai">AI 模型</span>
+            </div>
+        </div>
+
+        <form id="installForm">
+            <!-- Step 1 -->
+            <div class="step-content" id="step-1">
+                <div class="step-section">
+                    <h2 class="section-title" data-i18n="basic.sectionTitle">基础设置</h2>
+                    <p class="section-description" data-i18n="basic.sectionDescription">配置网络与隐私选项。</p>
+                    
+                    <div class="form-group">
+                        <label data-i18n="basic.httpProxy">HTTP 代理 (可选)</label>
+                        <input type="text" name="http_proxy_url" placeholder="http://127.0.0.1:7890" data-i18n-placeholder="basic.httpProxyPlaceholder">
+                        <div class="helper-text" data-i18n="basic.httpProxyHint">用于访问 AI 接口或交易所的代理地址。</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-field">
+                            <input type="checkbox" name="community_report_enabled" checked>
+                            <span>
+                                <span data-i18n="basic.communityReport">加入社区排行榜</span>
+                                <div class="helper-text" data-i18n="basic.communityReportHint">匿名上报收益数据，用于全局排行。</div>
+                            </span>
+                        </label>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="checkbox-field">
+                            <input type="checkbox" name="community_share_prompts" checked>
+                            <span>
+                                <span data-i18n="basic.communityShare">共享策略提示词</span>
+                                <div class="helper-text" data-i18n="basic.communityShareHint">仅在开启排行榜时生效，可助力模型调优。</div>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="btn-group" style="justify-content: flex-end;">
+                    <button type="button" class="btn-primary" onclick="nextStep(1)" data-i18n="buttons.next">下一步</button>
+                </div>
+            </div>
+
+            <!-- Step 2 -->
+            <div class="step-content hidden" id="step-2">
+                <div class="step-section">
+                    <h2 class="section-title" data-i18n="account.sectionTitle">账户配置</h2>
+                    <p class="section-description" data-i18n="account.sectionDescription">录入至少一个交易账户，系统会自动设为当前账户。</p>
+                    <div class="form-group">
+                        <label data-i18n="account.name">账户名称</label>
+                        <input type="text" name="account_name" id="account-name-input" value="默认账户" required data-i18n-placeholder="account.namePlaceholder">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="account.provider">交易所</label>
+                        <input type="hidden" name="account_provider" value="okx">
+                        <div class="provider-selector-install">
+                            <div class="provider-card-install selected" data-provider="okx">
+                                <img src="/static/icons/okx.png" alt="OKX">
+                                <span data-i18n="account.providers.okx">OKX</span>
+                            </div>
+                            <div class="provider-card-install" data-provider="binance">
+                                <img src="/static/icons/binance.png" alt="Binance">
+                                <span data-i18n="account.providers.binance">Binance</span>
+                            </div>
+                            <div class="provider-card-install" data-provider="bitget">
+                                <img src="/static/icons/bitget.png" alt="Bitget">
+                                <span data-i18n="account.providers.bitget">Bitget</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="account.apiKey">API Key</label>
+                        <input type="text" name="account_api_key" autocomplete="off" required data-i18n-placeholder="account.apiKeyPlaceholder">
+                    </div>
+                    <div class="form-group">
+                        <label data-i18n="account.apiSecret">API Secret</label>
+                        <input type="password" name="account_api_secret" autocomplete="off" required data-i18n-placeholder="account.apiSecretPlaceholder">
+                    </div>
+                    <div class="form-group passphrase-group" id="passphrase-group">
+                        <label data-i18n="account.passphrase">API Passphrase</label>
+                        <input type="password" name="account_api_passphrase" autocomplete="off" data-i18n-placeholder="account.passphrasePlaceholder">
+                        <div class="helper-text" data-i18n="account.passphraseHint">OKX/Bitget 必填，Binance 可留空。</div>
+                    </div>
+                    <input type="hidden" name="account_use_paper" value="0">
+                </div>
+
+                <div class="collapsible-section" id="risk-control-section">
+                    <div class="collapsible-header" onclick="toggleCollapse('risk-control-section')">
+                        <h3 data-i18n="account.riskTitle">账户风控 (可选)</h3>
+                        <span class="collapsible-icon">▼</span>
+                    </div>
+                    <div class="collapsible-content">
+                        <div class="form-inline">
+                            <div class="form-group">
+                                <label data-i18n="account.stopLoss">止损线 (USDT)</label>
+                                <input type="number" name="account_stop_loss" min="0" step="0.01" data-i18n-placeholder="account.stopLossPlaceholder">
+                                <div class="helper-text" data-i18n="account.stopLossHint">达到该净值后自动清仓并停止交易。</div>
+                            </div>
+                            <div class="form-group">
+                                <label data-i18n="account.takeProfit">止盈线 (USDT)</label>
+                                <input type="number" name="account_take_profit" min="0" step="0.01" data-i18n-placeholder="account.takeProfitPlaceholder">
+                                <div class="helper-text" data-i18n="account.takeProfitHint">达到该净值后清仓退出，保护收益。</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="btn-group">
+                    <button type="button" class="btn-secondary" onclick="prevStep(2)" data-i18n="buttons.prev">上一步</button>
+                    <button type="button" class="btn-primary" id="next-step-2-btn" onclick="nextStep(2)" data-i18n="buttons.next">下一步</button>
+                </div>
+            </div>
+
+            <!-- Step 3 -->
+            <div class="step-content hidden" id="step-3">
+                <div class="step-section">
+                    <h2 class="section-title" data-i18n="ai.sectionTitle">AI 模型配置</h2>
+                    <p class="section-description" data-i18n="ai.sectionDescription">配置一个 OpenAI 兼容模型供交易 Agent 调用。</p>
+                    
+                    <div class="form-group">
+                        <label data-i18n="ai.displayName">模型名称 <span style="color: var(--error-color);">*</span></label>
+                        <input type="text" name="ai_name" id="ai-model-name-input" value="默认模型" placeholder="DeepSeek V3" required data-i18n-placeholder="ai.displayNamePlaceholder">
+                    </div>
+
+                    <div class="form-group">
+                        <label data-i18n="ai.baseUrl">API Base URL <span style="color: var(--error-color);">*</span></label>
+                        <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                            <select id="install-base-url-preset" style="padding: 0.625rem; border: 1px solid var(--border-color); border-radius: 0.375rem; background: var(--card-bg); color: var(--text-primary); font-size: 0.9375rem;">
+                                <option value="" data-i18n="ai.providers.custom">自定义</option>
+                                <option value="https://openrouter.ai/api/v1/chat/completions">OpenRouter</option>
+                                <option value="https://api.deepseek.com/chat/completions">DeepSeek</option>
+                                <option value="https://api.openai.com/v1/chat/completions">OpenAI</option>
+                                <option value="https://open.bigmodel.cn/api/paas/v4/chat/completions">智谱 BigModel</option>
+                                <option value="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions">阿里云 DashScope</option>
+                            </select>
+                            <input type="text" id="install-base-url-input" name="ai_base_url" placeholder="https://openrouter.ai/api/v1/chat/completions" required data-i18n-placeholder="ai.baseUrlPlaceholder" style="padding: 0.625rem; border: 1px solid var(--border-color); border-radius: 0.375rem; background: var(--card-bg); color: var(--text-primary); font-size: 0.9375rem;">
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label data-i18n="ai.apiKey">API Key <span style="color: var(--error-color);">*</span></label>
+                        <div style="position: relative;">
+                            <input type="password" id="install-ai-api-key" name="ai_api_key" autocomplete="off" required data-i18n-placeholder="ai.apiKeyPlaceholder" style="padding: 0.625rem 2.5rem 0.625rem 0.625rem; border: 1px solid var(--border-color); border-radius: 0.375rem; background: var(--card-bg); color: var(--text-primary); font-size: 0.9375rem; width: 100%;">
+                            <button type="button" onclick="toggleInstallAiApiKeyVisibility()" style="position: absolute; right: 0.5rem; top: 50%; transform: translateY(-50%); background: none; border: none; cursor: pointer; font-size: 1.2rem; padding: 0.25rem;">👁️</button>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label data-i18n="ai.modelName">Model Name <span style="color: var(--error-color);">*</span></label>
+                        <input type="text" name="ai_model_name" placeholder="deepseek/deepseek-v3.2-exp" required data-i18n-placeholder="ai.modelNamePlaceholder">
+                        <div class="helper-text" data-i18n="ai.modelNameHint">例如：deepseek/deepseek-v3.2-exp, x-ai/grok-4-fast, gpt-4 等</div>
+                    </div>
+                </div>
+
+                <div class="error-msg" id="error-msg"></div>
+                <div class="btn-group">
+                    <button type="button" class="btn-secondary" onclick="prevStep(3)" data-i18n="buttons.prev">上一步</button>
+                    <button type="button" class="btn-primary" id="install-submit-btn" onclick="submitForm()" data-i18n="buttons.submit">开始安装</button>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <script>
+        const INSTALL_I18N = {
+            zh: {
+                langTag: "zh-CN",
+                strings: {
+                    pageTitle: "Q4 系统安装",
+                    appName: "Q4",
+                    subtitle: "AI 加密货币自动交易系统安装向导",
+                    steps: {
+                        basic: "基础设置",
+                        account: "账户配置",
+                        ai: "AI 模型",
+                    },
+                    basic: {
+                        sectionTitle: "基础设置",
+                        sectionDescription: "配置网络与隐私选项。",
+                        httpProxy: "HTTP 代理 (可选)",
+                        httpProxyPlaceholder: "http://127.0.0.1:7890",
+                        httpProxyHint: "用于访问 AI 接口或交易所的代理地址。",
+                        communityReport: "加入社区排行榜",
+                        communityReportHint: "匿名上报收益数据，用于全局排行。",
+                        communityShare: "共享策略提示词",
+                        communityShareHint: "仅在开启排行榜时生效，可助力模型调优。",
+                    },
+                    account: {
+                        sectionTitle: "账户配置",
+                        sectionDescription: "录入至少一个交易账户，系统将自动启用。",
+                        name: "账户名称",
+                        namePlaceholder: "默认账户",
+                        nameDefault: "默认账户",
+                        provider: "交易所",
+                        testConnection: "测试连接",
+                        testing: "测试中...",
+                        testSuccess: "连接成功",
+                        testFailed: "连接失败",
+                        providers: {
+                            okx: "OKX 永续合约",
+                            binance: "Binance Futures",
+                            bitget: "Bitget Futures",
+                        },
+                        apiKey: "API Key",
+                        apiKeyPlaceholder: "请输入交易所 API Key",
+                        apiSecret: "API Secret",
+                        apiSecretPlaceholder: "请输入 API Secret",
+                        passphrase: "API Passphrase",
+                        passphrasePlaceholder: "如需 Passphrase 请填写",
+                        passphraseHint: "OKX/Bitget 必填，Binance 可留空。",
+                        environment: "交易模式",
+                        environmentPaper: "模拟盘",
+                        environmentLive: "实盘",
+                        proxy: "账户代理 (可选)",
+                        proxyPlaceholder: "http://127.0.0.1:7890",
+                        proxyHint: "如需对该账户单独设置代理，可在此指定。",
+                        riskTitle: "账户风控 (可选)",
+                        stopLoss: "止损线 (USDT)",
+                        stopLossPlaceholder: "例如 500",
+                        stopLossHint: "净值低于此金额时自动清仓并暂停。",
+                        takeProfit: "止盈线 (USDT)",
+                        takeProfitPlaceholder: "例如 5000",
+                        takeProfitHint: "净值达到此金额后平仓退出，保护收益。",
+                    },
+                    ai: {
+                        sectionTitle: "AI 模型配置",
+                        sectionDescription: "配置一个 OpenAI 兼容模型供交易 Agent 调用。",
+                        displayName: "模型名称",
+                        displayNamePlaceholder: "例如 DeepSeek V3",
+                        nameDefault: "默认模型",
+                        providers: {
+                            custom: "自定义",
+                        },
+                        modelName: "Model Name",
+                        modelNamePlaceholder: "deepseek/deepseek-v3.2-exp",
+                        modelNameHint: "例如：deepseek/deepseek-v3.2-exp, x-ai/grok-4-fast, gpt-4 等",
+                        apiKey: "API Key",
+                        apiKeyPlaceholder: "sk-...",
+                        baseUrl: "API Base URL",
+                        baseUrlPlaceholder: "https://openrouter.ai/api/v1/chat/completions",
+                    },
+                    buttons: {
+                        next: "下一步",
+                        prev: "上一步",
+                        submit: "开始安装",
+                        submitting: "安装中...",
+                    },
+                    success: {
+                        title: "安装成功！",
+                        description: "请妥善保存以下管理员凭证，此信息仅显示一次。",
+                        adminPath: "后台路径",
+                        username: "用户名",
+                        password: "密码",
+                        copy: "复制凭证",
+                        login: "登录后台",
+                    },
+                    errors: {
+                        installFailed: "安装失败: {{message}}",
+                        network: "网络错误: {{message}}",
+                    },
+                },
+            },
+            en: {
+                langTag: "en",
+                strings: {
+                    pageTitle: "Q4 Installation",
+                    appName: "Q4",
+                    subtitle: "Guided setup for the AI trading platform",
+                    steps: {
+                        basic: "Basic",
+                        account: "Account",
+                        ai: "AI Model",
+                    },
+                    basic: {
+                        sectionTitle: "Basic Settings",
+                        sectionDescription: "Configure network and privacy options.",
+                        httpProxy: "HTTP Proxy (optional)",
+                        httpProxyPlaceholder: "http://127.0.0.1:7890",
+                        httpProxyHint: "Fill in when requests must pass through a proxy.",
+                        communityReport: "Join community leaderboard",
+                        communityReportHint: "Send anonymized performance snapshots each hour.",
+                        communityShare: "Share prompt snippets",
+                        communityShareHint: "Only active when leaderboard reporting is enabled.",
+                    },
+                    account: {
+                        sectionTitle: "Account Setup",
+                        sectionDescription: "Add at least one trading account. The first one becomes active.",
+                        name: "Account Name",
+                        namePlaceholder: "Default Account",
+                        nameDefault: "Default Account",
+                        provider: "Exchange",
+                        testConnection: "Test Connection",
+                        testing: "Testing...",
+                        testSuccess: "Connection successful",
+                        testFailed: "Connection failed",
+                        providers: {
+                            okx: "OKX Perpetual",
+                            binance: "Binance Futures",
+                            bitget: "Bitget Futures",
+                        },
+                        apiKey: "API Key",
+                        apiKeyPlaceholder: "Enter exchange API Key",
+                        apiSecret: "API Secret",
+                        apiSecretPlaceholder: "Enter API Secret",
+                        passphrase: "API Passphrase",
+                        passphrasePlaceholder: "Required for OKX/Bitget",
+                        passphraseHint: "Mandatory on OKX/Bitget, optional on Binance.",
+                        environment: "Trading Mode",
+                        environmentPaper: "Paper",
+                        environmentLive: "Live",
+                        proxy: "Account Proxy (optional)",
+                        proxyPlaceholder: "http://127.0.0.1:7890",
+                        proxyHint: "Use when this account needs a dedicated proxy endpoint.",
+                        riskTitle: "Risk Guard (optional)",
+                        stopLoss: "Stop Loss (USDT)",
+                        stopLossPlaceholder: "e.g. 500",
+                        stopLossHint: "Stop trading when equity falls below this value.",
+                        takeProfit: "Take Profit (USDT)",
+                        takeProfitPlaceholder: "e.g. 5000",
+                        takeProfitHint: "Lock in profit and exit when this value is reached.",
+                    },
+                    ai: {
+                        sectionTitle: "AI Model",
+                        sectionDescription: "Provide an OpenAI-compatible model endpoint for the agent.",
+                        displayName: "Model Name",
+                        displayNamePlaceholder: "DeepSeek V3",
+                        nameDefault: "Default Model",
+                        providers: {
+                            custom: "Custom",
+                        },
+                        modelName: "Model Name",
+                        modelNamePlaceholder: "deepseek/deepseek-v3.2-exp",
+                        modelNameHint: "e.g. deepseek/deepseek-v3.2-exp, x-ai/grok-4-fast, gpt-4, etc.",
+                        apiKey: "API Key",
+                        apiKeyPlaceholder: "sk-...",
+                        baseUrl: "API Base URL",
+                        baseUrlPlaceholder: "https://openrouter.ai/api/v1/chat/completions",
+                    },
+                    buttons: {
+                        next: "Next",
+                        prev: "Back",
+                        submit: "Install",
+                        submitting: "Installing...",
+                    },
+                    success: {
+                        title: "Installation Successful!",
+                        description: "Please save the following admin credentials securely. This information will only be shown once.",
+                        adminPath: "Admin Path",
+                        username: "Username",
+                        password: "Password",
+                        copy: "Copy Credentials",
+                        login: "Login to Admin",
+                    },
+                    errors: {
+                        installFailed: "Installation failed: {{message}}",
+                        network: "Network error: {{message}}",
+                    },
+                },
+            },
+            ja: {
+                langTag: "ja",
+                strings: {
+                    pageTitle: "Q4 インストール",
+                    appName: "Q4",
+                    subtitle: "AI 暗号通貨取引システムのセットアップウィザード",
+                    steps: {
+                        basic: "基本設定",
+                        account: "アカウント",
+                        ai: "AI モデル",
+                    },
+                    basic: {
+                        sectionTitle: "基本設定",
+                        sectionDescription: "ネットワークとプライバシーオプションを設定します。",
+                        httpProxy: "HTTP プロキシ (任意)",
+                        httpProxyPlaceholder: "http://127.0.0.1:7890",
+                        httpProxyHint: "AI や取引所アクセスにプロキシが必要な場合に設定。",
+                        communityReport: "コミュニティランキングに参加",
+                        communityReportHint: "匿名のパフォーマンスデータを共有し、ランキングに反映。",
+                        communityShare: "プロンプトを共有",
+                        communityShareHint: "ランキング共有が有効な場合のみ公開されます。",
+                    },
+                    account: {
+                        sectionTitle: "アカウント設定",
+                        sectionDescription: "少なくとも 1 つの取引アカウントを登録します。",
+                        name: "アカウント名",
+                        namePlaceholder: "デフォルトアカウント",
+                        nameDefault: "デフォルトアカウント",
+                        provider: "取引所",
+                        testConnection: "接続テスト",
+                        testing: "テスト中...",
+                        testSuccess: "接続成功",
+                        testFailed: "接続失敗",
+                        providers: {
+                            okx: "OKX パーペチュアル",
+                            binance: "Binance 先物",
+                            bitget: "Bitget 先物",
+                        },
+                        apiKey: "API Key",
+                        apiKeyPlaceholder: "取引所の API Key",
+                        apiSecret: "API Secret",
+                        apiSecretPlaceholder: "API Secret を入力",
+                        passphrase: "API パスフレーズ",
+                        passphrasePlaceholder: "OKX/Bitget は必須",
+                        passphraseHint: "OKX/Bitget は必須、Binance は任意。",
+                        environment: "取引モード",
+                        environmentPaper: "デモ",
+                        environmentLive: "本番",
+                        proxy: "アカウントプロキシ (任意)",
+                        proxyPlaceholder: "http://127.0.0.1:7890",
+                        proxyHint: "このアカウント専用のプロキシが必要な場合に指定。",
+                        riskTitle: "リスク管理 (任意)",
+                        stopLoss: "損切りライン (USDT)",
+                        stopLossPlaceholder: "例 500",
+                        stopLossHint: "評価額が下回った場合、自動的に全ポジションを閉じます。",
+                        takeProfit: "利確ライン (USDT)",
+                        takeProfitPlaceholder: "例 5000",
+                        takeProfitHint: "評価額が到達したら利確して終了します。",
+                    },
+                    ai: {
+                        sectionTitle: "AI モデル",
+                        sectionDescription: "OpenAI 互換のモデルエンドポイントを設定します。",
+                        displayName: "モデル名",
+                        displayNamePlaceholder: "DeepSeek V3",
+                        nameDefault: "デフォルトモデル",
+                        providers: {
+                            custom: "カスタム",
+                        },
+                        modelName: "Model Name",
+                        modelNamePlaceholder: "deepseek/deepseek-v3.2-exp",
+                        modelNameHint: "例: deepseek/deepseek-v3.2-exp, x-ai/grok-4-fast, gpt-4 など",
+                        apiKey: "API Key",
+                        apiKeyPlaceholder: "sk-...",
+                        baseUrl: "API Base URL",
+                        baseUrlPlaceholder: "https://openrouter.ai/api/v1/chat/completions",
+                    },
+                    buttons: {
+                        next: "次へ",
+                        prev: "戻る",
+                        submit: "インストール",
+                        submitting: "インストール中...",
+                    },
+                    success: {
+                        title: "インストール成功！",
+                        description: "次の管理者資格情報を安全に保存してください。この情報は一度のみ表示されます。",
+                        adminPath: "管理パス",
+                        username: "ユーザー名",
+                        password: "パスワード",
+                        copy: "資格情報をコピー",
+                        login: "管理画面にログイン",
+                    },
+                    errors: {
+                        installFailed: "インストールに失敗しました: {{message}}",
+                        network: "ネットワークエラー: {{message}}",
+                    },
+                },
+            },
+        };
+
+        const LANGUAGE_STORAGE_KEY = "nof1_install_language";
+        const FORM_DATA_STORAGE_KEY = "nof1_install_form_data";
+        const SUPPORTED_LANGUAGES = Object.keys(INSTALL_I18N);
+        let currentLanguage = getInitialLanguage();
+
+        function getInitialLanguage() {
+            const stored = window.localStorage?.getItem(LANGUAGE_STORAGE_KEY);
+            if (stored && SUPPORTED_LANGUAGES.includes(stored)) {
+                return stored;
+            }
+            const browserLang = navigator.language?.slice(0, 2).toLowerCase();
+            if (SUPPORTED_LANGUAGES.includes(browserLang)) {
+                return browserLang;
+            }
+            return "zh";
+        }
+
+        function setLanguage(lang) {
+            if (!SUPPORTED_LANGUAGES.includes(lang)) return;
+            currentLanguage = lang;
+            try {
+                window.localStorage?.setItem(LANGUAGE_STORAGE_KEY, lang);
+            } catch (error) {
+                console.warn("无法写入语言偏好", error);
+            }
+            applyTranslations();
+            syncLanguageButtons();
+        }
+
+        function getLangPack() {
+            return INSTALL_I18N[currentLanguage] || INSTALL_I18N.zh;
+        }
+
+        function translate(key) {
+            const pack = getLangPack().strings;
+            const segments = key.split(".");
+            let value = pack;
+            for (const segment of segments) {
+                if (value && Object.prototype.hasOwnProperty.call(value, segment)) {
+                    value = value[segment];
+                } else {
+                    return null;
+                }
+            }
+            return typeof value === "string" ? value : null;
+        }
+
+        function formatTranslation(template, replacements) {
+            if (!template || !replacements) return template;
+            return template.replace(/\{\{(\w+)\}\}/g, (_, token) => {
+                return Object.prototype.hasOwnProperty.call(replacements, token)
+                    ? String(replacements[token])
+                    : _;
+            });
+        }
+
+        function t(key, replacements) {
+            const text = translate(key) || translateFromFallback(key);
+            return formatTranslation(text || key, replacements);
+        }
+
+        function translateFromFallback(key) {
+            const segments = key.split(".");
+            let value = INSTALL_I18N.zh.strings;
+            for (const segment of segments) {
+                if (value && Object.prototype.hasOwnProperty.call(value, segment)) {
+                    value = value[segment];
+                } else {
+                    return null;
+                }
+            }
+            return typeof value === "string" ? value : null;
+        }
+
+        function applyTranslations() {
+            const pack = getLangPack();
+            document.title = pack.strings.pageTitle;
+            document.documentElement.lang = pack.langTag;
+
+            document.querySelectorAll("[data-i18n]").forEach((el) => {
+                const key = el.getAttribute("data-i18n");
+                if (!key) return;
+                const text = t(key);
+                if (text) {
+                    el.textContent = text;
+                }
+            });
+
+            document.querySelectorAll("[data-i18n-placeholder]").forEach((el) => {
+                const key = el.getAttribute("data-i18n-placeholder");
+                if (!key) return;
+                const text = t(key);
+                if (text) {
+                    el.setAttribute("placeholder", text);
+                }
+            });
+            
+            // 更新账户名称默认值
+            const accountNameInput = document.getElementById('account-name-input');
+            if (accountNameInput) {
+                const defaultName = t('account.nameDefault');
+                if (defaultName && defaultName !== 'account.nameDefault') {
+                    accountNameInput.value = defaultName;
+                }
+            }
+            
+            // 更新 AI 模型名称默认值
+            const aiModelNameInput = document.getElementById('ai-model-name-input');
+            if (aiModelNameInput) {
+                const defaultAiName = t('ai.nameDefault');
+                if (defaultAiName && defaultAiName !== 'ai.nameDefault') {
+                    aiModelNameInput.value = defaultAiName;
+                }
+            }
+        }
+
+        function syncLanguageButtons() {
+            document.querySelectorAll(".lang-btn").forEach((btn) => {
+                const lang = btn.getAttribute("data-lang");
+                if (lang === currentLanguage) {
+                    btn.classList.add("active");
+                    btn.setAttribute("aria-pressed", "true");
+                } else {
+                    btn.classList.remove("active");
+                    btn.setAttribute("aria-pressed", "false");
+                }
+            });
+        }
+
+        document.getElementById("language-switcher").addEventListener("click", (event) => {
+            const target = event.target;
+            if (target instanceof HTMLElement && target.dataset.lang) {
+                setLanguage(target.dataset.lang);
+            }
+        });
+
+        async function nextStep(currentStep) {
+            const currentStepEl = document.getElementById(`step-${currentStep}`);
+            const inputs = currentStepEl.querySelectorAll('input[required], select[required]');
+            let valid = true;
+            inputs.forEach((input) => {
+                if (!input.value) {
+                    valid = false;
+                    input.style.borderColor = 'var(--accent-red)';
+                } else {
+                    input.style.borderColor = 'var(--border-color)';
+                }
+            });
+
+            if (!valid) return;
+
+            // 如果是从 Step 2 前进，先测试账户连接
+            if (currentStep === 2) {
+                const success = await testAccountConnectionBeforeNext();
+                if (!success) return; // 测试失败，不继续前进
+            }
+
+            document.getElementById(`step-${currentStep}`).classList.add('hidden');
+            document.getElementById(`step-${currentStep + 1}`).classList.remove('hidden');
+
+            document.getElementById(`step-indicator-${currentStep}`).classList.remove('active');
+            document.getElementById(`step-indicator-${currentStep}`).classList.add('completed');
+            document.getElementById(`step-indicator-${currentStep + 1}`).classList.add('active');
+        }
+
+        function prevStep(currentStep) {
+            document.getElementById(`step-${currentStep}`).classList.add('hidden');
+            document.getElementById(`step-${currentStep - 1}`).classList.remove('hidden');
+
+            document.getElementById(`step-indicator-${currentStep}`).classList.remove('active');
+            document.getElementById(`step-indicator-${currentStep - 1}`).classList.remove('completed');
+            document.getElementById(`step-indicator-${currentStep - 1}`).classList.add('active');
+        }
+
+        const communityReportCheckbox = document.querySelector('input[name="community_report_enabled"]');
+        const communityShareCheckbox = document.querySelector('input[name="community_share_prompts"]');
+
+        function syncCommunityShareState() {
+            if (!communityReportCheckbox || !communityShareCheckbox) return;
+            const enabled = communityReportCheckbox.checked;
+            communityShareCheckbox.disabled = !enabled;
+            if (!enabled) {
+                communityShareCheckbox.checked = false;
+            }
+        }
+
+        communityReportCheckbox?.addEventListener('change', syncCommunityShareState);
+
+        function toggleCollapse(sectionId) {
+            const section = document.getElementById(sectionId);
+            if (section) {
+                section.classList.toggle('expanded');
+            }
+        }
+
+        // 交易所选择器逻辑
+        document.querySelectorAll('.provider-card-install').forEach(card => {
+            card.addEventListener('click', function() {
+                const provider = this.getAttribute('data-provider');
+                const providerInput = document.querySelector('input[name="account_provider"]');
+                const passphraseGroup = document.getElementById('passphrase-group');
+                
+                // 更新选中状态
+                document.querySelectorAll('.provider-card-install').forEach(c => c.classList.remove('selected'));
+                this.classList.add('selected');
+                
+                // 更新隐藏字段
+                if (providerInput) {
+                    providerInput.value = provider;
+                }
+                
+                // 控制 Passphrase 显示
+                if (passphraseGroup) {
+                    if (provider === 'binance') {
+                        passphraseGroup.classList.add('hidden');
+                    } else {
+                        passphraseGroup.classList.remove('hidden');
+                    }
+                }
+            });
+        });
+
+        // Base URL 预设选择器逻辑（AI 模型配置）
+        function initInstallAiBaseUrlSelector() {
+            const preset = document.getElementById('install-base-url-preset');
+            const input = document.getElementById('install-base-url-input');
+            
+            if (!preset || !input) return;
+            
+            // 预设选择器改变时自动填充输入框
+            preset.addEventListener('change', (e) => {
+                const selectedValue = e.target.value;
+                if (selectedValue) {
+                    input.value = selectedValue;
+                } else {
+                    input.value = '';
+                    input.focus();
+                }
+            });
+            
+            // 输入框改变时同步预设选择器
+            input.addEventListener('input', () => {
+                const currentValue = input.value.trim();
+                const matchingOption = Array.from(preset.options).find(
+                    option => option.value && option.value === currentValue
+                );
+                preset.value = matchingOption ? matchingOption.value : '';
+            });
+        }
+
+        // 切换 AI API Key 显示/隐藏
+        function toggleInstallAiApiKeyVisibility() {
+            const input = document.getElementById('install-ai-api-key');
+            if (!input) return;
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+            } else {
+                input.type = 'password';
+            }
+        }
+
+        // 页面加载时初始化
+        document.addEventListener('DOMContentLoaded', () => {
+            initInstallAiBaseUrlSelector();
+            loadFormDataFromStorage();
+            setupFormAutoSave();
+        });
+
+        // 从 localStorage 加载表单数据
+        function loadFormDataFromStorage() {
+            try {
+                const savedData = window.localStorage?.getItem(FORM_DATA_STORAGE_KEY);
+                if (!savedData) return;
+                
+                const data = JSON.parse(savedData);
+                const form = document.getElementById('installForm');
+                if (!form) return;
+                
+                // 恢复所有表单字段
+                Object.keys(data).forEach(name => {
+                    const field = form.querySelector(`[name="${name}"]`);
+                    if (!field) return;
+                    
+                    if (field.type === 'checkbox') {
+                        field.checked = Boolean(data[name]);
+                    } else {
+                        field.value = data[name] || '';
+                    }
+                });
+                
+                console.log('已从缓存恢复表单数据');
+            } catch (error) {
+                console.warn('加载表单缓存失败:', error);
+            }
+        }
+
+        // 保存表单数据到 localStorage
+        function saveFormDataToStorage() {
+            try {
+                const form = document.getElementById('installForm');
+                if (!form) return;
+                
+                const formData = new FormData(form);
+                const data = {};
+                
+                // 保存所有字段（包括 checkbox）
+                for (const [key, value] of formData.entries()) {
+                    data[key] = value;
+                }
+                
+                // 手动保存 checkbox 状态（因为 FormData 不包含未选中的 checkbox）
+                form.querySelectorAll('input[type="checkbox"]').forEach(checkbox => {
+                    data[checkbox.name] = checkbox.checked ? '1' : '0';
+                });
+                
+                window.localStorage?.setItem(FORM_DATA_STORAGE_KEY, JSON.stringify(data));
+            } catch (error) {
+                console.warn('保存表单缓存失败:', error);
+            }
+        }
+
+        // 设置表单自动保存
+        function setupFormAutoSave() {
+            const form = document.getElementById('installForm');
+            if (!form) return;
+            
+            // 监听所有输入变化
+            form.addEventListener('input', () => {
+                saveFormDataToStorage();
+            });
+            
+            // 监听 checkbox 变化
+            form.addEventListener('change', () => {
+                saveFormDataToStorage();
+            });
+        }
+
+        // 清除表单缓存
+        function clearFormDataStorage() {
+            try {
+                window.localStorage?.removeItem(FORM_DATA_STORAGE_KEY);
+                console.log('已清除表单缓存');
+            } catch (error) {
+                console.warn('清除表单缓存失败:', error);
+            }
+        }
+
+        // 在进入 Step 3 前测试账户连接
+        async function testAccountConnectionBeforeNext() {
+            const provider = document.querySelector('input[name="account_provider"]')?.value || 'okx';
+            const apiKey = document.querySelector('input[name="account_api_key"]')?.value?.trim();
+            const apiSecret = document.querySelector('input[name="account_api_secret"]')?.value?.trim();
+            const passphrase = document.querySelector('input[name="account_api_passphrase"]')?.value?.trim();
+            const httpProxy = document.querySelector('input[name="http_proxy_url"]')?.value?.trim();
+            
+            if (!apiKey || !apiSecret) {
+                alert(t('account.testFailed') + ': API Key/Secret 不能为空');
+                return false;
+            }
+            
+            if ((provider === 'okx' || provider === 'bitget') && !passphrase) {
+                alert(t('account.testFailed') + ': Passphrase 不能为空');
+                return false;
+            }
+            
+            // 显示测试提示浮层
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+            
+            const message = document.createElement('div');
+            message.style.cssText = 'background: var(--card-bg); padding: 2rem; border-radius: 0.5rem; text-align: center; min-width: 300px; box-shadow: 0 10px 25px rgba(0,0,0,0.3);';
+            message.innerHTML = `<div style="font-size: 1.1rem; margin-bottom: 1rem;">${t('account.testing') || '正在测试连接...'}</div><div style="color: var(--text-secondary);">请稍候</div>`;
+            
+            overlay.appendChild(message);
+            document.body.appendChild(overlay);
+            
+            try {
+                const response = await fetch('/api/accounts/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        provider,
+                        api_key: apiKey,
+                        api_secret: apiSecret,
+                        api_passphrase: passphrase || undefined,
+                        use_paper: false,
+                        proxy_url: httpProxy || undefined,
+                    }),
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    // 测试成功
+                    const balance = result.balance || '0';
+                    message.innerHTML = `
+                        <div style="color: var(--success-color); font-size: 2rem; margin-bottom: 1rem;">✓</div>
+                        <div style="font-size: 1.1rem; color: var(--success-color); margin-bottom: 0.5rem;">${t('account.testSuccess') || '连接成功'}</div>
+                        <div style="color: var(--text-secondary);">余额: ${balance} USDT</div>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 1rem;">5秒后进入下一步...</div>
+                    `;
+                    
+                    // 5秒后自动关闭并继续
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    document.body.removeChild(overlay);
+                    return true;
+                } else {
+                    // 测试失败
+                    message.innerHTML = `
+                        <div style="color: var(--error-color); font-size: 2rem; margin-bottom: 1rem;">✗</div>
+                        <div style="font-size: 1.1rem; color: var(--error-color); margin-bottom: 0.5rem;">${t('account.testFailed') || '连接失败'}</div>
+                        <div style="color: var(--text-secondary); margin-top: 0.5rem; max-width: 400px; word-wrap: break-word;">${result.error || 'Unknown error'}</div>
+                        <button onclick="this.closest('div[style*=fixed]').remove()" style="margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--accent-color); color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 1rem;">关闭</button>
+                    `;
+                    return false;
+                }
+            } catch (error) {
+                // 网络错误
+                message.innerHTML = `
+                    <div style="color: var(--error-color); font-size: 2rem; margin-bottom: 1rem;">✗</div>
+                    <div style="font-size: 1.1rem; color: var(--error-color); margin-bottom: 0.5rem;">${t('account.testFailed') || '连接失败'}</div>
+                    <div style="color: var(--text-secondary); margin-top: 0.5rem; max-width: 400px; word-wrap: break-word;">${error.message}</div>
+                    <button onclick="this.closest('div[style*=fixed]').remove()" style="margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--accent-color); color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 1rem;">关闭</button>
+                `;
+                return false;
+            }
+        }
+
+        // 显示安装成功页面及管理员凭证
+        function showSuccessPage(adminCredentials) {
+            // 创建全屏成功页面遮罩
+            const successOverlay = document.createElement('div');
+            successOverlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.95); z-index: 20000; display: flex; align-items: center; justify-content: center; animation: fadeIn 0.3s ease-in-out;';
+            
+            const successBox = document.createElement('div');
+            successBox.style.cssText = 'background: var(--card-bg); padding: 3rem; border-radius: 1rem; text-align: center; max-width: 600px; width: 90%; box-shadow: 0 20px 60px rgba(0,0,0,0.5); animation: slideUp 0.4s ease-out;';
+            
+            const t = (key) => {
+                const lang = currentLanguage || 'zh';
+                return INSTALL_I18N[lang]?.strings?.success?.[key] || key;
+            };
+            
+            successBox.innerHTML = `
+                <div style="color: var(--accent-color); font-size: 4rem; margin-bottom: 1rem;">✓</div>
+                <h2 style="font-size: 1.8rem; margin-bottom: 1rem; color: var(--text-primary);">${t('title') || '安装成功！'}</h2>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem; font-size: 1rem;">${t('description') || '请妥善保存以下管理员凭证，此信息仅显示一次。'}</p>
+                
+                <div style="background: var(--section-bg); padding: 1.5rem; border-radius: 0.5rem; margin-bottom: 2rem; text-align: left;">
+                    <div style="margin-bottom: 1rem;">
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.3rem;">${t('adminPath') || '后台路径'}</div>
+                        <div style="color: var(--text-primary); font-size: 1.1rem; font-family: monospace; background: var(--card-bg); padding: 0.5rem; border-radius: 0.25rem; word-break: break-all;">/${adminCredentials.adminPath}</div>
+                    </div>
+                    <div style="margin-bottom: 1rem;">
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.3rem;">${t('username') || '用户名'}</div>
+                        <div style="color: var(--text-primary); font-size: 1.1rem; font-family: monospace; background: var(--card-bg); padding: 0.5rem; border-radius: 0.25rem; word-break: break-all;">${adminCredentials.username}</div>
+                    </div>
+                    <div>
+                        <div style="color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 0.3rem;">${t('password') || '密码'}</div>
+                        <div style="color: var(--text-primary); font-size: 1.1rem; font-family: monospace; background: var(--card-bg); padding: 0.5rem; border-radius: 0.25rem; word-break: break-all;">${adminCredentials.password}</div>
+                    </div>
+                </div>
+                
+                <div style="display: flex; gap: 1rem; justify-content: center;">
+                    <button onclick="copyCredentialsToClipboard('${adminCredentials.adminPath}', '${adminCredentials.username}', '${adminCredentials.password}')" style="padding: 0.75rem 1.5rem; background: var(--section-bg); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 0.5rem; cursor: pointer; font-size: 1rem; transition: all 0.2s;">${t('copy') || '复制凭证'}</button>
+                    <a href="/${adminCredentials.adminPath}" style="padding: 0.75rem 2rem; background: var(--accent-color); color: white; border: none; border-radius: 0.5rem; cursor: pointer; font-size: 1rem; text-decoration: none; display: inline-block; transition: all 0.2s;">${t('login') || '登录后台'}</a>
+                </div>
+            `;
+            
+            successOverlay.appendChild(successBox);
+            document.body.appendChild(successOverlay);
+        }
+
+        // 复制管理员凭证到剪贴板
+        function copyCredentialsToClipboard(adminPath, username, password) {
+            const text = `后台路径: /${adminPath}\n用户名: ${username}\n密码: ${password}`;
+            navigator.clipboard.writeText(text).then(() => {
+                alert('凭证已复制到剪贴板！');
+            }).catch(err => {
+                console.error('复制失败:', err);
+                alert('复制失败，请手动复制凭证。');
+            });
+        }
+
+        // 在安装前测试 AI 模型连接
+        async function testAIModelBeforeInstall(aiConfig, proxyUrl) {
+            if (!aiConfig || !aiConfig.api_key || !aiConfig.base_url || !aiConfig.model_name) {
+                alert('AI 模型配置不完整');
+                return false;
+            }
+            
+            // 显示测试提示浮层
+            const overlay = document.createElement('div');
+            overlay.style.cssText = 'position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 10000; display: flex; align-items: center; justify-content: center;';
+            
+            const message = document.createElement('div');
+            message.style.cssText = 'background: var(--card-bg); padding: 2rem; border-radius: 0.5rem; text-align: center; min-width: 400px; max-width: 600px; box-shadow: 0 10px 25px rgba(0,0,0,0.3);';
+            message.innerHTML = `<div style="font-size: 1.1rem; margin-bottom: 1rem;">正在测试 AI 模型连接...</div><div style="color: var(--text-secondary);">请稍候</div>`;
+            
+            overlay.appendChild(message);
+            document.body.appendChild(overlay);
+            
+            try {
+                // 测试 AI 模型：发送一个简单的请求
+                const testMessages = [
+                    { role: 'system', content: 'You are a helpful assistant.' },
+                    { role: 'user', content: 'Hello, please respond with "OK" to confirm you are working.' }
+                ];
+                
+                const requestBody = {
+                    model: aiConfig.model_name,
+                    messages: testMessages,
+                    max_tokens: 50,
+                    temperature: 0.1
+                };
+                
+                const headers = {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${aiConfig.api_key}`
+                };
+                
+                const response = await fetch(aiConfig.base_url, {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(requestBody)
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    let errorMsg = `HTTP ${response.status}`;
+                    try {
+                        const errorJson = JSON.parse(errorText);
+                        errorMsg = errorJson.error?.message || errorJson.message || errorText;
+                    } catch {
+                        errorMsg = errorText.substring(0, 200);
+                    }
+                    
+                    // 测试失败
+                    message.innerHTML = `
+                        <div style="color: var(--error-color); font-size: 2rem; margin-bottom: 1rem;">✗</div>
+                        <div style="font-size: 1.1rem; color: var(--error-color); margin-bottom: 0.5rem;">AI 模型连接失败</div>
+                        <div style="color: var(--text-secondary); margin-top: 0.5rem; max-width: 500px; word-wrap: break-word; font-size: 0.9rem; max-height: 200px; overflow-y: auto; text-align: left; padding: 1rem; background: var(--bg-secondary); border-radius: 0.25rem;">${errorMsg}</div>
+                        <button onclick="this.closest('div[style*=fixed]').remove()" style="margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--accent-color); color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 1rem;">关闭</button>
+                    `;
+                    return false;
+                }
+                
+                const result = await response.json();
+                const aiResponse = result.choices?.[0]?.message?.content || result.response || '(no response)';
+                
+                // 测试成功
+                message.innerHTML = `
+                    <div style="color: var(--success-color); font-size: 2rem; margin-bottom: 1rem;">✓</div>
+                    <div style="font-size: 1.1rem; color: var(--success-color); margin-bottom: 0.5rem;">AI 模型连接成功</div>
+                    <div style="color: var(--text-secondary); margin-top: 0.5rem;">模型：${aiConfig.model_name}</div>
+                    <div style="color: var(--text-secondary); margin-top: 0.5rem; padding: 1rem; background: var(--bg-secondary); border-radius: 0.25rem; text-align: left; max-height: 150px; overflow-y: auto; font-size: 0.9rem;">AI 响应: ${aiResponse}</div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem; margin-top: 1rem;">3秒后开始安装...</div>
+                `;
+                
+                // 3秒后自动关闭并继续
+                await new Promise(resolve => setTimeout(resolve, 3000));
+                document.body.removeChild(overlay);
+                return true;
+                
+            } catch (error) {
+                // 网络错误
+                message.innerHTML = `
+                    <div style="color: var(--error-color); font-size: 2rem; margin-bottom: 1rem;">✗</div>
+                    <div style="font-size: 1.1rem; color: var(--error-color); margin-bottom: 0.5rem;">AI 模型连接失败</div>
+                    <div style="color: var(--text-secondary); margin-top: 0.5rem; max-width: 500px; word-wrap: break-word;">${error.message}</div>
+                    <button onclick="this.closest('div[style*=fixed]').remove()" style="margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--accent-color); color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 1rem;">关闭</button>
+                `;
+                return false;
+            }
+        }
+
+        // 监听表单字段变化，重置测试状态
+        async function submitForm() {
+            const form = document.getElementById('installForm');
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            const parseOptionalNumber = (value) => {
+                if (value === undefined || value === null || value === '') {
+                    return null;
+                }
+                const num = Number(value);
+                return Number.isFinite(num) ? num : null;
+            };
+
+            const payload = {
+                systemConfig: {
+                    initial_balance: 1000,
+                    trading_interval: 20,
+                    max_leverage: 10,
+                    max_positions: 5,
+                    trading_symbols: "BTC,ETH,SOL,XRP,BNB,BCH",
+                    http_proxy_url: data.http_proxy_url || '',
+                    community_report_enabled: Boolean(data.community_report_enabled),
+                    community_share_prompts: Boolean(data.community_share_prompts),
+                },
+                accountConfig: {
+                    name: data.account_name,
+                    provider: data.account_provider,
+                    api_key: data.account_api_key,
+                    api_secret: data.account_api_secret,
+                    api_passphrase: data.account_api_passphrase,
+                    use_paper: data.account_use_paper === '1',
+                    proxy_url: null,
+                    stop_loss_usdt: parseOptionalNumber(data.account_stop_loss),
+                    take_profit_usdt: parseOptionalNumber(data.account_take_profit),
+                },
+                aiModelConfig: {
+                    name: data.ai_name,
+                    model_name: data.ai_model_name,
+                    api_key: data.ai_api_key,
+                    base_url: data.ai_base_url,
+                },
+            };
+
+            const btn = document.getElementById('install-submit-btn');
+            const errorBox = document.getElementById('error-msg');
+            errorBox.style.display = 'none';
+            errorBox.textContent = '';
+
+            // 先测试 AI 模型连接
+            const aiTestPassed = await testAIModelBeforeInstall(payload.aiModelConfig, payload.systemConfig.http_proxy_url);
+            if (!aiTestPassed) {
+                return; // 测试失败，不继续安装
+            }
+
+            const originalText = btn.innerText;
+            btn.innerText = t('buttons.submitting');
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+
+            try {
+                const response = await fetch('/api/install', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(payload),
+                });
+
+                if (response.ok) {
+                    // 获取管理员凭证
+                    const result = await response.json();
+                    
+                    // 注意：不删除 localStorage 缓存，方便下次快速填充
+                    // clearFormDataStorage();
+                    
+                    // 确保 adminCredentials 存在
+                    if (!result.adminCredentials) {
+                        throw new Error('服务器未返回管理员凭证');
+                    }
+                    
+                    const { adminCredentials } = result;
+                    
+                    // 显示成功页面和凭证信息
+                    showSuccessPage(adminCredentials);
+                } else {
+                    const error = await response.json();
+                    errorBox.textContent = t('errors.installFailed', { message: error.message || 'Unknown' });
+                    errorBox.style.display = 'block';
+                    btn.innerText = originalText;
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                }
+            } catch (e) {
+                errorBox.textContent = t('errors.network', { message: e.message || 'Error' });
+                errorBox.style.display = 'block';
+                btn.innerText = originalText;
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
+        }
+
+        applyTranslations();
+        syncLanguageButtons();
+        syncCommunityShareState();
+    </script>
+</body>
+</html>

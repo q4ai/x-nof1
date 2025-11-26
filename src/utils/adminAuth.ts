@@ -1,6 +1,7 @@
 import { promises as fs } from "node:fs";
 import { createHash, randomBytes } from "node:crypto";
 import path from "node:path";
+import { createClient } from "@libsql/client";
 
 export interface AdminAuthConfig {
   adminPath: string;
@@ -14,6 +15,41 @@ const FILE_PERMISSIONS = 0o600;
 
 let cachedConfig: AdminAuthConfig | null = null;
 
+/**
+ * 从数据库读取管理员凭证
+ */
+async function readConfigFromDatabase(): Promise<AdminAuthConfig | null> {
+  try {
+    const dbClient = createClient({
+      url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+    });
+    
+    const result = await dbClient.execute({
+      sql: "SELECT admin_path, username, password_hash FROM admin_credentials ORDER BY id DESC LIMIT 1",
+      args: []
+    });
+    
+    await dbClient.close();
+    
+    if (result.rows.length === 0) {
+      return null;
+    }
+    
+    const row = result.rows[0];
+    return {
+      adminPath: String(row.admin_path),
+      username: String(row.username),
+      password: String(row.password_hash), // 注意：这是哈希后的密码，用于验证
+    };
+  } catch (error: unknown) {
+    // 数据库不存在或表不存在时返回 null
+    return null;
+  }
+}
+
+/**
+ * 从旧的文件系统读取配置（兼容旧版本）
+ */
 async function readExistingConfig(): Promise<AdminAuthConfig | null> {
   try {
     const raw = await fs.readFile(CREDENTIALS_FILE, "utf-8");
@@ -80,6 +116,16 @@ export async function initializeAdminAuth(logger?: LoggerLike): Promise<AdminAut
     return cachedConfig;
   }
 
+  // 优先从数据库读取凭证（新安装方式）
+  const dbConfig = await readConfigFromDatabase();
+  if (dbConfig) {
+    cachedConfig = dbConfig;
+    logger?.info(`[后台登录] 已从数据库加载后台入口: /${dbConfig.adminPath}`);
+    logger?.info(`[后台登录] 账号: ${dbConfig.username}`);
+    return dbConfig;
+  }
+
+  // 兼容旧版本：从文件读取
   const existing = await readExistingConfig();
   if (existing) {
     cachedConfig = existing;
@@ -88,33 +134,8 @@ export async function initializeAdminAuth(logger?: LoggerLike): Promise<AdminAut
     return existing;
   }
 
-  const config: AdminAuthConfig = {
-    adminPath: generateAdminPath(),
-    username: DEFAULT_USERNAME,
-    password: generatePassword(),
-  };
-
-  const writeSucceeded = await writeConfig(config);
-
-  if (!writeSucceeded) {
-    const latest = await readExistingConfig();
-    if (latest) {
-      cachedConfig = latest;
-      logger?.info("[后台登录] 检测到已有 ./.q4ai 凭证，沿用现有配置");
-      return latest;
-    }
-    throw new Error("检测到 ./.q4ai 已存在但内容无效，请手动检查或删除后重试");
-  }
-
-  cachedConfig = config;
-
-  logger?.info("[后台登录] 首次启动已生成后台入口和凭证");
-  logger?.info(`[后台登录] 后台路径: ${config.adminPath}`);
-  logger?.info(`[后台登录] 登录账号: ${config.username}`);
-  logger?.info(`[后台登录] 登录密码: ${config.password}`);
-  logger?.info("[后台登录] 凭证内容已保存至 ./.q4ai，请妥善保管");
-
-  return config;
+  // 如果数据库和文件都没有，抛出错误（不应该发生，因为安装时会生成）
+  throw new Error("未找到管理员凭证，请先完成系统安装");
 }
 
 export function getAdminAuthConfig(): AdminAuthConfig {

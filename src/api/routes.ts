@@ -44,6 +44,7 @@ import { getExchangeProxy } from "../config/exchange";
 import { initTradingSystem } from "../scheduler/tradingSystemInit";
 import { summarizeAgentResponseText } from "../database/agent-request-logs";
 import { getActiveAccount } from "../services/accountConfigService";
+import { isSystemInstalled, installSystem } from "../services/installService";
 
 const logger = createLogger({
   name: "api-routes",
@@ -51,7 +52,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+  url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
 });
 
 type DbRow = Record<string, unknown>;
@@ -437,11 +438,8 @@ async function runAccountConnectionTest(options: AccountConnectionTestOptions): 
     return { success: false, error: proxyCheck.error };
   }
 
-  const proxyFromSettings = (getExchangeProxy() || "").trim();
-  const effectiveProxy = proxyFromSettings || (proxyCheck.value ? proxyCheck.value : undefined);
-  if (proxyFromSettings) {
-    logger.info(`账户连接测试强制使用系统代理: ${proxyFromSettings}`);
-  }
+  // 安装阶段直接使用用户传入的代理（如果有），不读取系统配置
+  const effectiveProxy = proxyCheck.value ? proxyCheck.value : undefined;
 
   try {
     if (options.provider === "binance") {
@@ -595,6 +593,52 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 
   const app = new Hono<ApiEnv>();
 
+  const INSTALL_ALLOWED_EXACT_PATHS = new Set(["/monitor-styles.css", "/csrf.js", "/favicon.ico"]);
+  const INSTALL_ALLOWED_PREFIXES = ["/install", "/api/install", "/api/accounts/test", "/static/"];
+
+  app.use("*", async (c, next) => {
+    if (isSystemInstalled()) {
+      return next();
+    }
+
+    const path = c.req.path;
+    const isAllowedExact = INSTALL_ALLOWED_EXACT_PATHS.has(path);
+    const isAllowedPrefix = INSTALL_ALLOWED_PREFIXES.some((prefix) => path.startsWith(prefix));
+
+    if (isAllowedExact || isAllowedPrefix) {
+      return next();
+    }
+
+    if (c.req.method === "GET") {
+      return c.redirect("/install");
+    }
+
+    return c.json({ error: "System is not installed yet" }, 503);
+  });
+
+  app.get("/install", async (c) => {
+    if (isSystemInstalled()) {
+      return c.redirect("/");
+    }
+    const html = await loadInstallTemplate();
+    return c.html(html);
+  });
+
+  app.post("/api/install", async (c) => {
+    if (isSystemInstalled()) {
+      return c.json({ error: "System is already installed" }, 400);
+    }
+    try {
+      const payload = await c.req.json();
+      await installSystem(payload);
+      return c.json({ success: true });
+    } catch (error: unknown) {
+      logger.error("安装失败:", error);
+      const message = error instanceof Error ? error.message : "未知错误";
+      return c.json({ error: message }, 500);
+    }
+  });
+
   // Session 内存缓存（提升性能，避免每次请求都查数据库）
   const sessionCache = new Map<string, SessionRecord>();
   const SESSION_COOKIE = "q4ai_session";
@@ -602,6 +646,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 
   const loginTemplatePath = new URL("../../public/login.html", import.meta.url);
   let cachedLoginTemplate: string | null = null;
+  const installTemplatePath = new URL("../../public/install.html", import.meta.url);
+  let cachedInstallTemplate: string | null = null;
 
   const loadLoginTemplate = async () => {
     if (cachedLoginTemplate) {
@@ -609,6 +655,14 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     }
     cachedLoginTemplate = await readFile(loginTemplatePath, "utf-8");
     return cachedLoginTemplate;
+  };
+
+  const loadInstallTemplate = async () => {
+    if (cachedInstallTemplate) {
+      return cachedInstallTemplate;
+    }
+    cachedInstallTemplate = await readFile(installTemplatePath, "utf-8");
+    return cachedInstallTemplate;
   };
 
   // 从数据库加载 session
@@ -774,7 +828,25 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   app.post("/api/auth/login", async (c) => {
     try {
       const body = await c.req.json<{ username?: string; password?: string }>();
-      if (body.username !== adminAuth.username || body.password !== adminAuth.password) {
+      
+      // 验证用户名
+      if (body.username !== adminAuth.username) {
+        return c.json({ success: false, error: "用户名或密码错误" }, 401);
+      }
+      
+      // 验证密码：支持明文密码（旧版本兼容）和哈希密码（新版本）
+      let passwordMatch = false;
+      if (body.password === adminAuth.password) {
+        // 明文匹配（旧版本 .q4ai 文件）
+        passwordMatch = true;
+      } else {
+        // 哈希匹配（新版本数据库）
+        const crypto = await import("node:crypto");
+        const inputHash = crypto.createHash('sha256').update(body.password || '').digest('hex');
+        passwordMatch = inputHash === adminAuth.password;
+      }
+      
+      if (!passwordMatch) {
         return c.json({ success: false, error: "用户名或密码错误" }, 401);
       }
 
@@ -825,7 +897,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const { getAllConfig } = await import("../database/init-config");
       const config = await getAllConfig();
       
-      // 优先使用当前活跃账户的任务模型名称
+      // 优先使用当前活跃账户的任务模型名称（使用 model_name 而非 ai_model_name，因为前者是真正的 API 模型名称）
       let aiModelName = config.AI_MODEL_NAME ?? "";
       try {
         const { getActiveAccount } = await import("../services/accountConfigService");
@@ -838,11 +910,16 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
             (instance) => instance.account_id === activeAccount.id
           );
           
-          if (accountInstance?.ai_model_name) {
+          // 优先使用 model_name（真正的 API 模型名），如果没有则回退到 ai_model_name（用户自定义标题）
+          if (accountInstance?.model_name) {
+            aiModelName = accountInstance.model_name;
+          } else if (accountInstance?.ai_model_name) {
             aiModelName = accountInstance.ai_model_name;
           } else {
             const latestInstance = await getLatestInstanceForAccount(activeAccount.id);
-            if (latestInstance?.ai_model_name) {
+            if (latestInstance?.model_name) {
+              aiModelName = latestInstance.model_name;
+            } else if (latestInstance?.ai_model_name) {
               aiModelName = latestInstance.ai_model_name;
             }
           }
@@ -1158,7 +1235,16 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   /**
    * 测试账户连接
    */
-  app.post("/api/accounts/test", requireAuthWithCsrf, async (c) => {
+  app.post("/api/accounts/test", async (c) => {
+    // 已安装系统需要认证
+    if (isSystemInstalled()) {
+      const session = await getSessionFromRequest(c);
+      if (!session) {
+        return c.json({ error: "未登录" }, 401);
+      }
+    }
+    // 安装阶段允许测试，用于验证用户输入的凭证
+
     try {
       const body = await c.req.json();
       const { provider, api_key, api_secret, api_passphrase, use_paper, proxy_url } = body;
@@ -1600,6 +1686,160 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       
       logger.error("AI 模型连接测试失败:", { error, message });
       return c.json({ success: false, error: message });
+    }
+  });
+
+  // ========== 数据备份 API ==========
+  
+  /**
+   * 获取备份列表
+   */
+  app.get("/api/backups", requireAuth, async (c) => {
+    try {
+      const { listBackups } = await import("../services/backupService");
+      const backups = await listBackups();
+      return c.json({ backups });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取备份列表失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 创建新备份
+   */
+  app.post("/api/backups", requireAuthWithCsrf, async (c) => {
+    try {
+      const { createBackup } = await import("../services/backupService");
+      const backup = await createBackup();
+      logger.info(`创建备份成功: ${backup.name}`);
+      return c.json({ backup });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("创建备份失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 恢复备份
+   */
+  app.post("/api/backups/:name/restore", requireAuthWithCsrf, async (c) => {
+    try {
+      const name = c.req.param("name");
+      if (!name) {
+        return c.json({ error: "缺少备份名称" }, 400);
+      }
+      
+      const { restoreBackup } = await import("../services/backupService");
+      await restoreBackup(name);
+      
+      logger.info(`恢复备份成功: ${name}，需要重启服务以应用更改`);
+      
+      return c.json({ 
+        success: true, 
+        message: "备份恢复成功，请重启服务以应用更改" 
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("恢复备份失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 删除备份
+   */
+  app.delete("/api/backups/:name", requireAuthWithCsrf, async (c) => {
+    try {
+      const name = c.req.param("name");
+      if (!name) {
+        return c.json({ error: "缺少备份名称" }, 400);
+      }
+      
+      const { deleteBackup } = await import("../services/backupService");
+      await deleteBackup(name);
+      
+      logger.info(`删除备份成功: ${name}`);
+      
+      return c.json({ success: true });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("删除备份失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 下载备份文件
+   */
+  app.get("/api/backups/:name/download", requireAuth, async (c) => {
+    try {
+      const name = c.req.param("name");
+      if (!name) {
+        return c.json({ error: "缺少备份名称" }, 400);
+      }
+      
+      const { getBackupPath } = await import("../services/backupService");
+      const { existsSync, createReadStream, statSync } = await import("node:fs");
+      const backupPath = await getBackupPath(name);
+      
+      if (!existsSync(backupPath)) {
+        return c.json({ error: "备份文件不存在" }, 404);
+      }
+      
+      const stat = statSync(backupPath);
+      const stream = createReadStream(backupPath);
+      
+      // 设置响应头
+      c.header("Content-Type", "application/octet-stream");
+      c.header("Content-Disposition", `attachment; filename="${name}"`);
+      c.header("Content-Length", String(stat.size));
+      
+      // 返回流
+      return new Response(stream as any, {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "Content-Disposition": `attachment; filename="${name}"`,
+          "Content-Length": String(stat.size),
+        },
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("下载备份失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 导入备份文件
+   */
+  app.post("/api/backups/import", requireAuthWithCsrf, async (c) => {
+    try {
+      const formData = await c.req.formData();
+      const file = formData.get("file") as File | null;
+      
+      if (!file) {
+        return c.json({ error: "未提供备份文件" }, 400);
+      }
+      
+      // 验证文件类型 (支持 zip 新格式和 db 旧格式)
+      const fileName = file.name;
+      if (!fileName.endsWith(".zip") && !fileName.endsWith(".db") && !fileName.endsWith(".sqlite") && !fileName.endsWith(".backup")) {
+        return c.json({ error: "无效的备份文件格式，支持 .zip, .db, .sqlite, .backup" }, 400);
+      }
+      
+      const { importBackup } = await import("../services/backupService");
+      const backup = await importBackup(file);
+      
+      logger.info(`导入备份成功: ${backup.name}`);
+      
+      return c.json({ backup });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("导入备份失败:", error);
+      return c.json({ error: message }, 500);
     }
   });
 
@@ -2374,7 +2614,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const { getAllConfigMasked } = await import("../database/init-config");
       const config = await getAllConfigMasked();
       
-      // 优先使用当前活跃账户的任务模型名称，而非全局配置
+      // 优先使用当前活跃账户的任务模型名称（使用 model_name 而非 ai_model_name）
       try {
         const { getActiveAccount } = await import("../services/accountConfigService");
         const { getRunningInstances, getLatestInstanceForAccount } = await import("../services/tradingInstanceService");
@@ -2387,12 +2627,17 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
             (instance) => instance.account_id === activeAccount.id
           );
           
-          if (accountInstance?.ai_model_name) {
+          // 优先使用 model_name（真正的 API 模型名），如果没有则回退到 ai_model_name（用户自定义标题）
+          if (accountInstance?.model_name) {
+            config.AI_MODEL_NAME = accountInstance.model_name;
+          } else if (accountInstance?.ai_model_name) {
             config.AI_MODEL_NAME = accountInstance.ai_model_name;
           } else {
             // 回退到该账户最近的任务
             const latestInstance = await getLatestInstanceForAccount(activeAccount.id);
-            if (latestInstance?.ai_model_name) {
+            if (latestInstance?.model_name) {
+              config.AI_MODEL_NAME = latestInstance.model_name;
+            } else if (latestInstance?.ai_model_name) {
               config.AI_MODEL_NAME = latestInstance.ai_model_name;
             }
           }
@@ -3011,7 +3256,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
           runningInstance: {
             id: accountInstance.id,
             name: accountInstance.name,
-            ai_model_name: accountInstance.ai_model_name,
+            ai_model_name: accountInstance.ai_model_name,  // 用户自定义标题
+            model_name: accountInstance.model_name,        // 真正的 API 模型名（用于图标判断）
             strategy_name: accountInstance.strategy_name,
             status: accountInstance.status,
           },
@@ -3027,7 +3273,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
           runningInstance: {
             id: latestInstance.id,
             name: latestInstance.name,
-            ai_model_name: latestInstance.ai_model_name,
+            ai_model_name: latestInstance.ai_model_name,  // 用户自定义标题
+            model_name: latestInstance.model_name,        // 真正的 API 模型名（用于图标判断）
             strategy_name: latestInstance.strategy_name,
             status: latestInstance.status,
           },

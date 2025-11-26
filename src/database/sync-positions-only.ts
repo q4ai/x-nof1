@@ -40,7 +40,7 @@ export async function syncPositionsFromOkx() {
     logger.info(`🔄 从 OKX 同步持仓 (account_id=${accountId})...`);
     
     // 1. 连接数据库
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
     const client = createClient({
       url: dbUrl,
     });

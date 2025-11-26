@@ -4,7 +4,7 @@
 
 echo "开始迁移：移除 ai_models 表的 provider 字段..."
 
-DB_PATH="./db/sqlite.db"
+DB_PATH="./data/database/sqlite.db"
 
 # 检查数据库文件是否存在
 if [ ! -f "$DB_PATH" ]; then

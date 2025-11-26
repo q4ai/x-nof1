@@ -85,9 +85,9 @@ read -p "确认删除数据库文件吗？(y/N): " -n 1 -r
 echo ""
 
 if [[ $REPLY =~ ^[Yy]$ ]]; then
-    rm -rf db/sqlite.db 2>/dev/null || true
-    rm -rf db/sqlite.db-shm 2>/dev/null || true
-    rm -rf db/sqlite.db-wal 2>/dev/null || true
+    rm -rf data/database/sqlite.db 2>/dev/null || true
+    rm -rf data/database/sqlite.db-shm 2>/dev/null || true
+    rm -rf data/database/sqlite.db-wal 2>/dev/null || true
     echo -e "${GREEN}✓${NC} 数据库文件已删除"
 else
     echo -e "${YELLOW}⚠${NC} 跳过数据库清理"

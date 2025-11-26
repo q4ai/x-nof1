@@ -25,7 +25,7 @@ const DATA_TABLES = [
   "agent_request_logs",
 ];
 
-const MEMORY_DB_URL = process.env.TRADING_MEMORY_DB_URL || "file:./db/trading-memory.db";
+const MEMORY_DB_URL = process.env.TRADING_MEMORY_DB_URL || "file:./data/database/trading-memory.db";
 
 const PRESERVED_CONFIG_KEYS = new Set([
   // 交易所/账户配置（Account Settings）
@@ -79,7 +79,7 @@ export interface ResetLiveDataResult {
 }
 
 export async function resetLiveDataToDefaults(accountId?: string): Promise<ResetLiveDataResult> {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
   const client = createClient({
     url: dbUrl,
   });

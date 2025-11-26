@@ -65,7 +65,7 @@ function toSymbol(value: unknown): string {
 }
 
 async function addPeakPnlColumn() {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
   const dbClient = createClient({
     url: dbUrl,
   });

@@ -13,7 +13,7 @@ import { DEFAULT_STRATEGY_LANGUAGE } from "../config/strategyTypes";
 const logger = createLogger({ name: "init-config", level: "info" });
 
 const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+  url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
 });
 
 // 默认配置值

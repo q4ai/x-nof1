@@ -237,10 +237,11 @@
 			"actions": "操作"
 		},
 		"actions": {
+			"add": "タスクを追加",
 			"start": "開始",
 			"pause": "一時停止",
 			"stop": "停止",
-			"trigger": "即時実行",
+			"trigger": "今すぐ実行",
 			"edit": "編集",
 			"delete": "削除"
 		},
@@ -632,7 +633,9 @@
 		"tabs": {
 			"basic": "基本設定",
 			"account": "アカウント設定",
-			"aiModel": "AI 設定"
+			"aiModel": "AI 設定",
+			"notification": "通知設定",
+			"backup": "データバックアップ"
 		},
 		"ai": {
 			"sectionTitle": "🤖 AI モデル設定",
@@ -917,8 +920,8 @@
 		"confirmDelete": "AIモデル「{{name}}」を削除してもよろしいですか？",
 		"deleteActiveError": "現在有効なAIモデルは削除できません",
 		"form": {
-			"name": "モデル名",
-			"namePlaceholder": "DeepSeek V3",
+			"name": "タイトル <span class=\"required\">*</span>",
+			"namePlaceholder": "マイ DeepSeek",
 			"provider": "プロバイダー",
 			"providerPlaceholder": "OpenRouter / DeepSeek / OpenAI",
 			"baseUrl": "APIベースURL",
@@ -940,6 +943,33 @@
 			"testError": "テスト失敗",
 			"testing": "接続をテスト中...",
 			"fillRequiredForTest": "APIキー、ベースURL、モデル名を入力してください"
+		}
+	},
+	"backup": {
+		"createBackup": "💾 ワンクリックバックアップ",
+		"import": "インポート",
+		"table": {
+			"name": "バックアップ名",
+			"time": "作成日時",
+			"size": "サイズ",
+			"actions": "操作"
+		},
+		"actions": {
+			"restore": "復元",
+			"download": "エクスポート",
+			"delete": "削除"
+		},
+		"noBackups": "バックアップがありません。最初のバックアップを作成してデータを保護してください。",
+		"hint": "💡 バックアップには、データベース（取引データ、アカウント設定、AIモデル）とカスタム戦略ファイルが含まれ、ZIP形式でパッケージ化されます。<code>data/backup</code> ディレクトリに保存されます。",
+		"confirmRestore": "バックアップ「{{name}}」を復元しますか？現在のデータベースと戦略ファイルは置き換えられます。現在のデータのバックアップは自動的に作成されます。",
+		"confirmDelete": "バックアップ「{{name}}」を削除しますか？この操作は元に戻せません。",
+		"messages": {
+			"loadError": "バックアップリストの読み込みに失敗しました",
+			"createSuccess": "バックアップを作成しました：{{name}}",
+			"restoreSuccess": "バックアップを復元しました。サービスを再起動して変更を適用してください。",
+			"downloadStarted": "ダウンロードを開始しました",
+			"deleteSuccess": "バックアップを削除しました",
+			"importSuccess": "バックアップをインポートしました：{{name}}"
 		}
 	}
 }

@@ -42,7 +42,7 @@ fi
 
 source .env
 
-DATABASE_URL=${DATABASE_URL:-"file:./db/sqlite.db"}
+DATABASE_URL=${DATABASE_URL:-"file:./data/database/sqlite.db"}
 
 # 检查数据库文件
 if [[ $DATABASE_URL == file:* ]]; then
@@ -78,7 +78,7 @@ npx tsx --env-file=.env -e "
 import { createClient } from '@libsql/client';
 
 const client = createClient({
-  url: process.env.DATABASE_URL || 'file:./db/sqlite.db'
+  url: process.env.DATABASE_URL || 'file:./data/database/sqlite.db'
 });
 
 async function showStatus() {

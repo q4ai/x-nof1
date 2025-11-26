@@ -127,12 +127,12 @@ const MODEL_ICON_MATCHERS = [
   { pattern: /chatglm|glm/i, icon: "/static/icons/chatglm-color.png" },
   { pattern: /qwen/i, icon: "/static/icons/qwen-color.png" },
   { pattern: /gemini|palm/i, icon: "/static/icons/gemini-color.png" },
-  { pattern: /grok/i, icon: "/static/icons/grok-color.png" },
+  { pattern: /grok|x-ai/i, icon: "/static/icons/grok-color.png" },
   { pattern: /kling/i, icon: "/static/icons/kling-color.png" },
   { pattern: /doubao/i, icon: "/static/icons/doubao-color.png" },
   { pattern: /minimax/i, icon: "/static/icons/minimax-color.png" },
   { pattern: /mistral/i, icon: "/static/icons/mistral-color.png" },
-  { pattern: /gpt|openai|openrouter/i, icon: "/static/icons/openai.png" },
+  { pattern: /gpt|openai/i, icon: "/static/icons/openai.png" },
 ];
 
 let defaultLanguagePack = {};
@@ -5191,6 +5191,13 @@ class TradingMonitor {
     if (targetTab === "ai") {
       this.bindAiModelAddButton();
       void this.loadAiModelsList();
+      return;
+    }
+
+    if (targetTab === "backup") {
+      this.bindBackupEvents();
+      void this.loadBackupsList();
+      return;
     }
   }
   
@@ -5213,6 +5220,15 @@ class TradingMonitor {
       this.testAiBtn.addEventListener("click", (event) => {
         event.preventDefault();
         void this.testAiConnection();
+      });
+    }
+
+    // 测试紧急通知按钮
+    const testEmergencyBtn = document.getElementById("test-emergency-notice-btn");
+    if (testEmergencyBtn) {
+      testEmergencyBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        void this.testEmergencyNotice();
       });
     }
 
@@ -5301,6 +5317,8 @@ class TradingMonitor {
 
     const overlay = document.createElement("div");
     overlay.className = "ai-model-overlay";
+    // 默认隐藏，直到有任务运行时才显示
+    overlay.style.display = "none";
 
     const icon = document.createElement("img");
     icon.className = "ai-model-icon";
@@ -5343,10 +5361,11 @@ class TradingMonitor {
 
       if (instanceResponse.ok) {
         const instanceData = await instanceResponse.json();
-        // 如果有实例，使用其模型名称
-        if (instanceData?.runningInstance?.ai_model_name) {
-          const modelName = instanceData.runningInstance.ai_model_name;
-          const status = instanceData.runningInstance.status;
+        // 如果有实例，优先使用 model_name（真正的 API 模型名），回退到 ai_model_name（用户自定义标题）
+        const runningInstance = instanceData?.runningInstance;
+        const modelName = runningInstance?.model_name || runningInstance?.ai_model_name;
+        if (modelName) {
+          const status = runningInstance.status;
           const publicConfig = { 
             AI_MODEL_NAME: modelName,
             _INSTANCE_STATUS: status
@@ -6455,7 +6474,26 @@ class TradingMonitor {
 
     const cfg = config || this.latestConfig;
     const rawName = cfg && typeof cfg.AI_MODEL_NAME === "string" ? cfg.AI_MODEL_NAME.trim() : "";
-    const displayName = this.extractModelDisplayName(rawName);
+    
+    // 获取当前活跃账户
+    const activeAccount = this.accountsCache?.find(acc => acc.is_active);
+    const activeAccountId = activeAccount?.id;
+    
+    // 检查是否有与当前账户关联的运行中任务
+    const hasRunningInstances = this.instancesCache && this.instancesCache.some(
+      inst => (inst.status === "running" || inst.status === "paused") && 
+              (!activeAccountId || inst.account_id === activeAccountId)
+    );
+    
+    // 如果没有运行中的任务，隐藏图标
+    if (!hasRunningInstances) {
+      this.aiOverlay.style.display = "none";
+      return;
+    }
+    
+    // 有运行中的任务，显示图标并更新内容
+    this.aiOverlay.style.display = "";
+    
     const iconSrc = this.resolveAiModelIcon(rawName);
 
     const resolvedUrl = this.toAbsoluteUrl(iconSrc);
@@ -6463,8 +6501,32 @@ class TradingMonitor {
       iconEl.src = iconSrc;
     }
     iconEl.setAttribute("alt", t("chart.modelIconAlt"));
-    // 只显示模型名称，状态文本由 WebSocket 的 handleTradingStatusUpdate 动态更新
+    
+    // 默认状态：显示完整模型名称（去掉提供商前缀，但保留版本号等信息）
+    // WebSocket 的 handleTradingStatusUpdate 会在执行过程中动态更新为状态文本
+    const displayName = this.formatModelDisplayName(rawName);
     textEl.textContent = displayName;
+  }
+
+  /**
+   * 格式化模型名称用于显示
+   * 例如: "x-ai/grok-4.1-fast:free" -> "grok-4.1-fast:free"
+   *       "deepseek/deepseek-v3.2-exp" -> "deepseek-v3.2-exp"
+   */
+  formatModelDisplayName(modelName) {
+    if (typeof modelName !== "string" || modelName.trim() === "") {
+      return t("chart.modelBadge");
+    }
+
+    const trimmed = modelName.trim();
+    
+    // 如果包含斜杠，取斜杠后面的部分（去掉提供商前缀）
+    const slashIndex = trimmed.lastIndexOf("/");
+    if (slashIndex !== -1 && slashIndex < trimmed.length - 1) {
+      return trimmed.substring(slashIndex + 1);
+    }
+    
+    return trimmed || t("chart.modelBadge");
   }
 
   resolveAiModelIcon(modelName) {
@@ -7065,6 +7127,66 @@ class TradingMonitor {
     }
   }
 
+  /**
+   * 测试紧急通知功能
+   */
+  async testEmergencyNotice() {
+    if (!this.ensureAuthenticated() || !this.settingsForm) {
+      return;
+    }
+
+    const emergencyUrl = this.settingsForm.querySelector('[name="EMERGENCY_NOTICE_URL"]')?.value.trim() || "";
+    const resultEl = document.getElementById("emergency-test-result");
+
+    if (!emergencyUrl) {
+      if (resultEl) {
+        resultEl.textContent = t("settings.emergency.testMessages.fillRequired");
+        resultEl.className = "test-result error";
+      }
+      return;
+    }
+
+    if (resultEl) {
+      resultEl.textContent = t("settings.emergency.testMessages.testing");
+      resultEl.className = "test-result loading";
+    }
+
+    try {
+      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
+      const response = await fetch("/api/test-emergency-notice", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-csrf-token": csrfToken,
+        },
+        credentials: "same-origin",
+        body: JSON.stringify({ url: emergencyUrl }),
+      });
+
+      const result = await response.json().catch(() => ({}));
+      if (response.ok && result.success) {
+        if (resultEl) {
+          resultEl.textContent = t("settings.emergency.testMessages.success");
+          resultEl.className = "test-result success";
+        }
+      } else {
+        const detail = typeof result.error === "string" && result.error.trim()
+          ? result.error.trim()
+          : `HTTP ${response.status}`;
+        if (resultEl) {
+          resultEl.textContent = t("settings.emergency.testMessages.failure", { detail });
+          resultEl.className = "test-result error";
+        }
+      }
+    } catch (error) {
+      console.error("[settings] 测试紧急通知失败", error);
+      if (resultEl) {
+        resultEl.textContent = t("settings.emergency.testMessages.networkError");
+        resultEl.className = "test-result error";
+      }
+    }
+  }
+
   hideLoadingOverlay() {
     if (this.loadingOverlay) {
       this.loadingOverlay.classList.add("hidden");
@@ -7428,6 +7550,9 @@ class TradingMonitor {
       const accounts = data.accounts || [];
       this.accountsCache = accounts;
       this.updateAccountSwitcherDisplay();
+      
+      // 账户数据更新后，刷新 AI 图标显示（根据当前账户的任务状态）
+      this.updateAiOverlay();
 
       if (loading) {
         loading.style.display = "none";
@@ -8098,6 +8223,13 @@ class TradingMonitor {
       addBtn.dataset.bound = "true";
       addBtn.addEventListener("click", () => this.openInstanceFormModal());
     }
+    
+    // 策略页面底部的添加任务按钮
+    const strategyAddBtn = document.getElementById("strategy-add-task-btn");
+    if (strategyAddBtn && !strategyAddBtn.dataset.bound) {
+      strategyAddBtn.dataset.bound = "true";
+      strategyAddBtn.addEventListener("click", () => this.openInstanceFormModal());
+    }
 
     const container = document.getElementById("instances-list-container");
     if (container && !container.dataset.bound) {
@@ -8296,6 +8428,10 @@ class TradingMonitor {
       const instances = Array.isArray(payload?.instances) ? payload.instances : [];
       this.instancesCache = instances;
       this.instancesCacheLoaded = true;
+      
+      // 更新 AI 图标显示状态（根据是否有运行中的任务）
+      this.updateAiOverlay();
+      
       return instances;
     } catch (error) {
       this.instancesCacheLoaded = false;
@@ -9381,6 +9517,422 @@ class TradingMonitor {
     }
   }
 
+  // ========== 数据备份管理 ==========
+
+  /**
+   * 备份列表缓存
+   */
+  backupsCache = [];
+
+  /**
+   * 备份事件是否已绑定
+   */
+  backupEventsBound = false;
+
+  /**
+   * 绑定备份相关事件
+   */
+  bindBackupEvents() {
+    if (this.backupEventsBound) return;
+    this.backupEventsBound = true;
+
+    // 一键备份按钮
+    const createBackupBtn = document.getElementById("create-backup-btn");
+    if (createBackupBtn) {
+      createBackupBtn.addEventListener("click", () => {
+        void this.createBackup(createBackupBtn);
+      });
+    }
+
+    // 导入备份文件
+    const importInput = document.getElementById("import-backup-input");
+    if (importInput) {
+      importInput.addEventListener("change", (event) => {
+        const file = event.target.files?.[0];
+        if (file) {
+          void this.importBackup(file);
+          // 清空 input 以便再次选择同一文件
+          importInput.value = "";
+        }
+      });
+    }
+  }
+
+  /**
+   * 加载备份列表
+   */
+  async loadBackupsList() {
+    const container = document.getElementById("backup-list-container");
+    const loading = document.getElementById("backup-loading");
+    const table = document.getElementById("backup-table");
+    const emptyState = document.getElementById("backup-empty-state");
+    const tbody = document.getElementById("backup-list-body");
+
+    if (!container) return;
+
+    try {
+      if (loading) loading.style.display = "flex";
+      if (table) table.style.display = "none";
+      if (emptyState) emptyState.style.display = "none";
+
+      const response = await fetch("/api/backups", {
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        throw new Error("获取备份列表失败");
+      }
+
+      const data = await response.json();
+      const backups = data.backups || [];
+      this.backupsCache = backups;
+
+      if (loading) loading.style.display = "none";
+
+      if (backups.length === 0) {
+        if (table) table.style.display = "none";
+        if (emptyState) emptyState.style.display = "flex";
+        return;
+      }
+
+      // 渲染备份列表
+      if (tbody) {
+        tbody.innerHTML = backups.map(backup => this.renderBackupRow(backup)).join("");
+        this.bindBackupRowEvents();
+      }
+
+      if (table) table.style.display = "table";
+      if (emptyState) emptyState.style.display = "none";
+
+    } catch (error) {
+      console.error("加载备份列表失败:", error);
+      this.backupsCache = [];
+      if (loading) loading.style.display = "none";
+      
+      const errorText = this.translate("backup.messages.loadError", "加载备份列表失败");
+      if (tbody) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="4" class="backup-error">${this.escapeHtml(errorText)}</td>
+          </tr>
+        `;
+      }
+      if (table) table.style.display = "table";
+    }
+  }
+
+  /**
+   * 渲染备份行
+   * @param {Object} backup - 备份信息
+   * @returns {string} HTML 字符串
+   */
+  renderBackupRow(backup) {
+    const restoreLabel = this.translate("backup.actions.restore", "Restore");
+    const downloadLabel = this.translate("backup.actions.download", "Download");
+    const deleteLabel = this.translate("backup.actions.delete", "Delete");
+
+    // 格式化时间显示
+    const formattedTime = this.formatBackupTime(backup.createdAt);
+
+    return `
+      <tr data-backup-name="${this.escapeHtml(backup.name)}">
+        <td class="backup-name">
+          <span class="backup-icon">💾</span>
+          ${this.escapeHtml(backup.name)}
+        </td>
+        <td class="backup-time">${formattedTime}</td>
+        <td class="backup-size">${this.escapeHtml(backup.sizeFormatted)}</td>
+        <td class="backup-actions">
+          <button type="button" class="backup-action-btn backup-restore-btn" data-action="restore" data-backup-name="${this.escapeHtml(backup.name)}" title="${restoreLabel}">
+            <span class="btn-icon">🔄</span> ${restoreLabel}
+          </button>
+          <button type="button" class="backup-action-btn backup-download-btn" data-action="download" data-backup-name="${this.escapeHtml(backup.name)}" title="${downloadLabel}">
+            <span class="btn-icon">📥</span> ${downloadLabel}
+          </button>
+          <button type="button" class="backup-action-btn backup-delete-btn" data-action="delete" data-backup-name="${this.escapeHtml(backup.name)}" title="${deleteLabel}">
+            <span class="btn-icon">🗑️</span> ${deleteLabel}
+          </button>
+        </td>
+      </tr>
+    `;
+  }
+
+  /**
+   * 格式化备份时间显示
+   * @param {string} isoTime - ISO 格式时间
+   * @returns {string} 格式化后的时间
+   */
+  formatBackupTime(isoTime) {
+    if (!isoTime) return "-";
+    try {
+      const date = new Date(isoTime);
+      return date.toLocaleString(this.currentLanguage === "zh" ? "zh-CN" : 
+                                 this.currentLanguage === "ja" ? "ja-JP" : "en-US", {
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
+      });
+    } catch {
+      return isoTime;
+    }
+  }
+
+  /**
+   * 绑定备份行事件
+   */
+  bindBackupRowEvents() {
+    const tbody = document.getElementById("backup-list-body");
+    if (!tbody) return;
+
+    tbody.querySelectorAll(".backup-action-btn").forEach(btn => {
+      btn.addEventListener("click", async () => {
+        const action = btn.dataset.action;
+        const backupName = btn.dataset.backupName;
+
+        if (!action || !backupName) return;
+
+        switch (action) {
+          case "restore":
+            await this.restoreBackup(backupName, btn);
+            break;
+          case "download":
+            await this.downloadBackup(backupName, btn);
+            break;
+          case "delete":
+            await this.deleteBackup(backupName, btn);
+            break;
+        }
+      });
+    });
+  }
+
+  /**
+   * 创建备份
+   * @param {HTMLElement} triggerBtn - 触发按钮
+   */
+  async createBackup(triggerBtn) {
+    try {
+      this.setButtonLoading(triggerBtn, true);
+
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch("/api/backups", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "创建备份失败");
+      }
+
+      const data = await response.json();
+      const backup = data.backup;
+
+      this.showToast(
+        "success",
+        this.translate("common.success", "Success"),
+        this.translate("backup.messages.createSuccess", "Backup created successfully: {{name}}", { name: backup.name })
+      );
+
+      await this.loadBackupsList();
+
+    } catch (error) {
+      console.error("创建备份失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false);
+    }
+  }
+
+  /**
+   * 恢复备份
+   * @param {string} backupName - 备份名称
+   * @param {HTMLElement} triggerBtn - 触发按钮
+   */
+  async restoreBackup(backupName, triggerBtn) {
+    // 确认对话框
+    const confirmMessage = this.translate(
+      "backup.confirmRestore",
+      "Are you sure you want to restore backup「{{name}}」? The current database will be replaced. A backup of the current data will be created automatically.",
+      { name: backupName }
+    );
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      this.setButtonLoading(triggerBtn, true);
+
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/backups/${encodeURIComponent(backupName)}/restore`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "恢复备份失败");
+      }
+
+      this.showToast(
+        "success",
+        this.translate("common.success", "Success"),
+        this.translate("backup.messages.restoreSuccess", "Backup restored successfully. Please restart the service to apply changes.")
+      );
+
+      await this.loadBackupsList();
+
+    } catch (error) {
+      console.error("恢复备份失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false);
+    }
+  }
+
+  /**
+   * 下载备份
+   * @param {string} backupName - 备份名称
+   * @param {HTMLElement} triggerBtn - 触发按钮
+   */
+  async downloadBackup(backupName, triggerBtn) {
+    try {
+      this.setButtonLoading(triggerBtn, true);
+
+      // 创建下载链接
+      const downloadUrl = `/api/backups/${encodeURIComponent(backupName)}/download`;
+      
+      // 使用隐藏的 a 标签触发下载
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = backupName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      this.showToast(
+        "success",
+        this.translate("common.success", "Success"),
+        this.translate("backup.messages.downloadStarted", "Download started")
+      );
+
+    } catch (error) {
+      console.error("下载备份失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false);
+    }
+  }
+
+  /**
+   * 删除备份
+   * @param {string} backupName - 备份名称
+   * @param {HTMLElement} triggerBtn - 触发按钮
+   */
+  async deleteBackup(backupName, triggerBtn) {
+    // 确认对话框
+    const confirmMessage = this.translate(
+      "backup.confirmDelete",
+      "Are you sure you want to delete backup「{{name}}」? This action cannot be undone.",
+      { name: backupName }
+    );
+
+    if (!confirm(confirmMessage)) {
+      return;
+    }
+
+    try {
+      this.setButtonLoading(triggerBtn, true);
+
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/backups/${encodeURIComponent(backupName)}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "删除备份失败");
+      }
+
+      this.showToast(
+        "success",
+        this.translate("common.success", "Success"),
+        this.translate("backup.messages.deleteSuccess", "Backup deleted successfully")
+      );
+
+      await this.loadBackupsList();
+
+    } catch (error) {
+      console.error("删除备份失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false);
+    }
+  }
+
+  /**
+   * 导入备份
+   * @param {File} file - 要导入的文件
+   */
+  async importBackup(file) {
+    try {
+      const csrfToken = this.getCsrfToken();
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const response = await fetch("/api/backups/import", {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "导入备份失败");
+      }
+
+      const data = await response.json();
+      const backup = data.backup;
+
+      this.showToast(
+        "success",
+        this.translate("common.success", "Success"),
+        this.translate("backup.messages.importSuccess", "Backup imported successfully: {{name}}", { name: backup.name })
+      );
+
+      await this.loadBackupsList();
+
+    } catch (error) {
+      console.error("导入备份失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
   // ==================== Strategy Editor Methods ====================
 
   bindViewSwitcher() {
@@ -9407,7 +9959,13 @@ class TradingMonitor {
       if (isStrategyMode) {
         void this.loadStrategyList();
         // 强制刷新策略任务列表（确保获取最新数据）
-        void this.refreshRunningTasksPanel(true);
+        // 使用双重 requestAnimationFrame 确保 DOM 布局计算完成后再渲染任务列表
+        // 第一个 rAF 等待浏览器准备下一帧，第二个 rAF 确保布局已完成
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            void this.refreshRunningTasksPanel(true);
+          });
+        });
         if (!this.currentStrategyName) {
           this.populateStrategyEditor(this.getBlankStrategyTemplate());
           this.saveStrategyDraft();

@@ -177,6 +177,18 @@ export interface BinanceContractPrecision {
 }
 
 /**
+ * 管理员凭证
+ */
+export interface AdminCredentials {
+  id: number;
+  admin_path: string;
+  username: string;
+  password_hash: string;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * Strategy Task 状态类型
  */
 export type TradingInstanceStatus = "running" | "paused" | "stopped";
@@ -390,6 +402,16 @@ CREATE TABLE IF NOT EXISTS sessions (
   username TEXT NOT NULL,
   csrf_token TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
+-- 管理员凭证表（存储后台访问路径和登录凭证）
+CREATE TABLE IF NOT EXISTS admin_credentials (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  admin_path TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

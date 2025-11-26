@@ -38,7 +38,7 @@ function isTableInfoRow(row: unknown): row is TableInfoRow {
 }
 
 async function addFeeColumn() {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
   const client = createClient({
     url: dbUrl,
   });

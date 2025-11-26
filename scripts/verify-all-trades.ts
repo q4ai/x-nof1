@@ -10,7 +10,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-  url: "file:./db/sqlite.db",
+  url: "file:./data/database/sqlite.db",
 });
 
 // 合约乘数配置

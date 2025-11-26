@@ -89,7 +89,7 @@ function formatId(value: unknown): string {
 }
 
 async function checkTrades() {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
   const client = createClient({ url: dbUrl });
 
   try {

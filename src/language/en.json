@@ -233,10 +233,11 @@
 			"actions": "Actions"
 		},
 		"actions": {
+			"add": "Add Task",
 			"start": "Start",
 			"pause": "Pause",
 			"stop": "Stop",
-			"trigger": "Trigger",
+			"trigger": "Execute Now",
 			"edit": "Edit",
 			"delete": "Delete"
 		},
@@ -658,7 +659,9 @@
 		"tabs": {
 			"basic": "Basic Settings",
 			"account": "Account Config",
-			"aiModel": "AI Config"
+			"aiModel": "AI Config",
+			"notification": "Notification",
+			"backup": "Data Backup"
 		},
 		"tradingConfig": "Trading Config",
 		"strategy": "Strategy Type",
@@ -943,8 +946,8 @@
 		"confirmDelete": "Confirm deletion of AI model \u300c{{name}}\u300d?",
 		"deleteActiveError": "Cannot delete the currently active AI model",
 		"form": {
-			"name": "Model Name",
-			"namePlaceholder": "DeepSeek V3",
+			"name": "Title <span class=\"required\">*</span>",
+			"namePlaceholder": "My DeepSeek",
 			"provider": "Provider",
 			"providerPlaceholder": "OpenRouter / DeepSeek / OpenAI",
 			"baseUrl": "API Base URL",
@@ -966,6 +969,33 @@
 			"testError": "Test failed",
 			"testing": "Testing connection...",
 			"fillRequiredForTest": "Please fill in API Key, Base URL, and Model Name"
+		}
+	},
+	"backup": {
+		"createBackup": "💾 One-Click Backup",
+		"import": "Import",
+		"table": {
+			"name": "Backup Name",
+			"time": "Created At",
+			"size": "Size",
+			"actions": "Actions"
+		},
+		"actions": {
+			"restore": "Restore",
+			"download": "Export",
+			"delete": "Delete"
+		},
+		"noBackups": "No backups found. Create your first backup to protect your data.",
+		"hint": "💡 Backups include the database (trading data, account configs, AI models) and custom strategy files, packaged as ZIP. Stored in the <code>data/backup</code> directory.",
+		"confirmRestore": "Are you sure you want to restore backup「{{name}}」? The current database and strategy files will be replaced. A backup of the current data will be created automatically.",
+		"confirmDelete": "Are you sure you want to delete backup「{{name}}」? This action cannot be undone.",
+		"messages": {
+			"loadError": "Failed to load backup list",
+			"createSuccess": "Backup created successfully: {{name}}",
+			"restoreSuccess": "Backup restored successfully. Please restart the service to apply changes.",
+			"downloadStarted": "Download started",
+			"deleteSuccess": "Backup deleted successfully",
+			"importSuccess": "Backup imported successfully: {{name}}"
 		}
 	}
 }

@@ -472,6 +472,7 @@
 			"actions": "操作"
 		},
 		"actions": {
+			"add": "添加任务",
 			"start": "启动",
 			"pause": "暂停",
 			"stop": "停止",
@@ -674,7 +675,9 @@
 		"tabs": {
 			"basic": "基础设置",
 			"account": "账户配置",
-			"aiModel": "AI 模型配置"
+			"aiModel": "AI 模型配置",
+			"notification": "通知设置",
+			"backup": "数据备份"
 		},
 		"tradingConfig": "交易配置",
 		"strategy": "策略类型",
@@ -959,8 +962,8 @@
 		"confirmDelete": "确认删除 AI 模型「{{name}}」？",
 		"deleteActiveError": "无法删除当前激活的 AI 模型",
 		"form": {
-			"name": "模型名称",
-			"namePlaceholder": "DeepSeek V3",
+			"name": "标题 <span class=\"required\">*</span>",
+			"namePlaceholder": "我的 DeepSeek",
 			"provider": "提供商",
 			"providerPlaceholder": "OpenRouter / DeepSeek / OpenAI",
 			"baseUrl": "API 基础地址",
@@ -982,6 +985,33 @@
 			"testError": "测试失败",
 			"testing": "正在测试连接...",
 			"fillRequiredForTest": "请填写 API Key、Base URL 和 Model Name"
+		}
+	},
+	"backup": {
+		"createBackup": "💾 一键备份",
+		"import": "导入",
+		"table": {
+			"name": "备份名称",
+			"time": "创建时间",
+			"size": "文件大小",
+			"actions": "操作"
+		},
+		"actions": {
+			"restore": "恢复",
+			"download": "导出",
+			"delete": "删除"
+		},
+		"noBackups": "暂无备份。创建您的第一个备份以保护您的数据。",
+		"hint": "💡 备份包含数据库（交易数据、账户配置、AI 模型）和自定义策略文件，打包为 ZIP 格式。存储在 <code>data/backup</code> 目录中。",
+		"confirmRestore": "确定要恢复备份「{{name}}」吗？当前数据库和策略文件将被替换。系统会自动为当前数据创建备份。",
+		"confirmDelete": "确定要删除备份「{{name}}」吗？此操作无法撤销。",
+		"messages": {
+			"loadError": "加载备份列表失败",
+			"createSuccess": "备份创建成功：{{name}}",
+			"restoreSuccess": "备份恢复成功。请重启服务以应用更改。",
+			"downloadStarted": "下载已开始",
+			"deleteSuccess": "备份删除成功",
+			"importSuccess": "备份导入成功：{{name}}"
 		}
 	}
 }

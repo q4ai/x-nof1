@@ -45,7 +45,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+  url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
 });
 
 /**
@@ -815,7 +815,7 @@ export async function executeClosePosition({
       // 从数据库获取持仓信息以检查开仓时间
       if (!skipGuards) {
         const dbClient = createClient({
-          url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+          url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
         });
 
         const dbPositionResult = await dbClient.execute({

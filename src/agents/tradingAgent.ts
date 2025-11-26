@@ -882,7 +882,7 @@ export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAg
 
 	const memory = new Memory({
 		storage: new LibSQLMemoryAdapter({
-			url: "file:./db/trading-memory.db",
+			url: "file:./data/database/trading-memory.db",
 			logger: logger.child({ component: "libsql" }),
 		}),
 	});

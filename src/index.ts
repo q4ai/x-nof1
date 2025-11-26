@@ -19,25 +19,11 @@
 import "dotenv/config";
 import { createLogger } from "./utils/loggerUtils";
 import { serve } from "@hono/node-server";
-import { createApiRoutes } from "./api/routes";
-import { initTradingSystem } from "./scheduler/tradingSystemInit";
-import { startAccountRecorder } from "./scheduler/accountRecorder";
-import { startMultiInstanceTrading, stopMultiInstanceTrading } from "./scheduler/multiInstanceTradingLoop";
-// 注意：独立的止损/止盈监控器已禁用，改由 AI Agent 根据策略提示词自主决策
-// import { startTrailingStopMonitor, stopTrailingStopMonitor } from "./scheduler/trailingStopMonitor";
-// import { startStopLossMonitor, stopStopLossMonitor } from "./scheduler/stopLossMonitor";
-import { startContractMultiplierSync, stopContractMultiplierSync } from "./scheduler/contractMultiplierSync";
-import { startBinancePrecisionSync, stopBinancePrecisionSync } from "./scheduler/binancePrecisionSync";
-import { startCommunityReporter, stopCommunityReporter } from "./scheduler/communityReporter";
-import { initDatabase } from "./database/init";
-import { RISK_PARAMS, getConfigStringValue } from "./config/riskParams.new";
-import { getAccountRiskConfig } from "./agents/tradingAgent";
-// 注意：strategyControls.ts 中的硬编码参数已废弃，改为在策略提示词中定义
-// import { SWING_TREND_TRAILING_STOP_CONFIG, SWING_TREND_STOP_LOSS_CONFIG } from "./config/strategyControls";
+import { Hono } from "hono";
+import { serveStatic } from "@hono/node-server/serve-static";
+import fs from "node:fs";
+import { isSystemInstalled, installSystem } from "./services/installService";
 import { initializeTerminalEncoding } from "./utils/encodingUtils";
-import { initializeAdminAuth } from "./utils/adminAuth";
-import { websocketService } from "./services/websocketService";
-import { startDashboardBroadcaster, stopDashboardBroadcaster } from "./services/dashboardBroadcaster";
 
 // 设置时区为中国时间（Asia/Shanghai，UTC+8）
 process.env.TZ = 'Asia/Shanghai';
@@ -55,38 +41,217 @@ const logger = createLogger({
 let server: any = null;
 let contractMultiplierSyncTimer: NodeJS.Timeout | null = null;
 let binancePrecisionSyncTimer: NodeJS.Timeout | null = null;
-let communityReporterTask: ReturnType<typeof startCommunityReporter> | null = null;
+let communityReporterTask: any = null;
 
 /**
  * 主函数
  */
 async function main() {
   logger.info("启动 AI 加密货币自动交易系统");
+
+  if (!isSystemInstalled()) {
+    logger.info("检测到系统未安装，启动安装服务...");
+    await runInstallServer();
+    logger.info("安装完成，启动主程序...");
+  }
   
+  // 只有在系统已安装的情况下才启动主应用
+  await startApp();
+}
+
+async function runInstallServer() {
+  return new Promise<void>((resolve) => {
+    const app = new Hono();
+    const port = Number.parseInt(process.env.PORT || "3141");
+    
+    // 优先处理特定路由，防止被 serveStatic 拦截
+    app.get("/", (c) => c.redirect("/install"));
+    
+    app.get("/install", (c) => {
+        const html = fs.readFileSync("./public/install.html", "utf-8");
+        return c.html(html);
+    });
+
+    // 测试账户连接（安装阶段需要）
+    app.post("/api/accounts/test", async (c) => {
+        try {
+            const body = await c.req.json();
+            const { provider, api_key, api_secret, api_passphrase, use_paper, proxy_url } = body;
+            
+            if (!provider || !api_key || !api_secret) {
+                return c.json({ error: "缺少必需参数" }, 400);
+            }
+            
+            if (!['okx', 'binance', 'bitget'].includes(provider)) {
+                return c.json({ error: "不支持的交易所" }, 400);
+            }
+            
+            // 导入所需的客户端类
+            const { OkxClient } = await import("./services/okxClient");
+            const { BinanceClient } = await import("./services/binanceClient");
+            const { BitgetClient } = await import("./services/bitgetClient");
+            
+            // 简单的代理 URL 验证
+            const normalizedProxy = proxy_url ? String(proxy_url).trim() : undefined;
+            
+            try {
+                if (provider === "binance") {
+                    const client = new BinanceClient(
+                        String(api_key), 
+                        String(api_secret), 
+                        Boolean(use_paper), 
+                        normalizedProxy
+                    );
+                    const account = await client.getFuturesAccount();
+                    return c.json({
+                        success: true,
+                        provider: "Binance",
+                        mode: use_paper ? "测试网" : "主网",
+                        balance: account.total || "0",
+                    });
+                }
+                
+                if (provider === "bitget") {
+                    if (!api_passphrase) {
+                        return c.json({ error: "Bitget 账户需要 API Passphrase" }, 400);
+                    }
+                    const client = new BitgetClient(
+                        String(api_key), 
+                        String(api_secret), 
+                        String(api_passphrase),
+                        Boolean(use_paper), 
+                        normalizedProxy
+                    );
+                    const account = await client.getFuturesAccount();
+                    return c.json({
+                        success: true,
+                        provider: "Bitget",
+                        mode: use_paper ? "模拟盘" : "实盘",
+                        balance: account.total || "0",
+                    });
+                }
+                
+                // OKX
+                if (!api_passphrase) {
+                    return c.json({ error: "OKX 账户需要 API Passphrase" }, 400);
+                }
+                const client = new OkxClient(
+                    String(api_key), 
+                    String(api_secret), 
+                    String(api_passphrase),
+                    Boolean(use_paper), 
+                    normalizedProxy
+                );
+                const account = await client.getFuturesAccount();
+                return c.json({
+                    success: true,
+                    provider: "OKX",
+                    mode: use_paper ? "模拟盘" : "实盘",
+                    balance: account.total || "0",
+                });
+            } catch (error: unknown) {
+                const message = error instanceof Error ? error.message : "未知错误";
+                logger.error("账户连接测试失败:", error);
+                return c.json({ 
+                    success: false, 
+                    error: message 
+                }, 400);
+            }
+        } catch (error: unknown) {
+            const message = error instanceof Error ? error.message : "未知错误";
+            logger.error("测试连接接口错误:", error);
+            return c.json({ 
+                success: false, 
+                error: message 
+            }, 400);
+        }
+    });
+
+    app.post("/api/install", async (c) => {
+        try {
+            const data = await c.req.json();
+            const result = await installSystem(data);
+            
+            logger.info("安装完成，返回结果:", result);
+            
+            // 验证 adminCredentials 是否存在
+            if (!result.adminCredentials) {
+                logger.error("警告：installSystem 返回的结果中没有 adminCredentials");
+                return c.json({ 
+                    success: false, 
+                    message: "安装过程出错：未能生成管理员凭证" 
+                }, 500);
+            }
+            
+            // Return success with admin credentials
+            setTimeout(() => {
+                if (installServer) {
+                    installServer.close();
+                    resolve();
+                }
+            }, 1000);
+            
+            return c.json({ 
+                success: true,
+                adminCredentials: result.adminCredentials
+            });
+        } catch (e: any) {
+            logger.error("安装失败", e);
+            return c.json({ success: false, message: e.message }, 500);
+        }
+    });
+
+    // 最后处理静态文件
+    app.use("/*", serveStatic({ root: "./public" }));
+
+    logger.info(`安装服务运行在 http://localhost:${port}`);
+    
+    const installServer = serve({
+        fetch: app.fetch,
+        port
+    });
+  });
+}
+
+async function startApp() {
+  // Dynamic imports to avoid side effects before installation
+  const { createApiRoutes } = await import("./api/routes");
+  const { initTradingSystem } = await import("./scheduler/tradingSystemInit");
+  const { startAccountRecorder } = await import("./scheduler/accountRecorder");
+  const { startMultiInstanceTrading, stopMultiInstanceTrading } = await import("./scheduler/multiInstanceTradingLoop");
+  const { startContractMultiplierSync, stopContractMultiplierSync } = await import("./scheduler/contractMultiplierSync");
+  const { startBinancePrecisionSync, stopBinancePrecisionSync } = await import("./scheduler/binancePrecisionSync");
+  const { startCommunityReporter, stopCommunityReporter } = await import("./scheduler/communityReporter");
+  const { initDatabase } = await import("./database/init");
+  const { RISK_PARAMS, getConfigStringValue, loadRiskParams } = await import("./config/riskParams.new");
+  const { getAccountRiskConfig } = await import("./agents/tradingAgent");
+  const { initializeAdminAuth } = await import("./utils/adminAuth");
+  const { websocketService } = await import("./services/websocketService");
+  const { startDashboardBroadcaster, stopDashboardBroadcaster } = await import("./services/dashboardBroadcaster");
+  const { initConfig } = await import("./database/init-config");
+  const { migrateFromEnv } = await import("./services/accountConfigService");
+  const { ensureTradingInstancesTable } = await import("./services/tradingInstanceService");
+  const { initExchangeClient } = await import("./services/okxClient");
+
   // 1. 初始化数据库
   logger.info("初始化数据库...");
   await initDatabase();
   
   // 2. 初始化系统配置
   logger.info("初始化系统配置...");
-  const { initConfig } = await import("./database/init-config");
-  const { loadRiskParams } = await import("./config/riskParams.new");
   await initConfig();
   await loadRiskParams();
 
   // 3. 迁移账户配置（从环境变量到数据库）
   logger.info("迁移账户配置...");
-  const { migrateFromEnv } = await import("./services/accountConfigService");
   await migrateFromEnv();
 
   // 3.5 确保 trading_instances 表存在
   logger.info("初始化 Strategy Tasks 表...");
-  const { ensureTradingInstancesTable } = await import("./services/tradingInstanceService");
   await ensureTradingInstancesTable();
 
   // 4. 初始化交易客户端（使用活跃账户）
   logger.info("初始化交易客户端...");
-  const { initExchangeClient } = await import("./services/okxClient");
   await initExchangeClient();
 
   // 5. 初始化后台登录凭证
@@ -112,12 +277,11 @@ async function main() {
   // 8. 初始化 WebSocket 服务器
   logger.info("🔌 启动 WebSocket 服务器...");
   websocketService.initialize(server);
-  logger.info("WebSocket 服务器已启动: ws://localhost:${port}/ws/trading-status");
+  logger.info(`WebSocket 服务器已启动: ws://localhost:${port}/ws/trading-status`);
   startDashboardBroadcaster();
   logger.info("仪表盘实时推送服务已启动");
   
   // 9. 启动多实例交易调度器（执行 Strategy Tasks）
-  // 注意：传统单实例交易循环已移除，现在完全使用 Strategy Tasks 模式
   logger.info("启动多实例交易调度器...");
   startMultiInstanceTrading();
   
@@ -128,16 +292,6 @@ async function main() {
   // 11. 启动社区竞赛上报任务
   logger.info("启动社区竞赛上报任务...");
   communityReporterTask = startCommunityReporter();
-  
-  // 12. 移动止盈监控器已禁用
-  // 注意：移动止盈逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
-  // logger.info("启动移动止盈监控器...");
-  // startTrailingStopMonitor();
-  
-  // 13. 止损监控器已禁用
-  // 注意：止损逻辑已移至策略提示词中，由 AI Agent 根据提示词自主决策
-  // logger.info("启动止损监控器...");
-  // startStopLossMonitor();
   
   // 14. 启动合约乘数同步定时任务（每1小时执行一次）
   logger.info("启动合约乘数同步定时任务...");
@@ -157,7 +311,6 @@ async function main() {
   logger.info(`交易间隔: ${RISK_PARAMS.TRADING_INTERVAL_MINUTES} 分钟`);
   logger.info(`账户记录间隔: ${process.env.ACCOUNT_RECORD_INTERVAL_MINUTES || 10} 分钟`);
   
-  // 注意：代码级监控已禁用，止损/止盈/仓位管理等完全由 AI Agent 根据策略提示词决策
   logger.info(`\n⚠️  止损止盈策略完全由 AI 根据策略提示词控制，无硬编码规则`);
   
   logger.info(`\n支持币种: ${RISK_PARAMS.TRADING_SYMBOLS.join(', ')}`);
@@ -182,6 +335,14 @@ async function gracefulShutdown(signal: string) {
   logger.info(`\n\n收到 ${signal} 信号，正在关闭系统...`);
   
   try {
+    // Re-import to get access to stop functions
+    const { stopMultiInstanceTrading } = await import("./scheduler/multiInstanceTradingLoop");
+    const { stopContractMultiplierSync } = await import("./scheduler/contractMultiplierSync");
+    const { stopBinancePrecisionSync } = await import("./scheduler/binancePrecisionSync");
+    const { stopCommunityReporter } = await import("./scheduler/communityReporter");
+    const { websocketService } = await import("./services/websocketService");
+    const { stopDashboardBroadcaster } = await import("./services/dashboardBroadcaster");
+
     // 停止多实例交易调度器
     logger.info("正在停止多实例交易调度器...");
     stopMultiInstanceTrading();
@@ -199,12 +360,6 @@ async function gracefulShutdown(signal: string) {
       stopBinancePrecisionSync(binancePrecisionSyncTimer);
       binancePrecisionSyncTimer = null;
     }
-    
-    // 移动止盈监控器已禁用，无需停止
-    // stopTrailingStopMonitor();
-    
-    // 止损监控器已禁用，无需停止
-    // stopStopLossMonitor();
 
     if (communityReporterTask) {
       logger.info("正在停止社区竞赛上报任务...");
@@ -214,7 +369,7 @@ async function gracefulShutdown(signal: string) {
     
     // 关闭 WebSocket 服务器
     logger.info("正在关闭 WebSocket 服务器...");
-  stopDashboardBroadcaster();
+    stopDashboardBroadcaster();
     websocketService.close();
     logger.info("WebSocket 服务器已关闭");
     

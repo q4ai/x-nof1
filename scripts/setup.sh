@@ -131,7 +131,7 @@ INITIAL_BALANCE=$INITIAL_BALANCE
 # ============================================
 # 数据库配置
 # ============================================
-DATABASE_URL=file:./db/sqlite.db
+DATABASE_URL=file:./data/database/sqlite.db
 
 # ============================================
 # OKX API 配置

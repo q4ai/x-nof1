@@ -29,7 +29,7 @@ import { getQuantoMultiplier } from "../../utils/contractUtils";
 import { getInstanceExchangeClient } from "../../services/instanceContext";
 
 const dbClient = createClient({
-  url: process.env.DATABASE_URL || "file:./db/sqlite.db",
+  url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
 });
 
 /**

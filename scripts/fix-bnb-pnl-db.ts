@@ -10,7 +10,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-  url: "file:./db/sqlite.db",
+  url: "file:./data/database/sqlite.db",
 });
 
 async function fixBNBPnL() {
@@ -133,7 +133,7 @@ async function fixBNBPnL() {
 
 // 执行修复
 console.log("\n⚠️  警告: 此操作将修改数据库中的交易记录");
-console.log("建议先备份数据库文件: db/sqlite.db\n");
+console.log("建议先备份数据库文件: data/database/sqlite.db\n");
 
 fixBNBPnL().catch((error) => {
   console.error("执行失败:", error);

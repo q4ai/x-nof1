@@ -82,7 +82,7 @@ async function syncFromOkx() {
     await new Promise(resolve => setTimeout(resolve, 3000));
     
     // 4. 连接数据库
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
     logger.info(`📦 连接数据库: ${dbUrl}`);
     
     const client = createClient({

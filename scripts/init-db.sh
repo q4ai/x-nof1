@@ -87,7 +87,7 @@ fi
 echo -e "${GREEN}✅ 环境变量检查通过${NC}"
 
 # 设置默认值
-DATABASE_URL=${DATABASE_URL:-"file:./db/sqlite.db"}
+DATABASE_URL=${DATABASE_URL:-"file:./data/database/sqlite.db"}
 INITIAL_BALANCE=${INITIAL_BALANCE:-1000}
 
 # 确保数据库目录存在

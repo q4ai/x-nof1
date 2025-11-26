@@ -207,7 +207,7 @@ async function closeAllPositions(): Promise<void> {
  */
 async function resetDatabase(): Promise<void> {
   try {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
     const initialBalance = Number.parseFloat(process.env.INITIAL_BALANCE || "1000");
 
     logger.info("🗄️  开始重置数据库...");
@@ -282,7 +282,7 @@ async function resetDatabase(): Promise<void> {
  */
 async function syncPositions(): Promise<void> {
   const okxClient = createTradingClient();
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
   
   try {
   logger.info("🔄 从 OKX 同步持仓...");

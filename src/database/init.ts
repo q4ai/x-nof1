@@ -29,6 +29,8 @@ const logger = createLogger({
   level: "info",
 });
 
+type LibSqlClient = ReturnType<typeof createClient>;
+
 type DbRow = Record<string, unknown>;
 
 function asDbRows(rows: unknown[]): DbRow[] {
@@ -53,9 +55,30 @@ function toStringSafe(value: unknown, fallback = ""): string {
   return fallback;
 }
 
+async function resolveInitialBalanceFromConfig(client: LibSqlClient, fallback: number): Promise<number> {
+  try {
+    const result = await client.execute({
+      sql: "SELECT value FROM system_config WHERE key = ? LIMIT 1",
+      args: ["INITIAL_BALANCE"],
+    });
+
+    if (result.rows.length > 0) {
+      const row = result.rows[0] as Record<string, unknown>;
+      const rawValue = row.value;
+      const parsed = Number.parseFloat(typeof rawValue === "string" ? rawValue : String(rawValue ?? ""));
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  } catch (error) {
+    logger.warn("读取系统配置中的初始资金失败，将使用环境变量默认值:", error);
+  }
+  return fallback;
+}
+
 async function initDatabase() {
-  const dbUrl = process.env.DATABASE_URL || "file:./db/sqlite.db";
-  const initialBalance = Number.parseFloat(process.env.INITIAL_BALANCE || "1000");
+  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
+  let initialBalance = Number.parseFloat(process.env.INITIAL_BALANCE || "1000");
 
   logger.info(`初始化数据库: ${dbUrl}`);
 
@@ -68,6 +91,9 @@ async function initDatabase() {
     // 执行建表语句
     logger.info("创建数据库表...");
     await client.executeMultiple(CREATE_TABLES_SQL);
+
+    // 若 system_config 已由安装向导写入，优先使用其中的初始资金
+    initialBalance = await resolveInitialBalanceFromConfig(client, initialBalance);
 
     // 检查是否需要重新初始化
     const existingHistory = await client.execute(
