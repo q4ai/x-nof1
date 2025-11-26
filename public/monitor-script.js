@@ -502,6 +502,16 @@ class TradingMonitor {
     this.decisionDetailEl = document.getElementById("decision-detail");
     this.logModal = document.getElementById("log-modal");
     this.logDetailEl = document.getElementById("log-detail");
+    this.strategyBottomTabsEl = document.getElementById("strategy-bottom-tabs");
+    this.allTasksContainerEl = document.getElementById("all-tasks-container");
+    this.allTasksListEl = document.getElementById("all-tasks-list");
+    this.allTasksEmptyEl = document.getElementById("all-tasks-empty");
+    this.runningTasksContainerEl = document.getElementById("running-tasks-container");
+    this.runningTasksListEl = document.getElementById("running-tasks-list");
+    this.runningTasksEmptyEl = document.getElementById("running-tasks-empty");
+    this.bindInstanceTableActions(this.allTasksListEl);
+    this.bindInstanceTableActions(this.runningTasksListEl);
+    this.initStrategyBottomTabs();
     this.recordsModal = document.getElementById("records-modal");
     this.recordsTableContainer = document.getElementById("records-table-container");
     this.recordsTitleEl = document.getElementById("records-modal-title");
@@ -543,14 +553,17 @@ class TradingMonitor {
     // this.accountModal = document.getElementById("account-modal"); // Removed
     // this.accountsListModal = document.getElementById("accounts-list-modal"); // Removed
     this.accountFormModal = document.getElementById("account-form-modal");
+    this.instanceFormModal = document.getElementById("instance-form-modal");
     this.settingsModal = document.getElementById("settings-modal");
     this.statisticsModal = document.getElementById("statistics-modal");
     this.decisionRequestModal = document.getElementById("decision-request-modal");
     this.decisionRequestDetailEl = document.getElementById("decision-request-detail");
     this.accountForm = document.getElementById("account-form");
     this.accountEditForm = document.getElementById("account-edit-form");
+    this.instanceEditForm = document.getElementById("instance-edit-form");
     this.settingsForm = document.getElementById("settings-form");
     this.accountCancelBtn = document.getElementById("account-cancel");
+    this.instanceCancelBtn = document.getElementById("instance-cancel");
     this.settingsCancelBtn = document.getElementById("settings-cancel");
     this.exchangeSelect = document.getElementById("exchange-provider");
     this.exchangePanels = document.querySelectorAll("[data-exchange-panel]");
@@ -572,6 +585,10 @@ class TradingMonitor {
     this.tradingLoopDisableConfirm = false;
   this.accountsCache = [];
   this.aiModelsCache = [];
+  this.instancesCache = [];
+  this.instancesCacheLoaded = false;
+  this.strategyFilesCache = [];
+  this.runningTasksRefreshTimer = null;
 
     this.strategyPromptCache = new Map();
     this.strategyDeleteActivePopover = null;
@@ -607,6 +624,10 @@ class TradingMonitor {
     this.initAiModelOverlay();
     this.bindViewSwitcher(); // 绑定视图切换
     void this.fetchPublicModelInfo();
+
+    if (this.strategyBottomTabsEl) {
+      this.strategyBottomTabsEl.style.display = "none";
+    }
     
     // 立即初始化图表，确保在数据加载前就准备好
     this.initChart();
@@ -632,6 +653,8 @@ class TradingMonitor {
       this.loadDecisions(),
       this.loadDecisionRequests(),
     ]);
+
+    await this.refreshRunningTasksPanel();
 
     await Promise.all([this.loadPrices(), this.loadCandles(this.activeSymbol)]);
   }
@@ -689,6 +712,7 @@ class TradingMonitor {
       // this.accountModal, // Removed
       // this.accountsListModal, // Removed
       this.accountFormModal,
+      this.instanceFormModal,
       this.settingsModal,
       this.statisticsModal,
       this.recordsModal,
@@ -5119,10 +5143,20 @@ class TradingMonitor {
       }
     }
 
+    this.bindInstancesListEvents();
+    this.bindInstanceFormEvents();
+
     if (this.accountCancelBtn) {
       this.accountCancelBtn.addEventListener("click", (event) => {
         event.preventDefault();
         this.hideModal(this.accountModal);
+      });
+    }
+
+    if (this.instanceCancelBtn) {
+      this.instanceCancelBtn.addEventListener("click", (event) => {
+        event.preventDefault();
+        this.hideModal(this.instanceFormModal);
       });
     }
 
@@ -5144,6 +5178,12 @@ class TradingMonitor {
     if (targetTab === "account") {
       this.bindAccountsListEvents();
       void this.loadAccountsList();
+      return;
+    }
+
+    if (targetTab === "instances") {
+      this.bindInstancesListEvents();
+      void this.loadInstancesList();
       return;
     }
 
@@ -5294,23 +5334,51 @@ class TradingMonitor {
 
   async fetchPublicModelInfo() {
     try {
-      const response = await fetch("/api/public/model", {
+      // 首先尝试获取当前账户关联的运行实例信息（包含准确的模型名称）
+      const instanceResponse = await fetch("/api/public/instances-status", {
         cache: "no-store",
         credentials: "same-origin",
       });
 
-      if (!response.ok) {
-        return;
+      if (instanceResponse.ok) {
+        const instanceData = await instanceResponse.json();
+        // 如果有运行中的实例，使用其模型名称
+        if (instanceData?.runningInstance?.ai_model_name) {
+          const modelName = instanceData.runningInstance.ai_model_name;
+          const status = instanceData.runningInstance.status;
+          const publicConfig = { 
+            AI_MODEL_NAME: modelName,
+            _INSTANCE_STATUS: status // 内部字段，用于显示状态
+          };
+          this.latestConfig = {
+            ...(this.latestConfig ?? {}),
+            ...publicConfig,
+          };
+          this.updateAiOverlay(publicConfig);
+          // 同时获取交易循环状态以显示 AI overlay
+          await this.fetchPublicTradingLoopStatus();
+          return;
+        }
       }
 
-      const data = await response.json();
-      if (data && typeof data.aiModelName === "string") {
-        const publicConfig = { AI_MODEL_NAME: data.aiModelName };
-        this.latestConfig = {
-          ...(this.latestConfig ?? {}),
-          ...publicConfig,
-        };
-        this.updateAiOverlay(publicConfig);
+      // 如果没有运行中的实例，回退到全局配置
+      const fallbackResponse = await fetch("/api/public/model", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+
+      if (fallbackResponse.ok) {
+        const data = await fallbackResponse.json();
+        // 后端返回的字段可能是 model 或 aiModelName
+        const modelName = data?.aiModelName || data?.model;
+        if (typeof modelName === "string" && modelName.trim()) {
+          const publicConfig = { AI_MODEL_NAME: modelName };
+          this.latestConfig = {
+            ...(this.latestConfig ?? {}),
+            ...publicConfig,
+          };
+          this.updateAiOverlay(publicConfig);
+        }
       }
     } catch (error) {
       console.warn("[ai-overlay] 获取公开模型信息失败", error);
@@ -5374,11 +5442,17 @@ class TradingMonitor {
       }
 
       if (this.isAuthenticated) {
+        this.instancesCacheLoaded = false;
         void this.fetchFullConfig(true); // 强制刷新完整配置，覆盖公开配置缓存
         void this.fetchTradingLoopStatus();
         void this.loadAccountsList();
+        void this.refreshRunningTasksPanel(true);
       } else {
         this.accountsCache = [];
+        this.instancesCache = [];
+        this.instancesCacheLoaded = false;
+        this.renderAllTasks([]);
+        this.renderRunningTasks([]);
       }
       // 未登录时不调用 updateAiOverlay()，保持 fetchPublicModelInfo() 设置的模型信息
     } catch (error) {
@@ -5944,6 +6018,9 @@ class TradingMonitor {
       case "candles_snapshot":
         this.handleCandlesSnapshot(message);
         break;
+      case "instance_status":
+        this.handleInstanceStatusMessage(message);
+        break;
       case "pong":
         break;
       default:
@@ -6390,13 +6467,23 @@ class TradingMonitor {
     const rawName = cfg && typeof cfg.AI_MODEL_NAME === "string" ? cfg.AI_MODEL_NAME.trim() : "";
     const displayName = this.extractModelDisplayName(rawName);
     const iconSrc = this.resolveAiModelIcon(rawName);
+    
+    // 获取任务状态文本
+    let statusText = "";
+    if (cfg && cfg._INSTANCE_STATUS) {
+      const statusKey = `instances.status.${cfg._INSTANCE_STATUS}`;
+      const translatedStatus = this.translate(statusKey, cfg._INSTANCE_STATUS);
+      // 首字母大写
+      const formattedStatus = translatedStatus.charAt(0).toUpperCase() + translatedStatus.slice(1);
+      statusText = ` (${formattedStatus})`;
+    }
 
     const resolvedUrl = this.toAbsoluteUrl(iconSrc);
     if (iconEl.src !== resolvedUrl) {
       iconEl.src = iconSrc;
     }
     iconEl.setAttribute("alt", t("chart.modelIconAlt"));
-    textEl.textContent = displayName;
+    textEl.textContent = `${displayName}${statusText}`;
   }
 
   resolveAiModelIcon(modelName) {
@@ -7419,40 +7506,9 @@ class TradingMonitor {
       ? `<span class="account-badge badge-paper">${this.escapeHtml(this.translate("accounts.badges.paper", "Paper"))}</span>`
       : "";
 
-    const activeBadge = account.is_active
-      ? `<span class="account-badge badge-active">${this.escapeHtml(this.translate("accounts.badges.active", "Active"))}</span>`
-      : "";
-
-    const activateLabel = this.translate("accounts.actions.activate", "Activate");
-    const currentLabel = this.translate("accounts.actions.current", "Current");
+    // 多任务模式下不再需要激活状态和激活按钮
     const deleteLabel = this.translate("accounts.actions.delete", "Delete");
-
-    let activateBtn;
-    if (account.is_active) {
-      activateBtn = `<button type="button" class="account-action-btn" disabled>${this.escapeHtml(currentLabel)}</button>`;
-    } else {
-      const confirmMessage = this.escapeHtml(this.translate("accounts.messages.activateConfirm", "Switch to this account? The trading system will restart."));
-      const confirmLabel = this.escapeHtml(this.translate("common.confirm", "Confirm"));
-      const cancelLabel = this.escapeHtml(this.translate("common.cancel", "Cancel"));
-      
-      activateBtn = `
-        <div class="account-action-wrapper">
-          <button class="account-action-btn btn-activate activate-account-trigger" data-account-id="${account.id}">${this.escapeHtml(activateLabel)}</button>
-          <div class="activate-confirmation-popover" role="alert" aria-hidden="true" data-account-id="${account.id}">
-            <p class="activate-confirmation-text">${confirmMessage}</p>
-            <div class="activate-confirmation-actions">
-              <button type="button" class="link-button cancel-activate-btn">${cancelLabel}</button>
-              <button type="button" class="btn-primary btn-small confirm-activate-btn" data-account-id="${account.id}">${confirmLabel}</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    const deleteDisabledTitle = this.translate("accounts.messages.deleteDisabled", "Cannot delete active account");
-    const deleteBtn = account.is_active
-      ? `<button class="account-action-btn btn-delete" disabled title="${this.escapeHtml(deleteDisabledTitle)}">${this.escapeHtml(deleteLabel)}</button>`
-      : `<button class="account-action-btn btn-delete" data-account-id="${account.id}" data-action="delete">${this.escapeHtml(deleteLabel)}</button>`;
+    const deleteBtn = `<button class="account-action-btn btn-delete" data-account-id="${account.id}" data-action="delete">${this.escapeHtml(deleteLabel)}</button>`;
 
     const apiKeyLabel = this.translate("accounts.cards.apiKeyLabel", "API Key");
     const updatedLabel = this.translate("accounts.cards.updatedLabel", "Updated");
@@ -7460,11 +7516,10 @@ class TradingMonitor {
     const editLabel = this.translate("accounts.actions.edit", "Edit");
 
     return `
-      <div class="account-card ${account.is_active ? "is-active" : ""}" data-account-id="${account.id}">
+      <div class="account-card" data-account-id="${account.id}">
         <div class="account-card-info">
           <div class="account-card-header">
             <div class="account-card-name">${this.escapeHtml(account.name)}</div>
-            ${activeBadge}
             ${providerBadge}
             ${paperBadge}
           </div>
@@ -7476,7 +7531,6 @@ class TradingMonitor {
         <div class="account-card-actions">
           <button class="account-action-btn" data-account-id="${account.id}" data-action="test">${this.escapeHtml(testLabel)}</button>
           <button class="account-action-btn" data-account-id="${account.id}" data-action="edit">${this.escapeHtml(editLabel)}</button>
-          ${activateBtn}
           ${deleteBtn}
         </div>
       </div>
@@ -7490,11 +7544,7 @@ class TradingMonitor {
       addBtn.addEventListener("click", () => this.openAccountFormModal());
     }
 
-    const container = document.getElementById("accounts-list-container");
-    if (container && !container.dataset.clickBound) {
-      container.dataset.clickBound = "true";
-      container.addEventListener("click", (e) => this.handleAccountsContainerClick(e));
-    }
+    // 多任务模式下不再需要激活相关的点击事件处理
   }
 
   bindAccountCardEvents() {
@@ -7509,15 +7559,13 @@ class TradingMonitor {
         const action = btn.dataset.action;
         const accountId = btn.dataset.accountId;
         
+        // 多任务模式下移除 activate 操作
         switch (action) {
           case "edit":
             await this.openAccountFormModal(Number(accountId));
             break;
           case "delete":
             await this.deleteAccount(Number(accountId), btn);
-            break;
-          case "activate":
-            await this.activateAccount(Number(accountId), btn);
             break;
           case "test":
             await this.testAccountConnection(Number(accountId), btn);
@@ -8061,83 +8109,807 @@ class TradingMonitor {
     button.dataset.statusTimeoutId = String(timeoutId);
   }
 
-  handleAccountsContainerClick(event) {
-    if (!event) return;
-    const target = event.target;
-    if (!target) return;
+  // ====== Strategy Instance 管理功能 ======
 
-    // Handle Activate Trigger
-    const triggerBtn = target.closest(".activate-account-trigger");
-    if (triggerBtn) {
-      event.preventDefault();
-      event.stopPropagation();
-      const accountId = triggerBtn.dataset.accountId;
-      this.showActivateConfirmation(accountId, triggerBtn);
-      return;
+  bindInstancesListEvents() {
+    const addBtn = document.getElementById("add-instance-btn");
+    if (addBtn && !addBtn.dataset.bound) {
+      addBtn.dataset.bound = "true";
+      addBtn.addEventListener("click", () => this.openInstanceFormModal());
     }
 
-    // Handle Confirm Activate
-    const confirmBtn = target.closest(".confirm-activate-btn");
-    if (confirmBtn) {
-      event.preventDefault();
-      event.stopPropagation();
-      const accountId = confirmBtn.dataset.accountId;
-      this.hideActivateConfirmation(accountId);
-      // Find the original trigger button to pass to activateAccount for loading state
-      const wrapper = confirmBtn.closest(".account-action-wrapper");
-      const originalTrigger = wrapper ? wrapper.querySelector(".activate-account-trigger") : null;
-      this.activateAccount(accountId, originalTrigger || confirmBtn);
-      return;
-    }
-
-    // Handle Cancel Activate
-    const cancelBtn = target.closest(".cancel-activate-btn");
-    if (cancelBtn) {
-      event.preventDefault();
-      event.stopPropagation();
-      const popover = cancelBtn.closest(".activate-confirmation-popover");
-      if (popover) {
-        const accountId = popover.dataset.accountId;
-        this.hideActivateConfirmation(accountId);
-      }
-      return;
+    const container = document.getElementById("instances-list-container");
+    if (container && !container.dataset.bound) {
+      container.dataset.bound = "true";
+      container.addEventListener("click", (event) => {
+        const actionBtn = event.target.closest("[data-instance-action]");
+        if (!actionBtn) return;
+        const action = actionBtn.dataset.instanceAction;
+        const instanceId = Number(actionBtn.dataset.instanceId);
+        if (!action || !Number.isFinite(instanceId)) {
+          return;
+        }
+        void this.handleInstanceAction(action, instanceId, actionBtn);
+      });
     }
   }
 
-  showActivateConfirmation(accountId, triggerBtn) {
-    // Hide other popovers
-    document.querySelectorAll(".activate-confirmation-popover.is-visible").forEach(el => {
-      el.classList.remove("is-visible");
+  bindInstanceTableActions(targetEl) {
+    if (!targetEl || targetEl.dataset.actionsBound === "true") {
+      return;
+    }
+
+    targetEl.dataset.actionsBound = "true";
+    targetEl.addEventListener("click", (event) => {
+      const actionBtn = event.target.closest("[data-instance-action]");
+      if (!actionBtn) {
+        return;
+      }
+
+      event.preventDefault();
+      const action = actionBtn.dataset.instanceAction;
+      const instanceId = Number(actionBtn.dataset.instanceId);
+      if (!action || !Number.isFinite(instanceId)) {
+        return;
+      }
+
+      void this.handleInstanceAction(action, instanceId, actionBtn);
+    });
+  }
+
+  initStrategyBottomTabs() {
+    if (!this.strategyBottomTabsEl) {
+      return;
+    }
+
+    const nav = this.strategyBottomTabsEl.querySelector(".tab-nav");
+    const content = this.strategyBottomTabsEl.querySelector(".tab-content");
+    if (!nav || !content) {
+      return;
+    }
+
+    nav.addEventListener("click", (event) => {
+      const button = event.target.closest(".tab-btn");
+      if (!button) {
+        return;
+      }
+
+      const { tab } = button.dataset;
+      if (!tab) {
+        return;
+      }
+
+      nav.querySelectorAll(".tab-btn").forEach((btn) => {
+        btn.classList.toggle("active", btn === button);
+      });
+
+      content.querySelectorAll(".tab-panel").forEach((panel) => {
+        panel.classList.toggle("active", panel.id === `tab-${tab}`);
+      });
+    });
+  }
+
+  normalizeInstanceStatus(status) {
+    // 统一实例状态文本，兼容旧数据中的大写/异常值
+    if (typeof status !== "string") {
+      return "stopped";
+    }
+    const normalized = status.trim().toLowerCase();
+    if (normalized === "running" || normalized === "paused" || normalized === "stopped") {
+      return normalized;
+    }
+    return "stopped";
+  }
+
+  bindInstanceFormEvents() {
+    if (this.instanceEditForm && !this.instanceEditForm.dataset.bound) {
+      this.instanceEditForm.dataset.bound = "true";
+      this.instanceEditForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        void this.submitInstanceForm();
+      });
+    }
+  }
+
+  async handleInstanceAction(action, instanceId, triggerBtn) {
+    switch (action) {
+      case "edit":
+        await this.openInstanceFormModal(instanceId);
+        break;
+      case "delete":
+        await this.deleteInstance(instanceId, triggerBtn);
+        break;
+      case "start":
+      case "pause":
+      case "stop":
+        await this.updateInstanceStatus(instanceId, action, triggerBtn);
+        break;
+      case "trigger":
+        await this.triggerInstance(instanceId, triggerBtn);
+        break;
+      default:
+        break;
+    }
+  }
+
+  async loadInstancesList() {
+    const container = document.getElementById("instances-list-container");
+    const loading = document.getElementById("instances-loading");
+    if (!container) return;
+
+    if (!this.isAuthenticated) {
+      if (loading) loading.style.display = "none";
+      this.instancesCache = [];
+      this.instancesCacheLoaded = false;
+      container.innerHTML = `
+        <div class="empty-accounts">
+          <div class="empty-accounts-text">${this.escapeHtml(this.translate("instances.messages.loginRequired", "Please sign in to manage strategy tasks."))}</div>
+        </div>
+      `;
+      this.renderAllTasks([]);
+      this.renderRunningTasks([]);
+      return;
+    }
+
+    try {
+      if (loading) loading.style.display = "flex";
+      const instances = await this.fetchInstancesData();
+      if (loading) loading.style.display = "none";
+
+      if (!instances.length) {
+        container.innerHTML = `
+          <div class="empty-accounts">
+            <div class="empty-accounts-icon">🧠</div>
+            <div class="empty-accounts-text">${this.escapeHtml(this.translate("instances.empty", "No strategy tasks configured"))}</div>
+          </div>
+        `;
+        this.renderAllTasks([]);
+        this.renderRunningTasks([]);
+        return;
+      }
+
+      container.innerHTML = instances.map((instance) => this.renderInstanceCard(instance)).join("");
+      this.renderAllTasks(instances);
+      this.renderRunningTasks(
+        instances.filter((item) => this.normalizeInstanceStatus(item.status) === "running"),
+      );
+    } catch (error) {
+      console.error("加载策略任务失败:", error);
+      if (loading) loading.style.display = "none";
+      this.instancesCacheLoaded = false;
+      const message = this.translate("instances.messages.loadError", "Failed to load strategy tasks.");
+      container.innerHTML = `
+        <div class="empty-accounts">
+          <div class="empty-accounts-text" style="color: var(--accent-red);">${this.escapeHtml(message)}</div>
+        </div>
+      `;
+      this.renderAllTasks([]);
+      this.renderRunningTasks([]);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
+  async fetchInstancesData() {
+    if (!this.isAuthenticated) {
+      this.instancesCache = [];
+      this.instancesCacheLoaded = false;
+      return [];
+    }
+
+    try {
+      const response = await fetch("/api/trading-instances", {
+        credentials: "include",
+      });
+
+      if (response.status === 401) {
+        this.instancesCache = [];
+        this.instancesCacheLoaded = false;
+        return [];
+      }
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const payload = await response.json().catch(() => ({}));
+      const instances = Array.isArray(payload?.instances) ? payload.instances : [];
+      this.instancesCache = instances;
+      this.instancesCacheLoaded = true;
+      return instances;
+    } catch (error) {
+      this.instancesCacheLoaded = false;
+      throw error;
+    }
+  }
+
+  renderInstanceCard(instance) {
+    const normalizedStatus = this.normalizeInstanceStatus(instance?.status);
+    const statusKey = `instances.status.${normalizedStatus}`;
+    const statusLabel = this.translate(statusKey, normalizedStatus);
+    const strategyLabel = this.translate("instances.labels.strategy", "Strategy");
+    const accountLabel = this.translate("instances.labels.account", "Account");
+    const modelLabel = this.translate("instances.labels.model", "AI Model");
+    const intervalLabel = this.translate("instances.labels.interval", "Interval");
+    const lastExecutedLabel = this.translate("instances.labels.lastExecuted", "Last Executed");
+    const intervalValue = Number(instance?.interval_minutes) || null;
+    const lastExecuted = instance?.last_executed_at ? this.formatDate(instance.last_executed_at) : "--";
+
+    const actionButtons = [
+      this.renderInstanceActionButton("start", instance, normalizedStatus),
+      this.renderInstanceActionButton("pause", instance, normalizedStatus),
+      this.renderInstanceActionButton("stop", instance, normalizedStatus),
+      this.renderInstanceActionButton("trigger", instance, normalizedStatus),
+      this.renderInstanceActionButton("edit", instance, normalizedStatus),
+      this.renderInstanceActionButton("delete", instance, normalizedStatus),
+    ]
+      .filter(Boolean)
+      .join("");
+
+    return `
+      <div class="account-card instance-card" data-instance-id="${instance.id}">
+        <div class="account-card-info">
+          <div class="account-card-header">
+            <div class="instance-name">${this.escapeHtml(instance.name || `#${instance.id}`)}</div>
+            <span class="instance-status-badge status-${this.escapeHtml(normalizedStatus)}">${this.escapeHtml(statusLabel)}</span>
+          </div>
+          <div class="instance-meta">
+            <div>${this.escapeHtml(strategyLabel)}: <strong>${this.escapeHtml(instance.strategy_name || "--")}</strong></div>
+            <div>${this.escapeHtml(accountLabel)}: ${this.escapeHtml(instance.account_name || "--")}</div>
+            <div>${this.escapeHtml(modelLabel)}: ${this.escapeHtml(instance.ai_model_name || instance.model_name || "--")}</div>
+            <div>${this.escapeHtml(intervalLabel)}: ${intervalValue ? `${intervalValue}m` : "--"}</div>
+            <div>${this.escapeHtml(lastExecutedLabel)}: ${this.escapeHtml(lastExecuted)}</div>
+          </div>
+        </div>
+        <div class="account-card-actions instance-actions">
+          ${actionButtons}
+        </div>
+      </div>
+    `;
+  }
+
+  renderInstanceActionButton(action, instance, statusOverride = null) {
+    const status = statusOverride ? this.normalizeInstanceStatus(statusOverride) : this.normalizeInstanceStatus(instance?.status);
+    let disabled = false;
+    if (action === "start") {
+      disabled = status === "running";
+    } else if (action === "pause") {
+      disabled = status !== "running";
+    } else if (action === "stop") {
+      disabled = status === "stopped";
+    }
+    const label = this.translate(`instances.actions.${action}`, action);
+    const statusClass = action === "delete" ? "btn-delete" : action === "start" ? "btn-activate" : "";
+    return `
+      <button class="account-action-btn ${statusClass}" data-instance-action="${action}" data-instance-id="${instance.id}" ${disabled ? "disabled" : ""}>${this.escapeHtml(label)}</button>
+    `;
+  }
+
+  async openInstanceFormModal(instanceId = null) {
+    if (!this.instanceFormModal || !this.instanceEditForm) {
+      return;
+    }
+
+    this.instanceEditForm.reset();
+    const idField = document.getElementById("instance-edit-id");
+    if (idField) {
+      idField.value = instanceId ? String(instanceId) : "";
+    }
+
+    const title = document.getElementById("instance-form-title");
+    const titleKey = instanceId ? "instances.form.titleEdit" : "instances.form.titleAdd";
+    if (title) {
+      title.setAttribute("data-i18n", titleKey);
+      title.textContent = this.translate(titleKey, instanceId ? "Edit Strategy Task" : "Add Strategy Task");
+    }
+
+    let existing = null;
+    if (instanceId) {
+      existing = await this.ensureInstanceLoaded(instanceId);
+      if (!existing) {
+        this.showToast("error", this.translate("common.error", "Error"), this.translate("instances.messages.loadError", "Failed to load strategy tasks."));
+        return;
+      }
+    }
+
+    await this.populateInstanceFormOptions({
+      accountId: existing?.account_id,
+      aiModelId: existing?.ai_model_id,
+      strategyName: existing?.strategy_name,
     });
 
-    const wrapper = triggerBtn.closest(".account-action-wrapper");
-    if (!wrapper) return;
-    
-    const popover = wrapper.querySelector(".activate-confirmation-popover");
-    if (!popover) return;
-
-    popover.classList.add("is-visible");
-    
-    // Handle clicking outside to close
-    const closeHandler = (e) => {
-      if (!wrapper.contains(e.target)) {
-        this.hideActivateConfirmation(accountId);
-        document.removeEventListener("click", closeHandler);
+    if (existing) {
+      const nameInput = document.getElementById("instance-edit-name");
+      if (nameInput) {
+        nameInput.value = existing.name || "";
       }
-    };
-    // Use setTimeout to avoid immediate triggering
-    setTimeout(() => {
-      document.addEventListener("click", closeHandler);
-    }, 0);
+    }
+
+    this.showModal(this.instanceFormModal);
   }
 
-  hideActivateConfirmation(accountId) {
-    const popover = document.querySelector(`.activate-confirmation-popover[data-account-id="${accountId}"]`);
-    if (popover) {
-      popover.classList.remove("is-visible");
+  async ensureInstanceLoaded(instanceId) {
+    if (!this.instancesCacheLoaded || !Array.isArray(this.instancesCache) || !this.instancesCache.length) {
+      await this.fetchInstancesData();
+    }
+    return this.instancesCache.find((item) => item.id === instanceId) || null;
+  }
+
+  async populateInstanceFormOptions(defaults = {}) {
+    const [accounts, models, strategies] = await Promise.all([
+      this.fetchAccountsForSelect(),
+      this.fetchAiModelsForSelect(),
+      this.fetchStrategyFilesForSelect(),
+    ]);
+
+    const accountSelect = document.getElementById("instance-edit-account");
+    if (accountSelect) {
+      accountSelect.innerHTML = `
+        <option value="">${this.escapeHtml(this.translate("instances.form.selectAccount", "Select an account"))}</option>
+        ${accounts
+          .map((account) => `
+            <option value="${account.id}" ${defaults.accountId === account.id ? "selected" : ""}>${this.escapeHtml(account.name || `Account ${account.id}`)}</option>
+          `)
+          .join("")}
+      `;
+    }
+
+    const modelSelect = document.getElementById("instance-edit-ai-model");
+    if (modelSelect) {
+      modelSelect.innerHTML = `
+        <option value="">${this.escapeHtml(this.translate("instances.form.selectModel", "Select an AI model"))}</option>
+        ${models
+          .map((model) => `
+            <option value="${model.id}" ${defaults.aiModelId === model.id ? "selected" : ""}>${this.escapeHtml(model.name || model.model_name || `Model ${model.id}`)}</option>
+          `)
+          .join("")}
+      `;
+    }
+
+    const strategySelect = document.getElementById("instance-edit-strategy");
+    if (strategySelect) {
+      strategySelect.innerHTML = `
+        <option value="">${this.escapeHtml(this.translate("instances.form.selectStrategy", "Select a strategy"))}</option>
+        ${strategies
+          .map((name) => `
+            <option value="${this.escapeHtml(name)}" ${defaults.strategyName === name ? "selected" : ""}>${this.escapeHtml(name)}</option>
+          `)
+          .join("")}
+      `;
     }
   }
 
+  async fetchAccountsForSelect() {
+    if (Array.isArray(this.accountsCache) && this.accountsCache.length) {
+      return this.accountsCache;
+    }
+
+    try {
+      const response = await fetch("/api/accounts", { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Failed to fetch accounts");
+      }
+      const data = await response.json();
+      const accounts = data?.accounts || [];
+      this.accountsCache = accounts;
+      this.updateAccountSwitcherDisplay();
+      return accounts;
+    } catch (error) {
+      console.error("加载账户列表失败:", error);
+      return [];
+    }
+  }
+
+  async fetchAiModelsForSelect() {
+    if (Array.isArray(this.aiModelsCache) && this.aiModelsCache.length) {
+      return this.aiModelsCache;
+    }
+
+    try {
+      const response = await fetch("/api/ai-models", { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Failed to fetch AI models");
+      }
+      const data = await response.json();
+      const models = data?.models || [];
+      this.aiModelsCache = models;
+      return models;
+    } catch (error) {
+      console.error("加载 AI 模型失败:", error);
+      return [];
+    }
+  }
+
+  async fetchStrategyFilesForSelect() {
+    if (Array.isArray(this.strategyFilesCache) && this.strategyFilesCache.length) {
+      return this.strategyFilesCache;
+    }
+
+    try {
+      const response = await fetch("/api/strategies", { credentials: "include" });
+      if (!response.ok) {
+        throw new Error("Failed to fetch strategies");
+      }
+      const data = await response.json();
+      const strategies = Array.isArray(data?.strategies) ? data.strategies : [];
+      this.strategyFilesCache = strategies.map((item) => item?.name).filter(Boolean);
+      return this.strategyFilesCache;
+    } catch (error) {
+      console.error("加载策略文件失败:", error);
+      this.strategyFilesCache = [];
+      return [];
+    }
+  }
+
+  collectInstanceFormData() {
+    const nameInput = document.getElementById("instance-edit-name");
+    const accountSelect = document.getElementById("instance-edit-account");
+    const modelSelect = document.getElementById("instance-edit-ai-model");
+    const strategySelect = document.getElementById("instance-edit-strategy");
+
+    const name = nameInput?.value?.trim();
+    const accountValue = accountSelect?.value ?? "";
+    const modelValue = modelSelect?.value ?? "";
+    const strategyName = strategySelect?.value?.trim();
+    const accountId = accountValue ? Number(accountValue) : null;
+    const aiModelId = modelValue ? Number(modelValue) : null;
+
+    if (!name) {
+      this.showToast("error", this.translate("common.error", "Error"), this.translate("instances.messages.validation.missingName", "Please enter an instance name"));
+      return null;
+    }
+
+    if (!accountValue || !Number.isFinite(accountId)) {
+      this.showToast("error", this.translate("common.error", "Error"), this.translate("instances.messages.validation.missingAccount", "Please select an account"));
+      return null;
+    }
+
+    if (!modelValue || !Number.isFinite(aiModelId)) {
+      this.showToast("error", this.translate("common.error", "Error"), this.translate("instances.messages.validation.missingModel", "Please select an AI model"));
+      return null;
+    }
+
+    if (!strategyName) {
+      this.showToast("error", this.translate("common.error", "Error"), this.translate("instances.messages.validation.missingStrategy", "Please select a strategy"));
+      return null;
+    }
+
+    return {
+      name,
+      account_id: accountId,
+      ai_model_id: aiModelId,
+      strategy_name: strategyName,
+    };
+  }
+
+  async submitInstanceForm() {
+    const payload = this.collectInstanceFormData();
+    if (!payload) {
+      return;
+    }
+
+    const idField = document.getElementById("instance-edit-id");
+    const instanceId = idField?.value ? Number(idField.value) : null;
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const url = instanceId ? `/api/trading-instances/${instanceId}` : "/api/trading-instances";
+      const method = instanceId ? "PUT" : "POST";
+
+      const response = await fetch(url, {
+        method,
+        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+          "X-CSRF-Token": csrfToken,
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error?.error || "Failed to save instance");
+      }
+
+      const successKey = instanceId ? "instances.messages.updateSuccess" : "instances.messages.createSuccess";
+      this.showToast("success", this.translate("common.success", "Success"), this.translate(successKey, "Saved successfully"));
+      this.hideModal(this.instanceFormModal);
+      await this.loadInstancesList();
+      await this.refreshRunningTasksPanel(true);
+    } catch (error) {
+      console.error("保存策略任务失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    }
+  }
+
+  async updateInstanceStatus(instanceId, action, triggerBtn) {
+    if (!Number.isFinite(instanceId)) {
+      return;
+    }
+
+    this.setButtonLoading(triggerBtn, true, null, `instances.actions.${action}`);
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/trading-instances/${instanceId}/${action}`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || "Failed to update status");
+      }
+
+      this.showToast("success", this.translate("common.success", "Success"), payload?.message || this.translate("instances.messages.statusSuccess", "Status updated"));
+      await this.loadInstancesList();
+      await this.refreshRunningTasksPanel(true);
+    } catch (error) {
+      console.error("更新策略任务状态失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false, `instances.actions.${action}`);
+    }
+  }
+
+  async triggerInstance(instanceId, triggerBtn) {
+    if (!Number.isFinite(instanceId)) {
+      return;
+    }
+
+    this.setButtonLoading(triggerBtn, true, "instances.actions.trigger", "instances.actions.trigger");
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/trading-instances/${instanceId}/trigger`, {
+        method: "POST",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok || payload?.success === false) {
+        throw new Error(payload?.message || "Failed to trigger instance");
+      }
+
+      this.showToast("success", this.translate("common.success", "Success"), payload?.message || this.translate("instances.messages.triggerSuccess", "Execution triggered"));
+      this.scheduleRunningTasksRefresh();
+    } catch (error) {
+      console.error("触发策略任务失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false, "instances.actions.trigger");
+    }
+  }
+
+  async deleteInstance(instanceId, triggerBtn) {
+    if (!Number.isFinite(instanceId)) {
+      return;
+    }
+
+    const instance = this.instancesCache.find((item) => item.id === instanceId) || null;
+    const confirmMessage = this.translate("instances.messages.deleteConfirm", 'Delete strategy task "{{name}}"?', { name: instance?.name || `#${instanceId}` });
+    if (!window.confirm(confirmMessage)) {
+      return;
+    }
+
+    this.setButtonLoading(triggerBtn, true, "instances.actions.delete", "instances.actions.delete");
+
+    try {
+      const csrfToken = this.getCsrfToken();
+      const response = await fetch(`/api/trading-instances/${instanceId}`, {
+        method: "DELETE",
+        credentials: "include",
+        headers: {
+          "X-CSRF-Token": csrfToken,
+        },
+      });
+
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new Error(payload?.error || "Failed to delete instance");
+      }
+
+      this.showToast("success", this.translate("common.success", "Success"), this.translate("instances.messages.deleteSuccess", "Strategy task deleted"));
+      await this.loadInstancesList();
+      await this.refreshRunningTasksPanel(true);
+    } catch (error) {
+      console.error("删除策略任务失败:", error);
+      const message = error instanceof Error ? error.message : String(error);
+      this.showToast("error", this.translate("common.error", "Error"), message);
+    } finally {
+      this.setButtonLoading(triggerBtn, false, "instances.actions.delete");
+    }
+  }
+
+  async refreshRunningTasksPanel(forceFetch = false) {
+    const noRunningTargets = !this.runningTasksListEl || !this.runningTasksEmptyEl;
+    const noAllTargets = !this.allTasksListEl || !this.allTasksEmptyEl;
+    if (noRunningTargets && noAllTargets) {
+      return;
+    }
+
+    if (!this.isAuthenticated) {
+      this.renderAllTasks([]);
+      this.renderRunningTasks([]);
+      return;
+    }
+
+    try {
+      let instances = this.instancesCache;
+      if (forceFetch || !this.instancesCacheLoaded || !Array.isArray(instances)) {
+        instances = await this.fetchInstancesData();
+      }
+      const normalizedInstances = Array.isArray(instances) ? instances : [];
+      this.renderAllTasks(normalizedInstances);
+      const runningInstances = normalizedInstances.filter((item) => this.normalizeInstanceStatus(item.status) === "running");
+      this.renderRunningTasks(runningInstances);
+    } catch (error) {
+      console.warn("刷新运行任务面板失败:", error);
+      this.renderAllTasks([]);
+      this.renderRunningTasks([]);
+    }
+  }
+
+  renderAllTasks(instances) {
+    this.renderInstanceTable(instances, this.allTasksListEl, this.allTasksEmptyEl, {
+      showStartForStopped: true,
+    });
+  }
+
+  renderRunningTasks(instances) {
+    this.renderInstanceTable(instances, this.runningTasksListEl, this.runningTasksEmptyEl);
+  }
+
+  renderInstanceTable(instances, listEl, emptyEl, options = {}) {
+    if (!listEl || !emptyEl) {
+      return;
+    }
+
+    const items = Array.isArray(instances) ? instances : [];
+
+    if (!items.length) {
+      listEl.innerHTML = "";
+      emptyEl.style.display = "flex";
+      return;
+    }
+
+    emptyEl.style.display = "none";
+    const headers = {
+      instance: this.translate("instances.labels.instance", "Instance"),
+      strategy: this.translate("instances.labels.strategy", "Strategy"),
+      account: this.translate("instances.labels.account", "Account"),
+      model: this.translate("instances.labels.model", "AI Model"),
+      interval: this.translate("instances.labels.interval", "Interval"),
+      lastExecuted: this.translate("instances.labels.lastExecuted", "Last Executed"),
+      status: this.translate("tables.logs.headers.status", "Status"),
+      actions: this.translate("instances.labels.actions", "Actions"),
+    };
+
+    const rows = items
+      .map((instance) => {
+        const normalizedStatus = this.normalizeInstanceStatus(instance.status);
+        const statusLabel = this.translate(`instances.status.${normalizedStatus}`, normalizedStatus);
+        const lastExecuted = instance.last_executed_at ? this.formatDate(instance.last_executed_at) : "--";
+        const intervalValue = Number(instance.interval_minutes) || null;
+        const strategyName = instance.strategy_name || "--";
+        const modelName = instance.ai_model_name || instance.model_name || "--";
+        const accountName = instance.account_name || "--";
+        const actionsCell = this.renderInstanceActions(instance, normalizedStatus, options);
+        return `
+          <tr>
+            <td>${this.escapeHtml(instance.name || `#${instance.id}`)}</td>
+            <td>${this.escapeHtml(strategyName)}</td>
+            <td>${this.escapeHtml(accountName)}</td>
+            <td>${this.escapeHtml(modelName)}</td>
+            <td>${this.escapeHtml(intervalValue ? `${intervalValue}m` : "--")}</td>
+            <td>${this.escapeHtml(lastExecuted)}</td>
+            <td>
+              <div class="running-task-status">
+                <span class="instance-status-badge status-${this.escapeHtml(normalizedStatus)}">${this.escapeHtml(statusLabel)}</span>
+              </div>
+            </td>
+            <td>${actionsCell}</td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    listEl.innerHTML = `
+      <table class="data-table running-tasks-table">
+        <thead>
+          <tr>
+            <th>${this.escapeHtml(headers.instance)}</th>
+            <th>${this.escapeHtml(headers.strategy)}</th>
+            <th>${this.escapeHtml(headers.account)}</th>
+            <th>${this.escapeHtml(headers.model)}</th>
+            <th>${this.escapeHtml(headers.interval)}</th>
+            <th>${this.escapeHtml(headers.lastExecuted)}</th>
+            <th>${this.escapeHtml(headers.status)}</th>
+            <th>${this.escapeHtml(headers.actions)}</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows}
+        </tbody>
+      </table>
+    `;
+  }
+
+  renderInstanceActions(instance, normalizedStatus, options = {}) {
+    if (!instance || !instance.id) {
+      return "--";
+    }
+
+    const showStartForStopped = Boolean(options.showStartForStopped);
+    const actions = [];
+    if (showStartForStopped && normalizedStatus === "stopped") {
+      actions.push("start");
+    } else {
+      actions.push("stop");
+    }
+    actions.push("edit", "delete");
+
+    const buttons = actions
+      .map((action) => this.renderInstanceActionButton(action, instance, normalizedStatus))
+      .filter(Boolean)
+      .join("");
+
+    if (!buttons) {
+      return "--";
+    }
+
+    return `<div class="running-task-actions">${buttons}</div>`;
+  }
+
+  renderInstanceActionButton(action, instance, normalizedStatus) {
+    if (!instance || typeof instance.id !== "number") {
+      return "";
+    }
+
+    const label = this.translate(`instances.actions.${action}`, action);
+    if (!label) {
+      return "";
+    }
+
+    let disabled = false;
+    if (action === "stop") {
+      disabled = normalizedStatus === "stopped";
+    }
+
+    const extraClass = action === "delete" ? "btn-delete" : "";
+    return `
+      <button type="button" class="account-action-btn running-task-action-btn ${extraClass}" data-instance-action="${action}" data-instance-id="${instance.id}" ${disabled ? "disabled" : ""}>
+        ${this.escapeHtml(label)}
+      </button>
+    `;
+  }
+
+  handleInstanceStatusMessage(message) {
+    if (!message || typeof message.instanceId !== "number") {
+      return;
+    }
+    this.scheduleRunningTasksRefresh();
+  }
+
+  scheduleRunningTasksRefresh() {
+    if (this.runningTasksRefreshTimer) {
+      return;
+    }
+    this.runningTasksRefreshTimer = window.setTimeout(() => {
+      this.runningTasksRefreshTimer = null;
+      void this.refreshRunningTasksPanel(true);
+    }, 600);
+  }
+
+  // 多任务模式下不再需要账户激活弹出确认框相关事件处理
 
   // ========== AI 模型管理 ==========
 
@@ -8208,47 +8980,19 @@ class TradingMonitor {
   }
 
   renderAiModelCard(model) {
-    const activeBadge = model.is_active
-      ? `<span class="account-badge badge-active">${this.escapeHtml(this.translate("aiModels.active", "Active"))}</span>`
-      : "";
-
-    const activateLabel = this.translate("aiModels.activate", "Activate");
-    const currentLabel = this.translate("aiModels.active", "Active");
+    // 多任务模式下不再需要激活状态和激活按钮
     const editLabel = this.translate("aiModels.edit", "Edit");
     const deleteLabel = this.translate("aiModels.delete", "Delete");
     const testLabel = this.translate("aiModels.test", "Test");
 
-    let activateBtn;
-    if (model.is_active) {
-      activateBtn = `<button class="account-action-btn" disabled>${this.escapeHtml(currentLabel)}</button>`;
-    } else {
-      const confirmMessage = this.escapeHtml(this.translate("aiModels.messages.activateConfirm", "Switch to this AI model? The trading system will restart."));
-      const confirmLabel = this.escapeHtml(this.translate("common.confirm", "Confirm"));
-      const cancelLabel = this.escapeHtml(this.translate("common.cancel", "Cancel"));
-      
-      activateBtn = `
-        <div class="account-action-wrapper">
-          <button class="account-action-btn btn-activate activate-model-trigger" data-model-id="${model.id}">${this.escapeHtml(activateLabel)}</button>
-          <div class="activate-confirmation-popover" role="alert" aria-hidden="true" data-model-id="${model.id}">
-            <p class="activate-confirmation-text">${confirmMessage}</p>
-            <div class="activate-confirmation-actions">
-              <button type="button" class="link-button cancel-activate-btn">${cancelLabel}</button>
-              <button type="button" class="btn-primary btn-small confirm-activate-model-btn" data-model-id="${model.id}">${confirmLabel}</button>
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
     const iconPath = this.getAiModelIcon(model.model_name || model.name);
 
     return `
-      <div class="account-card ${model.is_active ? "is-active" : ""}" data-model-id="${model.id}">
+      <div class="account-card" data-model-id="${model.id}">
         <div class="account-card-header">
           <div class="account-card-title" style="display: flex; align-items: center; gap: 8px;">
             <img src="${iconPath}" alt="AI Icon" style="width: 20px; height: 20px; object-fit: contain; border-radius: 4px;">
             <span class="account-name">${this.escapeHtml(model.name)}</span>
-            ${activeBadge}
           </div>
         </div>
         <div class="account-card-body">
@@ -8266,7 +9010,6 @@ class TradingMonitor {
           </div>
         </div>
         <div class="account-card-actions">
-          ${activateBtn}
           <button type="button" class="account-action-btn" data-action="test" data-model-id="${model.id}">${this.escapeHtml(testLabel)}</button>
           <button type="button" class="account-action-btn" data-action="edit" data-model-id="${model.id}">${this.escapeHtml(editLabel)}</button>
           <button type="button" class="account-action-btn account-action-btn-danger" data-action="delete" data-model-id="${model.id}">${this.escapeHtml(deleteLabel)}</button>
@@ -8297,44 +9040,7 @@ class TradingMonitor {
       const target = e.target;
       if (!target) return;
 
-      // Handle Activate Trigger (Popover)
-      const triggerBtn = target.closest(".activate-model-trigger");
-      if (triggerBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const modelId = triggerBtn.dataset.modelId;
-        this.showAiModelActivateConfirmation(modelId, triggerBtn);
-        return;
-      }
-
-      // Handle Confirm Activate
-      const confirmBtn = target.closest(".confirm-activate-model-btn");
-      if (confirmBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const modelId = confirmBtn.dataset.modelId;
-        this.hideAiModelActivateConfirmation(modelId);
-        
-        // Find original trigger for loading state
-        const wrapper = confirmBtn.closest(".account-action-wrapper");
-        const originalTrigger = wrapper ? wrapper.querySelector(".activate-model-trigger") : null;
-        
-        await this.activateAiModel(Number(modelId), originalTrigger || confirmBtn);
-        return;
-      }
-
-      // Handle Cancel Activate
-      const cancelBtn = target.closest(".cancel-activate-btn");
-      if (cancelBtn) {
-        e.preventDefault();
-        e.stopPropagation();
-        const popover = cancelBtn.closest(".activate-confirmation-popover");
-        if (popover) {
-          const modelId = popover.dataset.modelId;
-          this.hideAiModelActivateConfirmation(modelId);
-        }
-        return;
-      }
+      // 多任务模式下不再需要激活相关的事件处理
 
       // Handle other actions
       const actionBtn = target.closest("[data-action]");
@@ -8357,40 +9063,7 @@ class TradingMonitor {
     });
   }
 
-  showAiModelActivateConfirmation(modelId, triggerBtn) {
-    // Hide other popovers
-    const allPopovers = document.querySelectorAll(".activate-confirmation-popover");
-    allPopovers.forEach(p => {
-      p.setAttribute("aria-hidden", "true");
-      p.classList.remove("is-visible");
-    });
-
-    const popover = document.querySelector(`.activate-confirmation-popover[data-model-id="${modelId}"]`);
-    if (popover) {
-      popover.setAttribute("aria-hidden", "false");
-      popover.classList.add("is-visible");
-    }
-
-    // Click outside to close
-    const closeHandler = (e) => {
-      if (!popover.contains(e.target) && !triggerBtn.contains(e.target)) {
-        this.hideAiModelActivateConfirmation(modelId);
-        document.removeEventListener("click", closeHandler);
-      }
-    };
-    // Delay to avoid immediate trigger
-    setTimeout(() => {
-      document.addEventListener("click", closeHandler);
-    }, 0);
-  }
-
-  hideAiModelActivateConfirmation(modelId) {
-    const popover = document.querySelector(`.activate-confirmation-popover[data-model-id="${modelId}"]`);
-    if (popover) {
-      popover.setAttribute("aria-hidden", "true");
-      popover.classList.remove("is-visible");
-    }
-  }
+  // 多任务模式下不再需要 AI 模型激活弹出确认框相关事件处理
 
   async openAiModelFormModal(modelId = null) {
     const modal = document.getElementById("ai-model-form-modal");
@@ -8683,42 +9356,7 @@ class TradingMonitor {
     }
   }
 
-  async activateAiModel(modelId, triggerBtn) {
-    if (!modelId) return;
-    
-    // Confirmation is now handled by the UI popover
-    
-    try {
-      this.setButtonLoading(triggerBtn, true, "aiModels.activate", "aiModels.activating");
-      
-      const csrfToken = this.getCsrfToken();
-      const response = await fetch(`/api/ai-models/${modelId}/activate`, {
-        method: "POST",
-        credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "X-CSRF-Token": csrfToken,
-        },
-      });
-      
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || "激活失败");
-      }
-      
-      this.showToast("success", this.translate("common.success", "Success"), this.translate("aiModels.messages.activateSuccess", "AI model activated"));
-      await this.loadAiModelsList();
-      // 刷新全局配置以更新图标
-      await this.fetchFullConfig(true);
-      
-    } catch (error) {
-      console.error("激活 AI 模型失败:", error);
-      const message = error instanceof Error ? error.message : String(error);
-      this.showToast("error", this.translate("common.error", "Error"), message);
-    } finally {
-      this.setButtonLoading(triggerBtn, false);
-    }
-  }
+  // 多任务模式下不再需要 activateAiModel 方法
 
   async deleteAiModel(modelId, triggerBtn) {
     if (!modelId) return;
@@ -9216,13 +9854,20 @@ class TradingMonitor {
       if (this.bottomTabsEl) {
         this.bottomTabsEl.style.display = "none";
       }
+      if (this.strategyBottomTabsEl) {
+        this.strategyBottomTabsEl.style.display = "";
+      }
       this.strategyEditorEl.classList.add("active");
       this.strategyEditorEl.setAttribute("aria-hidden", "false");
+      void this.refreshRunningTasksPanel();
     } else {
       this.hideStrategyDeleteConfirm();
       this.tradingDashboardEl.style.display = "";
       if (this.bottomTabsEl) {
         this.bottomTabsEl.style.display = "";
+      }
+      if (this.strategyBottomTabsEl) {
+        this.strategyBottomTabsEl.style.display = "none";
       }
       this.strategyEditorEl.classList.remove("active");
       this.strategyEditorEl.setAttribute("aria-hidden", "true");

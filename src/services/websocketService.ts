@@ -76,12 +76,22 @@ export interface PongMessage {
   timestamp: string;
 }
 
+// Strategy Task 状态消息类型
+export interface InstanceStatusMessage {
+  type: "instance_status";
+  instanceId: number;
+  status: "idle" | "executing" | "error";
+  message: string;
+  timestamp: string;
+}
+
 export type DashboardMessage =
   | TradingStatusMessage
   | PricesUpdateMessage
   | PositionsUpdateMessage
   | CandlesSnapshotMessage
-  | PongMessage;
+  | PongMessage
+  | InstanceStatusMessage;
 
 type ClientLifecycleHandler = (client: WebSocket) => void;
 type ClientMessageHandler = (client: WebSocket, payload: unknown) => void;
@@ -241,6 +251,23 @@ class WebSocketService {
       timestamp: new Date().toISOString(),
       trigger,
       data,
+    });
+  }
+
+  /**
+   * 推送 Strategy Task 执行状态
+   */
+  pushInstanceStatus(
+    instanceId: number,
+    status: InstanceStatusMessage["status"],
+    message: string
+  ): void {
+    this.broadcast({
+      type: "instance_status",
+      instanceId,
+      status,
+      message,
+      timestamp: new Date().toISOString(),
     });
   }
 

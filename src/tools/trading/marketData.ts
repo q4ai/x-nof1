@@ -22,7 +22,25 @@
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
 import { createTradingClient } from "../../services/okxTradingClient";
+import { createExchangeClientFromActiveAccount } from "../../services/okxClient";
 import { RISK_PARAMS } from "../../config/riskParams.new";
+import { getInstanceExchangeClient } from "../../services/instanceContext";
+
+/**
+ * 获取交易所客户端
+ * 优先使用实例上下文中的客户端（多实例并行模式）
+ * 回退到全局激活账户的客户端（传统单实例模式）
+ */
+async function getExchangeClient(): Promise<any> {
+  // 检查是否在实例上下文中
+  const instanceClient = getInstanceExchangeClient();
+  if (instanceClient) {
+    return instanceClient;
+  }
+  
+  // 回退到全局
+  return await createExchangeClientFromActiveAccount();
+}
 
 /**
  * 确保数值是有效的有限数字，否则返回默认值
@@ -229,7 +247,8 @@ export const getMarketPriceTool = createTool({
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
   }),
   execute: async ({ symbol }) => {
-  const client = createTradingClient();
+    // 获取交易所客户端（优先实例上下文，回退全局）
+    const client = await getExchangeClient();
     const contract = `${symbol}_USDT`;
     
     const ticker = await client.getFuturesTicker(contract);
@@ -260,7 +279,8 @@ export const getTechnicalIndicatorsTool = createTool({
     limit: z.number().default(100).describe("K线数量"),
   }),
   execute: async ({ symbol, interval, limit }) => {
-  const client = createTradingClient();
+    // 获取交易所客户端（优先实例上下文，回退全局）
+    const client = await getExchangeClient();
     const contract = `${symbol}_USDT`;
     
     const candles = await client.getFuturesCandles(contract, interval, limit);
@@ -285,7 +305,8 @@ export const getFundingRateTool = createTool({
     symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
   }),
   execute: async ({ symbol }) => {
-  const client = createTradingClient();
+    // 获取交易所客户端（优先实例上下文，回退全局）
+    const client = await getExchangeClient();
     const contract = `${symbol}_USDT`;
     
     const fundingRate = await client.getFundingRate(contract);
@@ -310,7 +331,8 @@ export const getOrderBookTool = createTool({
     limit: z.number().default(10).describe("深度档位数量"),
   }),
   execute: async ({ symbol, limit }) => {
-  const client = createTradingClient();
+    // 获取交易所客户端（优先实例上下文，回退全局）
+    const client = await getExchangeClient();
     const contract = `${symbol}_USDT`;
     
     const orderBook = await client.getOrderBook(contract, limit);

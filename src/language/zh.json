@@ -450,12 +450,81 @@
 			"testSuccess": "连接成功",
 			"testFailed": "连接失败",
 			"balanceLabel": "账户权益：{{balance}}",
+			"multiTaskMode": "多任务模式：请在策略编辑器中为每个任务配置账户",
 			"validation": {
 				"missingName": "请填写账户名称",
 				"missingOkx": "请填写完整的 OKX 凭证",
 				"missingBinance": "请填写完整的 Binance 凭证",
 				"missingBitget": "请填写完整的 Bitget 凭证"
 			}
+		}
+	},
+	"instances": {
+		"empty": "暂无策略任务",
+		"addInstance": "新增策略任务",
+		"labels": {
+			"instance": "实例",
+			"strategy": "策略",
+			"account": "账户",
+			"model": "AI 模型",
+			"interval": "执行间隔",
+			"lastExecuted": "上次执行",
+			"actions": "操作"
+		},
+		"actions": {
+			"start": "启动",
+			"pause": "暂停",
+			"stop": "停止",
+			"trigger": "立即执行",
+			"edit": "编辑",
+			"delete": "删除"
+		},
+		"status": {
+			"running": "运行中",
+			"paused": "已暂停",
+			"stopped": "已停止"
+		},
+		"executionStatus": {
+			"success": "成功",
+			"error": "失败",
+			"skipped": "已跳过"
+		},
+		"form": {
+			"titleAdd": "新增策略任务",
+			"titleEdit": "编辑策略任务",
+			"name": "实例名称 <span class=\"required\">*</span>",
+			"namePlaceholder": "BTC 剥头皮",
+			"account": "交易账户 <span class=\"required\">*</span>",
+			"aiModel": "AI 模型 <span class=\"required\">*</span>",
+			"strategy": "策略文件 <span class=\"required\">*</span>",
+			"strategyHint": "执行间隔将从策略配置中读取",
+			"selectAccount": "请选择账户",
+			"selectModel": "请选择 AI 模型",
+			"selectStrategy": "请选择策略文件"
+		},
+		"messages": {
+			"loginRequired": "请登录后管理策略任务。",
+			"loadError": "加载策略任务失败，请稍后再试。",
+			"createSuccess": "策略任务创建成功",
+			"updateSuccess": "策略任务更新成功",
+			"statusSuccess": "状态已更新",
+			"triggerSuccess": "已触发执行",
+			"deleteSuccess": "策略任务已删除",
+			"deleteConfirm": "确定删除策略任务“{{name}}”吗？",
+			"validation": {
+				"missingName": "请输入实例名称",
+				"missingAccount": "请选择关联账户",
+				"missingModel": "请选择 AI 模型",
+				"missingStrategy": "请选择策略文件"
+			}
+		},
+		"allTasks": {
+			"title": "全部任务",
+			"empty": "暂无策略任务"
+		},
+		"runningTasks": {
+			"title": "运行中的任务",
+			"empty": "暂无运行中的任务"
 		}
 	},
 	"strategy": {

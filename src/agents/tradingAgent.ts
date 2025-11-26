@@ -188,7 +188,7 @@ function applyTemplateVariables(template: string, variables: PromptVariables): s
 }
 
 function buildBasePromptVariables(
-	strategyId: string,
+	strategyIdOrObj: string | any,
 	intervalMinutes: number,
 	riskConfig: AccountRiskConfig,
 	language: StrategyLanguage,
@@ -198,8 +198,14 @@ function buildBasePromptVariables(
 	// 优先使用策略中配置的交易币种，若无则回退到全局配置
 	const symbols = tradingSymbols && tradingSymbols.length > 0 ? tradingSymbols : RISK_PARAMS.TRADING_SYMBOLS;
 	const symbolList = symbols.join(symbolSeparator);
-	return {
-		STRATEGY_ID: strategyId,
+
+	// 支持传入 strategy 对象或仅传入 strategyId
+	const strategyObj = typeof strategyIdOrObj === "object" && strategyIdOrObj !== null ? strategyIdOrObj : null;
+	const strategyParams = strategyObj?.params ?? null;
+
+	// 基础变量（来自全局与账户风控）
+	const base: PromptVariables = {
+		STRATEGY_ID: typeof strategyIdOrObj === "string" ? strategyIdOrObj : (strategyObj?.meta?.name ?? "custom"),
 		TRADING_INTERVAL_MINUTES: formatNumber(intervalMinutes, 0),
 		MAX_HOLDING_HOURS: formatNumber(RISK_PARAMS.MAX_HOLDING_HOURS, 0),
 		MIN_HOLDING_MINUTES: formatNumber(RISK_PARAMS.MIN_HOLDING_MINUTES, 0),
@@ -219,6 +225,60 @@ function buildBasePromptVariables(
 		),
 		SYMBOL_LIST: symbolList,
 	};
+
+	// 如果策略文件提供了 params，则将常见字段映射为模板占位符
+	if (strategyParams) {
+		try {
+			const p: any = strategyParams;
+
+			// 使用策略提供的 intervalMinutes 覆盖（如果存在且为有效数值）
+			if (p.intervalMinutes !== undefined && Number.isFinite(Number(p.intervalMinutes))) {
+				base.TRADING_INTERVAL_MINUTES = formatNumber(Number(p.intervalMinutes), 0);
+				// 重新计算 holding cycles
+				if (p.maxHoldingHours !== undefined && Number.isFinite(Number(p.maxHoldingHours))) {
+					const maxCycles = Math.floor((Number(p.maxHoldingHours) * 60) / Number(p.intervalMinutes || intervalMinutes));
+					base.MAX_HOLDING_CYCLES = String(maxCycles);
+				}
+			}
+
+			if (p.maxHoldingHours !== undefined && Number.isFinite(Number(p.maxHoldingHours))) {
+				base.MAX_HOLDING_HOURS = formatNumber(Number(p.maxHoldingHours), 0);
+			}
+			if (p.minHoldingMinutes !== undefined && Number.isFinite(Number(p.minHoldingMinutes))) {
+				base.MIN_HOLDING_MINUTES = formatNumber(Number(p.minHoldingMinutes), 0);
+			}
+			if (p.maxPositions !== undefined && Number.isFinite(Number(p.maxPositions))) {
+				base.MAX_POSITIONS = formatNumber(Number(p.maxPositions), 0);
+			}
+			if (p.extremeStopLossPercent !== undefined && Number.isFinite(Number(p.extremeStopLossPercent))) {
+				base.EXTREME_STOP_LOSS_PERCENT = formatNumber(Number(p.extremeStopLossPercent), 0);
+			}
+			if (p.accountStopLoss !== undefined && Number.isFinite(Number(p.accountStopLoss))) {
+				base.ACCOUNT_STOP_LOSS_USDT = formatNumber(Number(p.accountStopLoss), 0);
+			}
+			if (p.accountTakeProfit !== undefined && Number.isFinite(Number(p.accountTakeProfit))) {
+				base.ACCOUNT_TAKE_PROFIT_USDT = formatNumber(Number(p.accountTakeProfit), 0);
+			}
+			if (p.drawdownWarning !== undefined && Number.isFinite(Number(p.drawdownWarning))) {
+				base.ACCOUNT_DRAWDOWN_WARNING_PERCENT = formatNumber(Number(p.drawdownWarning), 0);
+			}
+			if (p.drawdownNoNew !== undefined && Number.isFinite(Number(p.drawdownNoNew))) {
+				base.ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT = formatNumber(Number(p.drawdownNoNew), 0);
+			}
+			if (p.drawdownForceClose !== undefined && Number.isFinite(Number(p.drawdownForceClose))) {
+				base.ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT = formatNumber(Number(p.drawdownForceClose), 0);
+			}
+
+			// 额外映射：杠杆等常用字段
+			if (p.leverage !== undefined && Number.isFinite(Number(p.leverage))) {
+				base.LEVERAGE = formatNumber(Number(p.leverage), 0);
+			}
+		} catch (e) {
+			// 不阻塞主流程，日志在外层处理
+		}
+	}
+
+	return base;
 }
 
 function buildSectionsFromPrompts(
@@ -708,19 +768,20 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 	const strategyName = getActiveStrategyName();
 	const riskConfig = getRiskConfigSnapshot();
 	
-	// 加载策略配置的交易币种
+	// 加载策略文件（用于 params 替换与交易币种配置）
 	let tradingSymbols: string[] | undefined;
+	let strategyObj: any = null;
 	if (strategyName) {
-		const strategy = await StrategyFileManager.loadStrategy(strategyName);
-		if (strategy?.params?.tradingSymbols) {
-			tradingSymbols = strategy.params.tradingSymbols
+		strategyObj = await StrategyFileManager.loadStrategy(strategyName);
+		if (strategyObj?.params?.tradingSymbols) {
+			tradingSymbols = strategyObj.params.tradingSymbols
 				.split(",")
-				.map((s) => s.trim().toUpperCase())
-				.filter((s) => s.length > 0);
+				.map((s: string) => s.trim().toUpperCase())
+				.filter((s: string) => s.length > 0);
 		}
 	}
-	
-	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
+
+	const baseVariables = buildBasePromptVariables(strategyObj ?? strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
 	const sections = buildConfiguredSections(baseVariables);
 
 	const templateVariables: PromptVariables = {
@@ -753,19 +814,20 @@ async function generateInstructions(intervalMinutes: number): Promise<string> {
 	const strategyName = getActiveStrategyName();
 	const riskConfig = await getAccountRiskConfig();
 	
-	// 加载策略配置的交易币种
+	// 加载策略文件（用于 params 替换与交易币种配置）
 	let tradingSymbols: string[] | undefined;
+	let strategyObj: any = null;
 	if (strategyName) {
-		const strategy = await StrategyFileManager.loadStrategy(strategyName);
-		if (strategy?.params?.tradingSymbols) {
-			tradingSymbols = strategy.params.tradingSymbols
+		strategyObj = await StrategyFileManager.loadStrategy(strategyName);
+		if (strategyObj?.params?.tradingSymbols) {
+			tradingSymbols = strategyObj.params.tradingSymbols
 				.split(",")
-				.map((s) => s.trim().toUpperCase())
-				.filter((s) => s.length > 0);
+				.map((s: string) => s.trim().toUpperCase())
+				.filter((s: string) => s.length > 0);
 		}
 	}
-	
-	const baseVariables = buildBasePromptVariables(strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
+
+	const baseVariables = buildBasePromptVariables(strategyObj ?? strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
 	const sections = buildConfiguredSections(baseVariables);
 
 	const template = await loadInstructionsTemplate(language);

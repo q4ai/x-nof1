@@ -41,15 +41,7 @@ import { getStrategyPromptDefaultSections } from "../agents/tradingAgent";
 import { RISK_PARAMS, reloadRiskParams } from "../config/riskParams.new";
 import { resetLiveDataToDefaults } from "../database/reset-live-data";
 import { getExchangeProxy } from "../config/exchange";
-import {
-  executeTradingDecision,
-  getTradingLoopState,
-  initTradingSystem,
-  restartTradingLoop,
-  setIterationCount,
-  setTradingLoopEnabled,
-  setTradingStartTime,
-} from "../scheduler/tradingLoop";
+import { initTradingSystem } from "../scheduler/tradingSystemInit";
 import { summarizeAgentResponseText } from "../database/agent-request-logs";
 import { getActiveAccount } from "../services/accountConfigService";
 
@@ -1098,10 +1090,9 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       await initExchangeClient();
       await recordActiveAccountSnapshot(switchTimestamp);
       
-      // 重载交易循环以使用新账户
-      logger.info("正在重新加载交易系统以使用新账户...");
+      // 重新加载风险参数，Strategy Tasks 会在下一次调度时自动应用
+      logger.info("正在重新加载风险参数以应用新账户...");
       await reloadRiskParams();
-      await restartTradingLoop();
 
       // 切换账户后，自动更新 INITIAL_BALANCE
       try {
@@ -1438,10 +1429,9 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       
       logger.info(`激活 AI 模型成功: ${model.name} (ID: ${model.id})`);
       
-      // 重新加载交易循环以使用新的 AI 模型
-      logger.info("正在重新加载交易系统以使用新 AI 模型...");
+      // 重新加载风险参数，Strategy Tasks 会自动在下一轮执行使用新模型
+      logger.info("正在重新加载风险参数以应用新的 AI 模型...");
       await reloadRiskParams();
-      await restartTradingLoop();
       
       return c.json({ 
         success: true,
@@ -1583,6 +1573,314 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       
       logger.error("AI 模型连接测试失败:", { error, message });
       return c.json({ success: false, error: message });
+    }
+  });
+
+  // ========== Strategy Tasks 管理 API ==========
+
+  /**
+   * 获取所有 Strategy Tasks
+   */
+  app.get("/api/trading-instances", requireAuth, async (c) => {
+    try {
+      const { getAllTradingInstances } = await import("../services/tradingInstanceService");
+      const instances = await getAllTradingInstances();
+      return c.json({ instances });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取 Strategy Tasks 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取单个 Strategy Task
+   */
+  app.get("/api/trading-instances/:id", requireAuth, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的实例ID" }, 400);
+      }
+
+      const { getTradingInstanceById } = await import("../services/tradingInstanceService");
+      const instance = await getTradingInstanceById(id);
+      if (!instance) {
+        return c.json({ error: "实例不存在" }, 404);
+      }
+      return c.json({ instance });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 创建 Strategy Task
+   */
+  app.post("/api/trading-instances", requireAuthWithCsrf, async (c) => {
+    try {
+      const body = await c.req.json();
+      
+      // 验证必填字段
+      if (!body.name || typeof body.name !== "string") {
+        return c.json({ error: "名称不能为空" }, 400);
+      }
+      if (!body.account_id || typeof body.account_id !== "number") {
+        return c.json({ error: "请选择账户" }, 400);
+      }
+      if (!body.ai_model_id || typeof body.ai_model_id !== "number") {
+        return c.json({ error: "请选择 AI 模型" }, 400);
+      }
+      if (!body.strategy_name || typeof body.strategy_name !== "string") {
+        return c.json({ error: "请选择策略" }, 400);
+      }
+
+      // 从策略配置中读取循环间隔
+      let intervalMinutes = 20; // 默认值
+      try {
+        const { StrategyFileManager } = await import("../services/strategyFileManager");
+        const strategy = await StrategyFileManager.loadStrategy(body.strategy_name);
+        if (strategy?.params?.intervalMinutes) {
+          intervalMinutes = Number(strategy.params.intervalMinutes);
+          if (!Number.isFinite(intervalMinutes) || intervalMinutes < 1) {
+            intervalMinutes = 20;
+          }
+        }
+        logger.info(`从策略 ${body.strategy_name} 读取循环间隔: ${intervalMinutes} 分钟`);
+      } catch (error) {
+        logger.warn(`读取策略 ${body.strategy_name} 循环间隔失败，使用默认值 ${intervalMinutes} 分钟`);
+      }
+
+      const { createTradingInstance } = await import("../services/tradingInstanceService");
+      const instance = await createTradingInstance({
+        name: body.name.trim(),
+        account_id: body.account_id,
+        ai_model_id: body.ai_model_id,
+        strategy_name: body.strategy_name,
+        interval_minutes: intervalMinutes,
+      });
+
+      logger.info(`创建 Strategy Task: ${instance.name} (ID: ${instance.id})`);
+      return c.json({ success: true, instance });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("创建 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 更新 Strategy Task
+   */
+  app.put("/api/trading-instances/:id", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的实例ID" }, 400);
+      }
+
+      const body = await c.req.json();
+      
+      // 如果策略名称变更，重新从策略配置中读取循环间隔
+      let intervalMinutes: number | undefined = undefined;
+      if (body.strategy_name) {
+        try {
+          const { StrategyFileManager } = await import("../services/strategyFileManager");
+          const strategy = await StrategyFileManager.loadStrategy(body.strategy_name);
+          if (strategy?.params?.intervalMinutes) {
+            intervalMinutes = Number(strategy.params.intervalMinutes);
+            if (!Number.isFinite(intervalMinutes) || intervalMinutes < 1) {
+              intervalMinutes = 20;
+            }
+          } else {
+            intervalMinutes = 20;
+          }
+          logger.info(`从策略 ${body.strategy_name} 读取循环间隔: ${intervalMinutes} 分钟`);
+        } catch (error) {
+          logger.warn(`读取策略 ${body.strategy_name} 循环间隔失败`);
+        }
+      }
+      
+      const { updateTradingInstance } = await import("../services/tradingInstanceService");
+      const instance = await updateTradingInstance(id, {
+        name: body.name?.trim(),
+        account_id: body.account_id,
+        ai_model_id: body.ai_model_id,
+        strategy_name: body.strategy_name,
+        interval_minutes: intervalMinutes,
+        status: body.status,
+      });
+
+      if (!instance) {
+        return c.json({ error: "实例不存在" }, 404);
+      }
+
+      logger.info(`更新 Strategy Task: ${instance.name} (ID: ${instance.id})`);
+      return c.json({ success: true, instance });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("更新 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 删除 Strategy Task
+   */
+  app.delete("/api/trading-instances/:id", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的实例ID" }, 400);
+      }
+
+      const { deleteTradingInstance, getTradingInstanceById } = await import("../services/tradingInstanceService");
+      const instance = await getTradingInstanceById(id);
+      if (!instance) {
+        return c.json({ error: "实例不存在" }, 404);
+      }
+
+      // 不允许删除正在运行的实例
+      if (instance.status === "running") {
+        return c.json({ error: "请先停止实例再删除" }, 400);
+      }
+
+      await deleteTradingInstance(id);
+      logger.info(`删除 Strategy Task: ${instance.name} (ID: ${id})`);
+      return c.json({ success: true });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("删除 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 启动 Strategy Task
+   */
+  app.post("/api/trading-instances/:id/start", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的实例ID" }, 400);
+      }
+
+      const { startInstance, getTradingInstanceById } = await import("../services/tradingInstanceService");
+      const instance = await getTradingInstanceById(id);
+      if (!instance) {
+        return c.json({ error: "实例不存在" }, 404);
+      }
+
+      await startInstance(id);
+      logger.info(`启动 Strategy Task: ${instance.name} (ID: ${id})`);
+      return c.json({ success: true, message: "实例已启动" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("启动 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 暂停 Strategy Task
+   */
+  app.post("/api/trading-instances/:id/pause", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的实例ID" }, 400);
+      }
+
+      const { pauseInstance, getTradingInstanceById } = await import("../services/tradingInstanceService");
+      const instance = await getTradingInstanceById(id);
+      if (!instance) {
+        return c.json({ error: "实例不存在" }, 404);
+      }
+
+      await pauseInstance(id);
+      logger.info(`暂停 Strategy Task: ${instance.name} (ID: ${id})`);
+      return c.json({ success: true, message: "实例已暂停" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("暂停 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 停止 Strategy Task
+   */
+  app.post("/api/trading-instances/:id/stop", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的实例ID" }, 400);
+      }
+
+      const { stopInstance, getTradingInstanceById } = await import("../services/tradingInstanceService");
+      const instance = await getTradingInstanceById(id);
+      if (!instance) {
+        return c.json({ error: "实例不存在" }, 404);
+      }
+
+      await stopInstance(id);
+      logger.info(`停止 Strategy Task: ${instance.name} (ID: ${id})`);
+      return c.json({ success: true, message: "实例已停止" });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("停止 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 手动触发 Strategy Task 执行
+   * 不管实例当前状态，立即触发一次交易决策
+   */
+  app.post("/api/trading-instances/:id/trigger", requireAuthWithCsrf, async (c) => {
+    try {
+      const id = Number(c.req.param("id"));
+      if (!Number.isFinite(id) || id <= 0) {
+        return c.json({ error: "无效的实例ID" }, 400);
+      }
+
+      const { getTradingInstanceById } = await import("../services/tradingInstanceService");
+      const { triggerInstanceExecution } = await import("../scheduler/multiInstanceTradingLoop");
+      
+      const instance = await getTradingInstanceById(id);
+      if (!instance) {
+        return c.json({ error: "实例不存在" }, 404);
+      }
+
+      const result = await triggerInstanceExecution(id);
+      logger.info(`手动触发 Strategy Task: ${instance.name} (ID: ${id}) - ${result.message}`);
+      
+      if (result.success) {
+        return c.json({ success: true, message: result.message });
+      } else {
+        return c.json({ error: result.message }, 400);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("触发 Strategy Task 失败:", error);
+      return c.json({ error: message }, 500);
+    }
+  });
+
+  /**
+   * 获取多实例调度状态
+   */
+  app.get("/api/trading-instances/status", requireAuth, async (c) => {
+    try {
+      const { getMultiInstanceStatus } = await import("../scheduler/multiInstanceTradingLoop");
+      const status = await getMultiInstanceStatus();
+      return c.json(status);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取多实例状态失败:", error);
+      return c.json({ error: message }, 500);
     }
   });
 
@@ -2108,47 +2406,12 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const { reloadRiskParams } = await import("../config/riskParams.new");
       await reloadRiskParams();
       await initTradingSystem();
-      await restartTradingLoop();
 
-      return c.json({ success: true, message: "配置已重新加载并重启交易循环" });
+      return c.json({ success: true, message: "配置已重新加载，Strategy Tasks 将在下一轮执行使用最新参数" });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
       logger.error("重载配置失败:", error);
       return c.json({ error: message }, 500);
-    }
-  });
-
-  /**
-   * 查询交易循环状态
-   */
-  app.get("/api/trading-loop/status", requireAuth, (c) => {
-    try {
-      const state = getTradingLoopState();
-      return c.json({ success: true, state });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "未知错误";
-      logger.error("获取交易循环状态失败:", error);
-      return c.json({ success: false, error: message }, 500);
-    }
-  });
-
-  /**
-   * 更新交易循环状态（启用/停用）
-   */
-  app.post("/api/trading-loop/state", requireAuthWithCsrf, async (c) => {
-    try {
-  const body = (await c.req.json().catch(() => ({}))) as { enabled?: unknown };
-  const enabledValue = body.enabled;
-      if (typeof enabledValue !== "boolean") {
-        return c.json({ success: false, error: "缺少 enabled 字段或类型错误" }, 400);
-      }
-
-      const state = await setTradingLoopEnabled(enabledValue);
-      return c.json({ success: true, state });
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : "未知错误";
-      logger.error("更新交易循环状态失败:", error);
-      return c.json({ success: false, error: message }, 500);
     }
   });
 
@@ -2453,9 +2716,10 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         return c.json({ success: false, error: result.message }, 400);
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "执行失败";
       logger.error("手动交易执行失败", error);
-      return c.json({ success: false, error: error.message || "执行失败" }, 500);
+      return c.json({ success: false, error: message }, 500);
     }
   });
 
@@ -2464,25 +2728,64 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.post("/api/trading/execute-manual", requireAuthWithCsrf, async (c) => {
     try {
-      logger.info("收到手动执行 AI 决策请求");
-      
-      // 执行交易决策（异步，不阻塞响应），传递 manual 触发标记
-      executeTradingDecision("manual")
-        .then(() => {
-          logger.info("手动 AI 决策执行完成");
-        })
-        .catch((error: unknown) => {
-          logger.error("手动 AI 决策执行失败:", error);
-        });
-      
+      logger.info("收到 Strategy Task 手动执行请求");
+      const body = (await c.req.json().catch(() => ({}))) as { instanceId?: unknown };
+      const requestedId = body.instanceId !== undefined ? Number(body.instanceId) : undefined;
+      const resolvedRequestedId = typeof requestedId === "number" && Number.isFinite(requestedId) && requestedId > 0
+        ? requestedId
+        : undefined;
+
+      const { getRunningInstances, getAllTradingInstances } = await import("../services/tradingInstanceService");
+      const runningInstances = await getRunningInstances();
+
+      let targetInstance = resolvedRequestedId
+        ? runningInstances.find((instance) => instance.id === resolvedRequestedId)
+        : null;
+
+      if (!targetInstance) {
+        const activeAccount = await getActiveAccount();
+        if (activeAccount) {
+          targetInstance = runningInstances.find((instance) => instance.account_id === activeAccount.id) || null;
+        }
+      }
+
+      if (!targetInstance && runningInstances.length > 0) {
+        targetInstance = runningInstances[0];
+      }
+
+      if (!targetInstance) {
+        const allInstances = await getAllTradingInstances();
+        if (resolvedRequestedId) {
+          targetInstance = allInstances.find((instance) => instance.id === resolvedRequestedId) || null;
+        } else {
+          targetInstance = allInstances.find((instance) => instance.status === "running") || null;
+        }
+      }
+
+      if (!targetInstance) {
+        return c.json({
+          success: false,
+          error: "当前没有可执行的 Strategy Task，请先在设置页创建并启动实例",
+        }, 400);
+      }
+
+      const { triggerInstanceExecution } = await import("../scheduler/multiInstanceTradingLoop");
+      const result = await triggerInstanceExecution(targetInstance.id);
+
+      if (!result.success) {
+        return c.json({ success: false, error: result.message }, 400);
+      }
+
+      logger.info(`已手动触发实例 ${targetInstance.name} (ID: ${targetInstance.id}) 执行`);
       return c.json({
         success: true,
-        message: "AI 决策已触发执行",
-        timestamp: new Date().toISOString()
+        message: result.message,
+        instanceId: targetInstance.id,
+        timestamp: new Date().toISOString(),
       });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
-      logger.error("触发手动 AI 决策失败:", error);
+      logger.error("触发 Strategy Task 手动执行失败:", error);
       return c.json({ success: false, error: message }, 500);
     }
   });
@@ -2600,11 +2903,81 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/public/model", async (c) => {
     try {
+      // 优先从最新的任务实例中获取模型信息
+      const { getLatestInstance } = await import("../services/tradingInstanceService");
+      const latestInstance = await getLatestInstance();
+      
+      if (latestInstance && latestInstance.ai_model_name) {
+        return c.json({ 
+          model: latestInstance.ai_model_name,
+          aiModelName: latestInstance.ai_model_name 
+        });
+      }
+
+      // 回退到全局配置（兼容旧逻辑）
       const { getConfigValue } = await import("../database/init-config");
       const model = (await getConfigValue("AI_MODEL_NAME")) || "gpt-4o";
-      return c.json({ model });
+      return c.json({ model, aiModelName: model });
     } catch (error: unknown) {
       return c.json({ model: "unknown" });
+    }
+  });
+
+  /**
+   * 获取当前活跃账户运行中实例的公开状态
+   * 用于未登录用户也能看到 AI overlay 状态
+   */
+  app.get("/api/public/instances-status", async (c) => {
+    try {
+      const { getActiveAccount } = await import("../services/accountConfigService");
+      const { getRunningInstances, getLatestInstanceForAccount } = await import("../services/tradingInstanceService");
+      
+      // 1. 获取当前活跃账户
+      const activeAccount = await getActiveAccount();
+      if (!activeAccount) {
+        return c.json({ runningInstance: null });
+      }
+
+      // 2. 获取所有运行中的实例
+      const runningInstances = await getRunningInstances();
+      
+      // 3. 查找该账户关联的运行中实例
+      const accountInstance = runningInstances.find(
+        (instance) => instance.account_id === activeAccount.id
+      );
+
+      if (accountInstance) {
+        return c.json({
+          runningInstance: {
+            id: accountInstance.id,
+            name: accountInstance.name,
+            ai_model_name: accountInstance.ai_model_name,
+            strategy_name: accountInstance.strategy_name,
+            status: accountInstance.status,
+          },
+        });
+      }
+
+      // 4. 如果没有运行中的实例，尝试获取该账户最近的一个实例（可能是 stopped）
+      // 这样可以显示该账户配置的模型，而不是回退到全局默认
+      const latestInstance = await getLatestInstanceForAccount(activeAccount.id);
+      
+      if (latestInstance) {
+        return c.json({
+          runningInstance: {
+            id: latestInstance.id,
+            name: latestInstance.name,
+            ai_model_name: latestInstance.ai_model_name,
+            strategy_name: latestInstance.strategy_name,
+            status: latestInstance.status,
+          },
+        });
+      }
+
+      return c.json({ runningInstance: null });
+    } catch (error: unknown) {
+      logger.error("获取公开实例状态失败:", error);
+      return c.json({ runningInstance: null });
     }
   });
 
@@ -3143,10 +3516,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       // 调用重置逻辑，仅清理当前账户数据
       const result = await resetLiveDataToDefaults(accountId);
       
-      // 重置交易循环状态
-      setIterationCount(0);
-      setTradingStartTime(new Date());
-      
       logger.info(`实盘数据重置完成 (account_id=${accountId})`);
       
       return c.json({ 
@@ -3165,19 +3534,15 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   
   // 获取策略列表
+  // 注意：多任务并行架构下，不再有"激活策略"的概念，每个策略任务独立选择策略
   app.get("/api/strategies", requireAuth, async (c) => {
     try {
       const { StrategyFileManager } = await import("../services/strategyFileManager");
       const strategyNames = await StrategyFileManager.listStrategies();
       
-      // 获取当前激活的策略名称
-      const { getConfigValue } = await import("../database/init-config");
-      const activeStrategyName = await getConfigValue("ACTIVE_STRATEGY_NAME");
-      
-      // 构建策略列表,添加isActive标志
+      // 构建策略列表（多任务并行模式下移除 isActive 标志）
       const strategies = strategyNames.map(name => ({
         name: name,
-        isActive: name === activeStrategyName
       }));
       
       return c.json({ strategies });
@@ -3322,9 +3687,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       
       await updateSystemConfig(configUpdates);
       
-      // 2. 重新加载配置并重启交易循环
+      // 2. 重新加载配置，Strategy Tasks 会在下一轮执行时读取最新参数
       await reloadRiskParams();
-      await restartTradingLoop();
       
       logger.info(`已激活策略: ${name}`);
       

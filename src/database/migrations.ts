@@ -285,3 +285,50 @@ export async function ensureAccountConfigsTable(client: Client): Promise<void> {
   }
 }
 
+/**
+ * 确保 trading_instances 表存在（用于多账户并行策略任务管理）
+ */
+export async function ensureTradingInstancesTable(client: Client): Promise<void> {
+  try {
+    const result = await client.execute({
+      sql: "SELECT name FROM sqlite_master WHERE type='table' AND name='trading_instances'",
+      args: [],
+    });
+
+    if (result.rows.length > 0) {
+      return; // 表已存在
+    }
+
+    logger.info("创建 trading_instances 表...");
+    
+    await client.execute(`
+      CREATE TABLE IF NOT EXISTS trading_instances (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        account_id INTEGER NOT NULL,
+        ai_model_id INTEGER NOT NULL,
+        strategy_name TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'stopped',
+        interval_minutes INTEGER NOT NULL DEFAULT 20,
+        last_executed_at TEXT,
+        last_execution_status TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        FOREIGN KEY (account_id) REFERENCES account_configs(id) ON DELETE CASCADE,
+        FOREIGN KEY (ai_model_id) REFERENCES ai_models(id) ON DELETE CASCADE
+      )
+    `);
+
+    await client.execute(`
+      CREATE INDEX IF NOT EXISTS idx_trading_instances_status ON trading_instances(status)
+    `);
+
+    await client.execute(`
+      CREATE INDEX IF NOT EXISTS idx_trading_instances_account_id ON trading_instances(account_id)
+    `);
+
+    logger.info("✅ trading_instances 表创建成功");
+  } catch (error) {
+    logger.error("创建 trading_instances 表失败:", error);
+  }
+}

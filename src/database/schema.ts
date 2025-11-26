@@ -177,6 +177,29 @@ export interface BinanceContractPrecision {
 }
 
 /**
+ * Strategy Task 状态类型
+ */
+export type TradingInstanceStatus = "running" | "paused" | "stopped";
+
+/**
+ * Strategy Task - 多账户并行策略任务
+ * 每个实例绑定一个账户、一个AI模型和一个策略
+ */
+export interface TradingInstance {
+  id: number;
+  name: string;
+  account_id: number;
+  ai_model_id: number;
+  strategy_name: string;
+  status: TradingInstanceStatus;
+  interval_minutes: number;
+  last_executed_at: string | null;
+  last_execution_status: "success" | "error" | "skipped" | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/**
  * SQL 建表语句
  */
 export const CREATE_TABLES_SQL = `
@@ -371,6 +394,23 @@ CREATE TABLE IF NOT EXISTS sessions (
   updated_at TEXT NOT NULL
 );
 
+-- Strategy Tasks 表（多账户并行策略任务）
+CREATE TABLE IF NOT EXISTS trading_instances (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name TEXT NOT NULL,
+  account_id INTEGER NOT NULL,
+  ai_model_id INTEGER NOT NULL,
+  strategy_name TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'stopped',
+  interval_minutes INTEGER NOT NULL DEFAULT 20,
+  last_executed_at TEXT,
+  last_execution_status TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  FOREIGN KEY (account_id) REFERENCES account_configs(id) ON DELETE CASCADE,
+  FOREIGN KEY (ai_model_id) REFERENCES ai_models(id) ON DELETE CASCADE
+);
+
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_trades_timestamp ON trades(timestamp);
 CREATE INDEX IF NOT EXISTS idx_trades_symbol ON trades(symbol);
@@ -384,5 +424,7 @@ CREATE INDEX IF NOT EXISTS idx_binance_contract_precisions_contract ON binance_c
 CREATE INDEX IF NOT EXISTS idx_account_configs_is_active ON account_configs(is_active);
 CREATE INDEX IF NOT EXISTS idx_ai_models_is_active ON ai_models(is_active);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+CREATE INDEX IF NOT EXISTS idx_trading_instances_status ON trading_instances(status);
+CREATE INDEX IF NOT EXISTS idx_trading_instances_account_id ON trading_instances(account_id);
 `;
 

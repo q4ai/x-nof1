@@ -32,6 +32,12 @@ import { getExchangeProvider, type ExchangeProvider } from "../../config/exchang
 import { getBinancePrecision } from "../../database/binancePrecision";
 import { BinanceClient } from "../../services/binanceClient";
 import { getActiveAccount } from "../../services/accountConfigService";
+import { 
+  getCurrentInstanceContext, 
+  getInstanceExchangeClient, 
+  getInstanceAccountId,
+  getInstanceProvider 
+} from "../../services/instanceContext";
 
 const logger = createLogger({
   name: "trade-execution",
@@ -41,6 +47,57 @@ const logger = createLogger({
 const dbClient = createClient({
   url: process.env.DATABASE_URL || "file:./db/sqlite.db",
 });
+
+/**
+ * 获取交易所客户端
+ * 优先使用实例上下文中的客户端（多实例并行模式）
+ * 回退到全局激活账户的客户端（传统单实例模式）
+ */
+async function getExchangeClient(): Promise<any> {
+  // 检查是否在实例上下文中
+  const instanceClient = getInstanceExchangeClient();
+  if (instanceClient) {
+    logger.debug("使用实例上下文的交易所客户端");
+    return instanceClient;
+  }
+  
+  // 回退到全局激活账户
+  logger.debug("使用全局激活账户的交易所客户端");
+  return await createExchangeClientFromActiveAccount();
+}
+
+/**
+ * 获取当前账户 ID
+ * 优先使用实例上下文中的账户 ID
+ * 回退到全局激活账户
+ */
+async function getCurrentAccountId(): Promise<number> {
+  // 检查是否在实例上下文中
+  const instanceAccountId = getInstanceAccountId();
+  if (instanceAccountId !== null) {
+    return instanceAccountId;
+  }
+  
+  // 回退到全局激活账户
+  const activeAccount = await getActiveAccount();
+  return activeAccount?.id || 0;
+}
+
+/**
+ * 获取当前交易所提供商
+ * 优先使用实例上下文中的提供商
+ * 回退到全局配置
+ */
+async function getCurrentProvider(): Promise<ExchangeProvider> {
+  // 检查是否在实例上下文中
+  const instanceProvider = getInstanceProvider();
+  if (instanceProvider !== null) {
+    return instanceProvider;
+  }
+  
+  // 回退到全局配置
+  return await getExchangeProvider();
+}
 
 type LotSizingInfo = {
   lotSize: number;
@@ -206,11 +263,13 @@ export async function executeOpenPosition({
   // 开仓时不设置止盈止损，由 AI 在每个周期主动决策
   const stopLoss = undefined;
   const takeProfit = undefined;
-  const client = await createExchangeClientFromActiveAccount();
-  const activeAccount = await getActiveAccount();
-  const accountId = activeAccount ? activeAccount.id.toString() : "default";
-  // 优先使用活跃账户的 provider，否则回落到全局配置
-  const exchangeProvider = activeAccount?.provider || getExchangeProvider();
+  
+  // 获取交易所客户端（优先实例上下文，回退全局）
+  const client = await getExchangeClient();
+  const accountId = (await getCurrentAccountId()).toString();
+  
+  // 获取交易所提供商
+  const exchangeProvider = await getCurrentProvider();
   const unitLabel = exchangeProvider === "okx" ? "张" : "个";
   const normalizedSymbol = symbol.toUpperCase();
   const contract = `${normalizedSymbol}_USDT`;
@@ -684,11 +743,13 @@ export async function executeClosePosition({
 }: ClosePositionOptions) {
   const normalizedSymbol = symbol.toUpperCase();
   const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
-  const client = await createExchangeClientFromActiveAccount();
-  const activeAccount = await getActiveAccount();
-  const accountId = activeAccount ? activeAccount.id.toString() : "default";
-  // 优先使用活跃账户的 provider，否则回落到全局配置
-  const exchangeProvider = activeAccount?.provider || getExchangeProvider();
+  
+  // 获取交易所客户端（优先实例上下文，回退全局）
+  const client = await getExchangeClient();
+  const accountId = (await getCurrentAccountId()).toString();
+  
+  // 获取交易所提供商
+  const exchangeProvider = await getCurrentProvider();
   const unitLabel = exchangeProvider === "okx" ? "张" : "个";
   const contract = `${normalizedSymbol}_USDT`;
   let logSide: "long" | "short" | undefined;
@@ -1192,7 +1253,8 @@ export const cancelOrderTool = createTool({
     orderId: z.string().describe("订单ID"),
   }),
   execute: async ({ orderId }) => {
-  const client = await createExchangeClientFromActiveAccount();
+    // 获取交易所客户端（优先实例上下文，回退全局）
+    const client = await getExchangeClient();
     const requestPayload = { orderId };
     const finalize = async (result: {
       success: boolean;

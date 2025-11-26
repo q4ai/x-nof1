@@ -20,8 +20,9 @@ import "dotenv/config";
 import { createLogger } from "./utils/loggerUtils";
 import { serve } from "@hono/node-server";
 import { createApiRoutes } from "./api/routes";
-import { startTradingLoop, initTradingSystem } from "./scheduler/tradingLoop";
+import { initTradingSystem } from "./scheduler/tradingSystemInit";
 import { startAccountRecorder } from "./scheduler/accountRecorder";
+import { startMultiInstanceTrading, stopMultiInstanceTrading } from "./scheduler/multiInstanceTradingLoop";
 // 注意：独立的止损/止盈监控器已禁用，改由 AI Agent 根据策略提示词自主决策
 // import { startTrailingStopMonitor, stopTrailingStopMonitor } from "./scheduler/trailingStopMonitor";
 // import { startStopLossMonitor, stopStopLossMonitor } from "./scheduler/stopLossMonitor";
@@ -78,6 +79,11 @@ async function main() {
   const { migrateFromEnv } = await import("./services/accountConfigService");
   await migrateFromEnv();
 
+  // 3.5 确保 trading_instances 表存在
+  logger.info("初始化 Strategy Tasks 表...");
+  const { ensureTradingInstancesTable } = await import("./services/tradingInstanceService");
+  await ensureTradingInstancesTable();
+
   // 4. 初始化交易客户端（使用活跃账户）
   logger.info("初始化交易客户端...");
   const { initExchangeClient } = await import("./services/okxClient");
@@ -110,9 +116,10 @@ async function main() {
   startDashboardBroadcaster();
   logger.info("仪表盘实时推送服务已启动");
   
-  // 9. 启动交易循环
-  logger.info("启动交易循环...");
-  startTradingLoop();
+  // 9. 启动多实例交易调度器（执行 Strategy Tasks）
+  // 注意：传统单实例交易循环已移除，现在完全使用 Strategy Tasks 模式
+  logger.info("启动多实例交易调度器...");
+  startMultiInstanceTrading();
   
   // 10. 启动账户资产记录器
   logger.info("启动账户资产记录器...");
@@ -175,6 +182,11 @@ async function gracefulShutdown(signal: string) {
   logger.info(`\n\n收到 ${signal} 信号，正在关闭系统...`);
   
   try {
+    // 停止多实例交易调度器
+    logger.info("正在停止多实例交易调度器...");
+    stopMultiInstanceTrading();
+    logger.info("多实例交易调度器已停止");
+    
     // 停止合约乘数同步定时任务
     if (contractMultiplierSyncTimer) {
       logger.info("正在停止合约乘数同步定时任务...");

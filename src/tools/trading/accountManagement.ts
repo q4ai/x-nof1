@@ -22,13 +22,31 @@
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
 import { createTradingClient } from "../../services/okxTradingClient";
+import { createExchangeClientFromActiveAccount } from "../../services/okxClient";
 import { createClient } from "@libsql/client";
 import { RISK_PARAMS } from "../../config/riskParams.new";
 import { getQuantoMultiplier } from "../../utils/contractUtils";
+import { getInstanceExchangeClient } from "../../services/instanceContext";
 
 const dbClient = createClient({
   url: process.env.DATABASE_URL || "file:./db/sqlite.db",
 });
+
+/**
+ * 获取交易所客户端
+ * 优先使用实例上下文中的客户端（多实例并行模式）
+ * 回退到全局激活账户的客户端（传统单实例模式）
+ */
+async function getExchangeClient(): Promise<any> {
+  // 检查是否在实例上下文中
+  const instanceClient = getInstanceExchangeClient();
+  if (instanceClient) {
+    return instanceClient;
+  }
+  
+  // 回退到全局
+  return await createExchangeClientFromActiveAccount();
+}
 
 /**
  * 获取账户余额工具
@@ -38,7 +56,8 @@ export const getAccountBalanceTool = createTool({
   description: "获取账户余额和资金信息",
   parameters: z.object({}),
   execute: async () => {
-  const client = createTradingClient();
+    // 获取交易所客户端（优先实例上下文，回退全局）
+    const client = await getExchangeClient();
     
     try {
       const account = await client.getFuturesAccount();
@@ -69,7 +88,8 @@ export const getPositionsTool = createTool({
   description: "获取当前所有持仓信息",
   parameters: z.object({}),
   execute: async () => {
-  const client = createTradingClient();
+    // 获取交易所客户端（优先实例上下文，回退全局）
+    const client = await getExchangeClient();
     
     try {
       const positions = await client.getPositions();

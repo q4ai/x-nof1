@@ -113,29 +113,7 @@
         </div>
         <div class="kline-container">
           <div id="kline-chart"></div>
-          <div class="chart-ai-controls" id="chart-ai-controls">
-            <a
-              href="#"
-              class="trading-loop-toggle hidden is-paused"
-              id="trading-loop-toggle"
-              title="Start AI Scheduler"
-              aria-label="Start AI Scheduler"
-              data-i18n-title="chart.aiToggleStart"
-              data-i18n-aria="chart.aiToggleStart"
-            >
-              <span class="cron-icon cron-icon-running" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <rect x="3" y="3" width="3" height="10"></rect>
-                  <rect x="10" y="3" width="3" height="10"></rect>
-                </svg>
-              </span>
-              <span class="cron-icon cron-icon-paused" aria-hidden="true">
-                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
-                  <polygon points="4,3 12,8 4,13"></polygon>
-                </svg>
-              </span>
-            </a>
-          </div>
+          <!-- AI 控件已移至 overlay，不再需要顶部控制按钮 -->
         </div>
       </section>
 
@@ -438,13 +416,9 @@
             <span class="extension">.json</span>
           </div>
           <div class="strategy-meta-footer">
-            <div class="strategy-active-indicator">
-              <span data-i18n="strategyEditor.currentActive">Active Strategy:</span>
-              <strong id="active-strategy-label">--</strong>
-            </div>
+            <!-- 已移除"当前激活策略"显示 - 现在由 Strategy Task 独立选择策略 -->
             <div class="editor-actions strategy-actions-inline">
               <button type="button" class="btn btn-primary" id="strategy-save-btn" data-i18n="strategyEditor.save">Save Strategy</button>
-              <button type="button" class="btn btn-success" id="strategy-activate-btn" data-i18n="strategyEditor.activate">Activate</button>
             </div>
           </div>
         </div>
@@ -558,6 +532,32 @@
         <div class="tab-panel" id="tab-decision-logs">
           <div class="table-container" id="decision-logs-container">
             <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- 策略页面底部：运行中的任务（仅在策略页面显示） -->
+    <footer class="bottom-tabs strategy-bottom-tabs" id="strategy-bottom-tabs">
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="all-tasks" data-i18n="instances.allTasks.title">All Tasks</button>
+        <button class="tab-btn" data-tab="running-tasks" data-i18n="instances.runningTasks.title">Running Tasks</button>
+      </nav>
+      <div class="tab-content">
+        <div class="tab-panel active" id="tab-all-tasks">
+          <div class="running-tasks-container table-container" id="all-tasks-container">
+            <div class="running-tasks-empty" id="all-tasks-empty">
+              <span data-i18n="instances.allTasks.empty">No strategy tasks</span>
+            </div>
+            <div class="running-tasks-list" id="all-tasks-list"></div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-running-tasks">
+          <div class="running-tasks-container table-container" id="running-tasks-container">
+            <div class="running-tasks-empty" id="running-tasks-empty">
+              <span data-i18n="instances.runningTasks.empty">No running tasks</span>
+            </div>
+            <div class="running-tasks-list" id="running-tasks-list"></div>
           </div>
         </div>
       </div>
@@ -1181,6 +1181,56 @@
           </div>
 
           <div id="ai-model-test-result" class="api-test-result" style="display: none;"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加/编辑 Strategy Task 弹窗 -->
+  <div class="modal settings-modal" id="instance-form-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="instance-form-title" data-i18n="instances.form.titleAdd">Add Strategy Task</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="instance-edit-form" class="settings-form">
+          <input type="hidden" id="instance-edit-id" />
+          
+          <div class="settings-section">
+            <div class="form-group">
+              <label for="instance-edit-name" data-i18n-html="instances.form.name">Instance Name <span class="required">*</span></label>
+              <input type="text" id="instance-edit-name" placeholder="BTC Scalping" data-i18n-placeholder="instances.form.namePlaceholder" required />
+            </div>
+
+            <div class="form-group">
+              <label for="instance-edit-account" data-i18n-html="instances.form.account">Trading Account <span class="required">*</span></label>
+              <select id="instance-edit-account" required>
+                <option value="" data-i18n="instances.form.selectAccount">Select an account</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="instance-edit-ai-model" data-i18n-html="instances.form.aiModel">AI Model <span class="required">*</span></label>
+              <select id="instance-edit-ai-model" required>
+                <option value="" data-i18n="instances.form.selectModel">Select an AI model</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="instance-edit-strategy" data-i18n-html="instances.form.strategy">Strategy <span class="required">*</span></label>
+              <select id="instance-edit-strategy" required>
+                <option value="" data-i18n="instances.form.selectStrategy">Select a strategy</option>
+              </select>
+              <p class="form-hint" data-i18n="instances.form.strategyHint">Execution interval will be read from the strategy's configuration</p>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="instance-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="common.save">Save</button>
+          </div>
         </form>
       </div>
     </div>

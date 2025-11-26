@@ -215,12 +215,81 @@
 			"testSuccess": "接続に成功しました",
 			"testFailed": "接続に失敗しました",
 			"balanceLabel": "資産: {{balance}}",
+			"multiTaskMode": "マルチタスクモード：ストラテジーエディターでアカウントを設定してください",
 			"validation": {
 				"missingName": "アカウント名を入力してください",
 				"missingOkx": "OKX の認証情報をすべて入力してください",
 				"missingBinance": "Binance の認証情報をすべて入力してください",
 				"missingBitget": "Bitget の認証情報をすべて入力してください"
 			}
+		}
+	},
+	"instances": {
+		"empty": "戦略タスクはありません",
+		"addInstance": "戦略タスクを追加",
+		"labels": {
+			"instance": "インスタンス",
+			"strategy": "ストラテジー",
+			"account": "アカウント",
+			"model": "AIモデル",
+			"interval": "実行間隔",
+			"lastExecuted": "前回実行",
+			"actions": "操作"
+		},
+		"actions": {
+			"start": "開始",
+			"pause": "一時停止",
+			"stop": "停止",
+			"trigger": "即時実行",
+			"edit": "編集",
+			"delete": "削除"
+		},
+		"status": {
+			"running": "稼働中",
+			"paused": "一時停止",
+			"stopped": "停止中"
+		},
+		"executionStatus": {
+			"success": "成功",
+			"error": "エラー",
+			"skipped": "スキップ"
+		},
+		"form": {
+			"titleAdd": "戦略タスクを追加",
+			"titleEdit": "戦略タスクを編集",
+			"name": "インスタンス名 <span class=\"required\">*</span>",
+			"namePlaceholder": "BTC スキャルピング",
+			"account": "取引アカウント <span class=\"required\">*</span>",
+			"aiModel": "AIモデル <span class=\"required\">*</span>",
+			"strategy": "ストラテジー <span class=\"required\">*</span>",
+			"strategyHint": "実行間隔はストラテジー設定から自動取得されます",
+			"selectAccount": "アカウントを選択",
+			"selectModel": "AIモデルを選択",
+			"selectStrategy": "ストラテジーを選択"
+		},
+		"messages": {
+			"loginRequired": "戦略タスクを管理するにはログインしてください。",
+			"loadError": "戦略タスクの読み込みに失敗しました。",
+			"createSuccess": "戦略タスクを作成しました",
+			"updateSuccess": "戦略タスクを更新しました",
+			"statusSuccess": "ステータスを更新しました",
+			"triggerSuccess": "実行をトリガーしました",
+			"deleteSuccess": "戦略タスクを削除しました",
+			"deleteConfirm": "戦略タスク「{{name}}」を削除しますか？",
+			"validation": {
+				"missingName": "インスタンス名を入力してください",
+				"missingAccount": "アカウントを選択してください",
+				"missingModel": "AIモデルを選択してください",
+				"missingStrategy": "ストラテジーを選択してください"
+			}
+		},
+		"allTasks": {
+			"title": "すべてのタスク",
+			"empty": "戦略タスクはありません"
+		},
+		"runningTasks": {
+			"title": "稼働中のタスク",
+			"empty": "稼働中のタスクはありません"
 		}
 	},
 	"tables": {

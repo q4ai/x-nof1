@@ -211,12 +211,81 @@
 			"testSuccess": "Connection successful",
 			"testFailed": "Connection failed",
 			"balanceLabel": "Equity: {{balance}}",
+			"multiTaskMode": "Multi-task mode: Configure account in strategy editor",
 			"validation": {
 				"missingName": "Please enter account name",
 				"missingOkx": "Please fill in all OKX credentials",
 				"missingBinance": "Please fill in all Binance credentials",
 				"missingBitget": "Please fill in all Bitget credentials"
 			}
+		}
+	},
+	"instances": {
+		"empty": "No strategy tasks configured",
+		"addInstance": "Add Strategy Task",
+		"labels": {
+			"instance": "Instance",
+			"strategy": "Strategy",
+			"account": "Account",
+			"model": "AI Model",
+			"interval": "Interval",
+			"lastExecuted": "Last Executed",
+			"actions": "Actions"
+		},
+		"actions": {
+			"start": "Start",
+			"pause": "Pause",
+			"stop": "Stop",
+			"trigger": "Trigger",
+			"edit": "Edit",
+			"delete": "Delete"
+		},
+		"status": {
+			"running": "Running",
+			"paused": "Paused",
+			"stopped": "Stopped"
+		},
+		"executionStatus": {
+			"success": "Success",
+			"error": "Error",
+			"skipped": "Skipped"
+		},
+		"form": {
+			"titleAdd": "Add Strategy Task",
+			"titleEdit": "Edit Strategy Task",
+			"name": "Instance Name <span class=\"required\">*</span>",
+			"namePlaceholder": "BTC Scalping",
+			"account": "Trading Account <span class=\"required\">*</span>",
+			"aiModel": "AI Model <span class=\"required\">*</span>",
+			"strategy": "Strategy <span class=\"required\">*</span>",
+			"strategyHint": "Execution interval will be read from the strategy's configuration",
+			"selectAccount": "Select an account",
+			"selectModel": "Select an AI model",
+			"selectStrategy": "Select a strategy"
+		},
+		"messages": {
+			"loginRequired": "Please sign in to manage strategy tasks.",
+			"loadError": "Failed to load strategy tasks. Please try again.",
+			"createSuccess": "Strategy task created successfully",
+			"updateSuccess": "Strategy task updated successfully",
+			"statusSuccess": "Status updated",
+			"triggerSuccess": "Execution triggered",
+			"deleteSuccess": "Strategy task deleted",
+			"deleteConfirm": "Delete strategy task \"{{name}}\"?",
+			"validation": {
+				"missingName": "Please enter an instance name",
+				"missingAccount": "Please select an account",
+				"missingModel": "Please select an AI model",
+				"missingStrategy": "Please select a strategy"
+			}
+		},
+		"allTasks": {
+			"title": "All Tasks",
+			"empty": "No strategy tasks"
+		},
+		"runningTasks": {
+			"title": "Running Tasks",
+			"empty": "No running tasks"
 		}
 	},
 	"tables": {
