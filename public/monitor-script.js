@@ -2638,7 +2638,8 @@ class TradingMonitor {
     const data = await this.fetchJson("/api/account");
     if (!data) return;
 
-    const totalEq = data.totalBalance + data.unrealisedPnl;
+    // 后端已经计算好了 totalBalance（包含未实现盈亏），前端不要重复加
+    const totalEq = data.totalBalance;
     this.availableBalance = data.availableBalance || 0;
     
     this.setText("metric-total", this.formatCurrency(totalEq));
@@ -5334,7 +5335,7 @@ class TradingMonitor {
 
   async fetchPublicModelInfo() {
     try {
-      // 首先尝试获取当前账户关联的运行实例信息（包含准确的模型名称）
+      // 获取当前账户关联的实例信息
       const instanceResponse = await fetch("/api/public/instances-status", {
         cache: "no-store",
         credentials: "same-origin",
@@ -5342,46 +5343,25 @@ class TradingMonitor {
 
       if (instanceResponse.ok) {
         const instanceData = await instanceResponse.json();
-        // 如果有运行中的实例，使用其模型名称
+        // 如果有实例，使用其模型名称
         if (instanceData?.runningInstance?.ai_model_name) {
           const modelName = instanceData.runningInstance.ai_model_name;
           const status = instanceData.runningInstance.status;
           const publicConfig = { 
             AI_MODEL_NAME: modelName,
-            _INSTANCE_STATUS: status // 内部字段，用于显示状态
+            _INSTANCE_STATUS: status
           };
           this.latestConfig = {
             ...(this.latestConfig ?? {}),
             ...publicConfig,
           };
           this.updateAiOverlay(publicConfig);
-          // 同时获取交易循环状态以显示 AI overlay
           await this.fetchPublicTradingLoopStatus();
           return;
         }
       }
-
-      // 如果没有运行中的实例，回退到全局配置
-      const fallbackResponse = await fetch("/api/public/model", {
-        cache: "no-store",
-        credentials: "same-origin",
-      });
-
-      if (fallbackResponse.ok) {
-        const data = await fallbackResponse.json();
-        // 后端返回的字段可能是 model 或 aiModelName
-        const modelName = data?.aiModelName || data?.model;
-        if (typeof modelName === "string" && modelName.trim()) {
-          const publicConfig = { AI_MODEL_NAME: modelName };
-          this.latestConfig = {
-            ...(this.latestConfig ?? {}),
-            ...publicConfig,
-          };
-          this.updateAiOverlay(publicConfig);
-        }
-      }
     } catch (error) {
-      console.warn("[ai-overlay] 获取公开模型信息失败", error);
+      console.warn("[ai-overlay] 获取模型信息失败", error);
     }
     
     // 同时获取交易循环状态以显示 AI overlay
@@ -5515,10 +5495,19 @@ class TradingMonitor {
     const statsView = document.getElementById("view-stats");
     const manualTabBtn = document.querySelector('.tab-btn[data-tab="view-manual"]');
     const statsTabBtn = document.querySelector('.tab-btn[data-tab="view-stats"]');
+    const viewSwitcher = document.querySelector(".view-switcher");
+    const viewToggle = document.getElementById("view-mode-toggle");
 
     if (!this.isAuthenticated) {
-      // 未登录：隐藏顶部 Tabs，强制显示统计面板
+      // 未登录：隐藏顶部 Tabs 和视图切换器，强制显示统计面板和交易视图
       if (sidebarTabs) sidebarTabs.style.display = "none";
+      if (viewSwitcher) viewSwitcher.style.display = "none";
+      
+      // 确保在交易视图（非策略视图）
+      if (viewToggle && viewToggle.checked) {
+        viewToggle.checked = false;
+        this.toggleStrategyView(false);
+      }
       
       if (statsView) statsView.classList.add("active");
       if (manualView) manualView.classList.remove("active");
@@ -5526,8 +5515,9 @@ class TradingMonitor {
       if (statsTabBtn) statsTabBtn.classList.add("active");
       if (manualTabBtn) manualTabBtn.classList.remove("active");
     } else {
-      // 已登录：显示顶部 Tabs
+      // 已登录：显示顶部 Tabs 和视图切换器
       if (sidebarTabs) sidebarTabs.style.display = "";
+      if (viewSwitcher) viewSwitcher.style.display = "";
       
       // 如果当前没有激活的视图，默认显示统计面板
       if (statsView && manualView && !statsView.classList.contains("active") && !manualView.classList.contains("active")) {
@@ -6467,23 +6457,14 @@ class TradingMonitor {
     const rawName = cfg && typeof cfg.AI_MODEL_NAME === "string" ? cfg.AI_MODEL_NAME.trim() : "";
     const displayName = this.extractModelDisplayName(rawName);
     const iconSrc = this.resolveAiModelIcon(rawName);
-    
-    // 获取任务状态文本
-    let statusText = "";
-    if (cfg && cfg._INSTANCE_STATUS) {
-      const statusKey = `instances.status.${cfg._INSTANCE_STATUS}`;
-      const translatedStatus = this.translate(statusKey, cfg._INSTANCE_STATUS);
-      // 首字母大写
-      const formattedStatus = translatedStatus.charAt(0).toUpperCase() + translatedStatus.slice(1);
-      statusText = ` (${formattedStatus})`;
-    }
 
     const resolvedUrl = this.toAbsoluteUrl(iconSrc);
     if (iconEl.src !== resolvedUrl) {
       iconEl.src = iconSrc;
     }
     iconEl.setAttribute("alt", t("chart.modelIconAlt"));
-    textEl.textContent = `${displayName}${statusText}`;
+    // 只显示模型名称，状态文本由 WebSocket 的 handleTradingStatusUpdate 动态更新
+    textEl.textContent = displayName;
   }
 
   resolveAiModelIcon(modelName) {
@@ -9425,6 +9406,8 @@ class TradingMonitor {
       this.toggleStrategyView(Boolean(isStrategyMode));
       if (isStrategyMode) {
         void this.loadStrategyList();
+        // 加载策略任务列表
+        void this.refreshRunningTasksPanel();
         if (!this.currentStrategyName) {
           this.populateStrategyEditor(this.getBlankStrategyTemplate());
           this.saveStrategyDraft();

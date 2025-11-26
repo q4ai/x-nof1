@@ -20,6 +20,7 @@ import type { TradingInstanceWithDetails } from "../services/tradingInstanceServ
 import { insertAgentRequestLog } from "../database/agent-request-logs";
 import { getLocalizedPromptTemplate } from "../prompts/templateLoader";
 import { normalizeStrategyLanguage, DEFAULT_STRATEGY_LANGUAGE, type StrategyLanguage } from "../config/strategyTypes";
+import { websocketService } from "../services/websocketService";
 
 const logger = createLogger({
   name: "instance-executor",
@@ -569,6 +570,9 @@ export async function executeInstanceTradingDecision(
   
   logger.info(`[实例 ${instanceName}] 开始执行交易决策`);
   
+  // 广播准备执行状态
+  websocketService.pushTradingStatus("preparing", `准备执行实例 ${instanceName}`, "scheduled");
+  
   try {
     // 1. 创建交易所客户端
     const exchangeClient = await createExchangeClientForInstance(config);
@@ -592,6 +596,9 @@ export async function executeInstanceTradingDecision(
     
   } catch (error) {
     logger.error(`[实例 ${instanceName}] 执行失败:`, error);
+    // 广播执行错误状态
+    const errorMessage = error instanceof Error ? error.message : "未知错误";
+    websocketService.pushTradingStatus("error", `实例 ${instanceName} 执行失败: ${errorMessage}`, "scheduled");
     throw error;
   }
 }
@@ -611,6 +618,9 @@ async function executeWithContext(
   // 1. 获取交易对列表
   const symbols = await getStrategySymbols(strategyName);
   logger.info(`[实例 ${instanceName}] 交易对: ${symbols.join(", ")}`);
+  
+  // 广播收集数据状态
+  websocketService.pushTradingStatus("collecting_data", `收集 ${symbols.length} 个交易对的市场数据`, "scheduled");
   
   // 2. 收集市场数据
   const marketData = await collectMarketDataForInstance(exchangeClient, symbols, accountId);
@@ -635,6 +645,9 @@ async function executeWithContext(
   
   logger.info(`[实例 ${instanceName}] 当前持仓: ${activePositions.length} 个`);
   
+  // 广播分析市场状态
+  websocketService.pushTradingStatus("analyzing", `分析 ${validSymbols.length} 个交易对的市场行情`, "scheduled");
+  
   // 5. 创建 AI Agent
   const { agent, instructions, modelName } = await createAgentForInstance(config, intervalMinutes);
   
@@ -651,6 +664,9 @@ async function executeWithContext(
   });
   
   logger.info(`[实例 ${instanceName}] 调用 AI 模型: ${modelName}`);
+  
+  // 广播 AI 决策中状态
+  websocketService.pushTradingStatus("ai_deciding", `AI 模型 ${modelName} 正在决策`, "scheduled");
   
   // 记录执行开始时间，用于捕获期间的交易动作
   const executionStartedAt = getChinaTimeISO();
@@ -726,6 +742,8 @@ async function executeWithContext(
   const actionsTakenRecords = await getTradeActionsBetween(executionStartedAt, decisionTimestamp, accountId);
   if (actionsTakenRecords.length > 0) {
     logger.info(`[实例 ${instanceName}] 捕获到 ${actionsTakenRecords.length} 条交易动作`);
+    // 广播执行交易状态
+    websocketService.pushTradingStatus("executing_trades", `执行了 ${actionsTakenRecords.length} 个交易操作`, "scheduled");
   }
   
   // 10. 记录到 agent_request_logs 表（决策日志 Tab 使用此表）
@@ -762,6 +780,9 @@ async function executeWithContext(
   });
   
   logger.info(`[实例 ${instanceName}] 决策记录已保存到两个表`);
+  
+  // 广播执行完成状态
+  websocketService.pushTradingStatus("completed", `实例 ${instanceName} 执行完成`, "scheduled");
 }
 
 /**

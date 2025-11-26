@@ -599,9 +599,7 @@ a:hover {
   transform: none;
 }
 
-.ai-model-overlay.disabled .ai-model-icon {
-  filter: grayscale(0.5);
-}
+/* 移除灰色滤镜效果，保持正常显示 */
 
 @keyframes ai-overlay-pulse {
   0%, 100% {

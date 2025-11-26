@@ -824,10 +824,37 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     try {
       const { getAllConfig } = await import("../database/init-config");
       const config = await getAllConfig();
+      
+      // 优先使用当前活跃账户的任务模型名称
+      let aiModelName = config.AI_MODEL_NAME ?? "";
+      try {
+        const { getActiveAccount } = await import("../services/accountConfigService");
+        const { getRunningInstances, getLatestInstanceForAccount } = await import("../services/tradingInstanceService");
+        
+        const activeAccount = await getActiveAccount();
+        if (activeAccount) {
+          const runningInstances = await getRunningInstances();
+          const accountInstance = runningInstances.find(
+            (instance) => instance.account_id === activeAccount.id
+          );
+          
+          if (accountInstance?.ai_model_name) {
+            aiModelName = accountInstance.ai_model_name;
+          } else {
+            const latestInstance = await getLatestInstanceForAccount(activeAccount.id);
+            if (latestInstance?.ai_model_name) {
+              aiModelName = latestInstance.ai_model_name;
+            }
+          }
+        }
+      } catch (instanceError) {
+        logger.warn("获取账户任务模型失败，使用全局配置:", instanceError);
+      }
+      
       return c.json({
         config: {
           TRADING_SYMBOLS: config.TRADING_SYMBOLS ?? "",
-          AI_MODEL_NAME: config.AI_MODEL_NAME ?? "",
+          AI_MODEL_NAME: aiModelName,
         },
       });
     } catch (error: unknown) {
@@ -1929,7 +1956,13 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const historyInitial = history.length > 0 ? Number.parseFloat(history[0].total_value as string || "0") : undefined;
       const unrealisedPnl = Number.parseFloat(account.unrealisedPnl || "0");
       const accountTotal = Number.parseFloat(account.total || "0");
-      const totalBalance = accountTotal + unrealisedPnl;
+      
+      // 不同交易所的 total 字段含义不同：
+      // - Bitget: accountEquity 已包含未实现盈亏
+      // - OKX/Binance: total 是余额，需要手动加上未实现盈亏
+      const isBitget = activeAccount?.provider === 'bitget';
+      const totalBalance = isBitget ? accountTotal : (accountTotal + unrealisedPnl);
+      
       const availableBalance = Number.parseFloat(account.available || "0");
       const initialBalance = historyInitial && Number.isFinite(historyInitial) && historyInitial > 0
         ? historyInitial
@@ -2340,6 +2373,33 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     try {
       const { getAllConfigMasked } = await import("../database/init-config");
       const config = await getAllConfigMasked();
+      
+      // 优先使用当前活跃账户的任务模型名称，而非全局配置
+      try {
+        const { getActiveAccount } = await import("../services/accountConfigService");
+        const { getRunningInstances, getLatestInstanceForAccount } = await import("../services/tradingInstanceService");
+        
+        const activeAccount = await getActiveAccount();
+        if (activeAccount) {
+          // 查找该账户的运行中实例
+          const runningInstances = await getRunningInstances();
+          const accountInstance = runningInstances.find(
+            (instance) => instance.account_id === activeAccount.id
+          );
+          
+          if (accountInstance?.ai_model_name) {
+            config.AI_MODEL_NAME = accountInstance.ai_model_name;
+          } else {
+            // 回退到该账户最近的任务
+            const latestInstance = await getLatestInstanceForAccount(activeAccount.id);
+            if (latestInstance?.ai_model_name) {
+              config.AI_MODEL_NAME = latestInstance.ai_model_name;
+            }
+          }
+        }
+      } catch (instanceError) {
+        logger.warn("获取账户任务模型失败，使用全局配置:", instanceError);
+      }
       
       return c.json({ config });
     } catch (error: unknown) {
