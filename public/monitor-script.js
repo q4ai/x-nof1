@@ -9406,8 +9406,8 @@ class TradingMonitor {
       this.toggleStrategyView(Boolean(isStrategyMode));
       if (isStrategyMode) {
         void this.loadStrategyList();
-        // 加载策略任务列表
-        void this.refreshRunningTasksPanel();
+        // 强制刷新策略任务列表（确保获取最新数据）
+        void this.refreshRunningTasksPanel(true);
         if (!this.currentStrategyName) {
           this.populateStrategyEditor(this.getBlankStrategyTemplate());
           this.saveStrategyDraft();
@@ -9842,7 +9842,7 @@ class TradingMonitor {
       }
       this.strategyEditorEl.classList.add("active");
       this.strategyEditorEl.setAttribute("aria-hidden", "false");
-      void this.refreshRunningTasksPanel();
+      // 注意：任务列表刷新由 bindViewSwitcher 的 change 事件处理，这里不重复调用
     } else {
       this.hideStrategyDeleteConfirm();
       this.tradingDashboardEl.style.display = "";
