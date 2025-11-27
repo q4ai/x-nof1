@@ -322,6 +322,39 @@ export class BinanceClient {
     }));
   }
 
+  /**
+   * 获取所有 USDT 永续合约的 ticker 数据（包含成交量、价格、涨跌幅）
+   * 用于按成交量排序展示合约列表
+   */
+  async getAllSwapTickers(): Promise<Array<{
+    symbol: string;
+    volume24h: number;
+    price: string;
+    change24h: number;
+  }>> {
+    const tickers = await this.request<any[]>("GET", "/fapi/v1/ticker/24hr", undefined, false);
+    const result: Array<{ symbol: string; volume24h: number; price: string; change24h: number }> = [];
+
+    for (const ticker of tickers || []) {
+      // Binance 永续合约格式: BTCUSDT
+      if (ticker.symbol && ticker.symbol.endsWith("USDT")) {
+        const symbol = ticker.symbol.replace(/USDT$/, ""); // 使用正则替换，确保只替换末尾
+        const volume24h = Number.parseFloat(ticker.quoteVolume || "0"); // USDT 计价的成交量
+        const price = ticker.lastPrice || "0";
+        const change24h = Number.parseFloat(ticker.priceChangePercent || "0");
+        
+        result.push({
+          symbol,
+          volume24h,
+          price,
+          change24h,
+        });
+      }
+    }
+
+    return result;
+  }
+
   async setPositionMode(dualSidePosition: boolean) {
     try {
       await this.request("POST", "/fapi/v1/positionSide/dual", { dualSidePosition }, true);

@@ -32,6 +32,11 @@
 		"languageTooltip": "Language: {{language}}"
 	},
 	"tradingSymbols": "Symbols",
+	"symbolFilter": {
+		"allSymbols": "All Symbols",
+		"instancePrefix": "Task: ",
+		"loadingSymbols": "Loading symbols..."
+	},
 	"loading": "Loading...",
 	"interval": {
 		"1m": "1m",

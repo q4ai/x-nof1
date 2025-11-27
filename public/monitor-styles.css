@@ -321,7 +321,6 @@ a:hover {
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
-  justify-content: space-between;
   flex-shrink: 0;
 }
 
@@ -331,9 +330,114 @@ a:hover {
   color: var(--text-primary);
 }
 
-.update-time {
-  font-size: 10px;
+/* 币种筛选自定义下拉选择器 */
+.symbol-filter-dropdown {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.symbol-filter-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.symbol-filter-trigger:hover {
+  border-color: var(--accent-color);
+  background: var(--bg-secondary);
+}
+
+.symbol-filter-dropdown.is-open .symbol-filter-trigger {
+  border-color: var(--accent-color);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.symbol-filter-label {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbol-filter-arrow {
+  flex-shrink: 0;
   color: var(--text-muted);
+  transition: transform 0.2s ease;
+}
+
+.symbol-filter-dropdown.is-open .symbol-filter-arrow {
+  transform: rotate(180deg);
+}
+
+.symbol-filter-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  z-index: 100;
+  display: none;
+}
+
+.symbol-filter-dropdown.is-open .symbol-filter-menu {
+  display: block;
+}
+
+.symbol-filter-menu::-webkit-scrollbar {
+  width: 4px;
+}
+
+.symbol-filter-menu::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 2px;
+}
+
+.symbol-filter-option {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background 0.1s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.symbol-filter-option:hover {
+  background: var(--bg-tertiary);
+}
+
+.symbol-filter-option.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent-color);
+}
+
+.symbol-filter-option .status-icon {
+  font-size: 10px;
+}
+
+.symbol-filter-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 0;
 }
 
 .symbol-list {

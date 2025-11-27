@@ -513,6 +513,56 @@ export class OkxClient {
     }));
   }
 
+  /**
+   * 获取所有 USDT 永续合约的 ticker 数据（包含成交量、价格、涨跌幅）
+   * 用于按成交量排序展示合约列表
+   */
+  async getAllSwapTickers(): Promise<Array<{
+    symbol: string;
+    volume24h: number;
+    price: string;
+    change24h: number;
+  }>> {
+    const tickers = await this.request<any[]>(
+      "GET",
+      "/api/v5/market/tickers",
+      { instType: "SWAP" },
+      undefined,
+      false
+    );
+
+    const result: Array<{ symbol: string; volume24h: number; price: string; change24h: number }> = [];
+    
+    for (const ticker of tickers || []) {
+      // 只保留 USDT 本位永续合约 (例如 BTC-USDT-SWAP)
+      // 放宽过滤条件，确保包含所有 USDT 永续
+      if (ticker.instId && ticker.instId.includes("-USDT-SWAP")) {
+        const symbol = ticker.instId.split("-")[0]; // 更安全的提取 symbol 方式
+        const price = ticker.last || ticker.lastPx || "0";
+        const priceNum = Number.parseFloat(price);
+        
+        // OKX API v5 对于 USDT 永续合约，volCcy24h 返回的是基础货币成交量 (如 BTC, ETH, SATS)
+        // 而不是文档中说的计价货币成交量 (USDT)。
+        // 因此，我们需要乘以价格来计算 USDT 总成交额。
+        const baseVolume = Number.parseFloat(ticker.volCcy24h || "0");
+        let volume24h = baseVolume * priceNum;
+
+        const open24h = ticker.open24h || ticker.openPx || price;
+        const openNum = Number.parseFloat(open24h);
+        const change24h = openNum > 0 ? ((priceNum - openNum) / openNum) * 100 : 0;
+        
+        result.push({
+          symbol,
+          volume24h,
+          price,
+          change24h,
+        });
+      }
+    }
+
+    return result;
+  }
+
   async setLeverage(contract: string, leverage: number, marginMode: "cross" | "isolated" = "cross") {
     const instId = this.contractToInstrument(contract);
     try {

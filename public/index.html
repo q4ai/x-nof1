@@ -88,8 +88,19 @@
       <!-- 左侧：币种列表 -->
       <aside class="symbol-sidebar">
         <div class="sidebar-header">
-          <h3 data-i18n="tradingSymbols">Trading Symbols</h3>
-          <span class="update-time" id="prices-updated">--</span>
+          <!-- 币种筛选自定义下拉选择器 -->
+          <div class="symbol-filter-dropdown" id="symbol-filter-dropdown">
+            <button type="button" class="symbol-filter-trigger" id="symbol-filter-trigger">
+              <span class="symbol-filter-label" id="symbol-filter-label" data-i18n="symbolFilter.allSymbols">All Symbols</span>
+              <svg class="symbol-filter-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="symbol-filter-menu" id="symbol-filter-menu" aria-hidden="true">
+              <div class="symbol-filter-option active" data-value="all" data-i18n="symbolFilter.allSymbols">All Symbols</div>
+              <!-- 任务实例选项会动态加载 -->
+            </div>
+          </div>
         </div>
         <div class="symbol-list" id="symbol-list">
           <p class="loading" data-i18n="loading">Loading...</p>

@@ -431,6 +431,11 @@ class TradingMonitor {
     this.priceChanges = new Map();
     this.availableSymbols = new Set();
     this.symbolOrder = [];
+    this.allExchangeSymbols = []; // 交易所所有合约列表（按成交量排序）
+    this.currentSymbolFilter = "all"; // 当前选中的币种筛选：'all' 或任务实例ID
+    this.currentFilterInstanceId = null; // 当前筛选的任务实例ID
+    this.currentFilterAccountId = null; // 当前筛选的任务实例对应的账户ID
+    this.accountInstancesCache = []; // 当前账户的任务实例缓存
     this.chart = null;
     this.candleSeries = null;
     this.pendingCandleSymbol = this.activeSymbol;
@@ -451,7 +456,11 @@ class TradingMonitor {
 
     // DOM 元素
     this.symbolListEl = document.getElementById("symbol-list");
-    this.pricesUpdatedEl = document.getElementById("prices-updated");
+    // 自定义币种筛选下拉选择器
+    this.symbolFilterDropdown = document.getElementById("symbol-filter-dropdown");
+    this.symbolFilterTrigger = document.getElementById("symbol-filter-trigger");
+    this.symbolFilterLabel = document.getElementById("symbol-filter-label");
+    this.symbolFilterMenu = document.getElementById("symbol-filter-menu");
     this.chartTitleEl = document.getElementById("chart-title");
     this.chartIntervalEl = document.getElementById("chart-interval");
     this.klineChartEl = document.getElementById("kline-chart");
@@ -611,6 +620,7 @@ class TradingMonitor {
     this.initViewAllControls();
     this.setupRecordsControls();
     this.setupIntervalSelector();
+    void this.initSymbolFilter(); // 初始化币种筛选器
     this.renderSymbolList();
     this.initManualTradeControls();
 
@@ -2264,6 +2274,324 @@ class TradingMonitor {
     }, 200);
   }
 
+  /**
+   * 初始化币种筛选下拉选择器
+   * - 加载交易所所有合约列表
+   * - 加载当前账户的任务实例
+   * - 绑定切换事件
+   */
+  async initSymbolFilter() {
+    if (!this.symbolFilterDropdown || !this.symbolFilterTrigger || !this.symbolFilterMenu) return;
+
+    // 绑定点击触发器展开/收起下拉菜单
+    this.symbolFilterTrigger.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.toggleSymbolFilterDropdown();
+    });
+
+    // 绑定选项点击事件（事件委托）
+    this.symbolFilterMenu.addEventListener("click", (e) => {
+      const option = e.target.closest(".symbol-filter-option");
+      if (!option) return;
+      
+      const value = option.dataset.value;
+      if (value) {
+        this.selectSymbolFilterOption(value, option);
+      }
+    });
+
+    // 点击外部关闭下拉菜单
+    document.addEventListener("click", (e) => {
+      if (!this.symbolFilterDropdown?.contains(e.target)) {
+        this.closeSymbolFilterDropdown();
+      }
+    });
+
+    // 初始化时加载选项（此时可能还没登录，会在 syncAuthState 完成后再次刷新）
+    // 延迟一点执行，确保页面初始化完成
+    setTimeout(() => {
+      void this.refreshSymbolFilterOptions();
+    }, 100);
+  }
+
+  /**
+   * 切换币种筛选下拉菜单的展开/收起状态
+   */
+  toggleSymbolFilterDropdown() {
+    if (!this.symbolFilterDropdown) return;
+    const isOpen = this.symbolFilterDropdown.classList.contains("is-open");
+    if (isOpen) {
+      this.closeSymbolFilterDropdown();
+    } else {
+      this.openSymbolFilterDropdown();
+    }
+  }
+
+  /**
+   * 打开币种筛选下拉菜单
+   */
+  openSymbolFilterDropdown() {
+    if (!this.symbolFilterDropdown || !this.symbolFilterMenu) return;
+    this.symbolFilterDropdown.classList.add("is-open");
+    this.symbolFilterMenu.setAttribute("aria-hidden", "false");
+  }
+
+  /**
+   * 关闭币种筛选下拉菜单
+   */
+  closeSymbolFilterDropdown() {
+    if (!this.symbolFilterDropdown || !this.symbolFilterMenu) return;
+    this.symbolFilterDropdown.classList.remove("is-open");
+    this.symbolFilterMenu.setAttribute("aria-hidden", "true");
+  }
+
+  /**
+   * 选择币种筛选选项
+   * @param {string} value - 选项值 ('all' 或 'instance_xxx')
+   * @param {HTMLElement} optionEl - 选项元素
+   */
+  selectSymbolFilterOption(value, optionEl) {
+    // 更新选中状态
+    this.symbolFilterMenu?.querySelectorAll(".symbol-filter-option").forEach(opt => {
+      opt.classList.remove("active");
+    });
+    optionEl?.classList.add("active");
+
+    // 更新显示的标签
+    if (this.symbolFilterLabel) {
+      this.symbolFilterLabel.textContent = optionEl?.textContent?.trim() || value;
+    }
+
+    // 关闭下拉菜单
+    this.closeSymbolFilterDropdown();
+
+    // 触发筛选变更
+    this.onSymbolFilterChange(value);
+  }
+
+  /**
+   * 刷新币种筛选下拉选项
+   */
+  async refreshSymbolFilterOptions() {
+    if (!this.symbolFilterMenu) {
+      console.warn("[symbolFilter] symbolFilterMenu 元素不存在");
+      return;
+    }
+
+    const t = (key, defaultVal) => this.translate(key, defaultVal);
+
+    // 获取当前活跃账户
+    const activeAccount = this.accountsCache?.find(acc => acc.is_active);
+    const activeAccountId = activeAccount?.id;
+    
+    console.log("[symbolFilter] refreshSymbolFilterOptions:", {
+      isAuthenticated: this.isAuthenticated,
+      accountsCacheLength: this.accountsCache?.length,
+      activeAccountId,
+      activeAccountName: activeAccount?.name,
+    });
+
+    // 保留当前选择
+    const currentValue = this.currentSymbolFilter || "all";
+
+    // 重建选项 HTML
+    let optionsHtml = `<div class="symbol-filter-option${currentValue === "all" ? " active" : ""}" data-value="all">${t("symbolFilter.allSymbols", "All Symbols")}</div>`;
+
+    // 加载当前账户的任务实例
+    if (activeAccountId && this.isAuthenticated) {
+      try {
+        console.log("[symbolFilter] 加载账户的任务实例, accountId:", activeAccountId);
+        const data = await this.fetchJson(`/api/trading-instances?accountId=${activeAccountId}`);
+        console.log("[symbolFilter] 任务实例 API 返回:", data);
+        if (data?.instances && Array.isArray(data.instances)) {
+          // 按运行状态排序：运行中 > 暂停 > 停止
+          const sortedInstances = data.instances.sort((a, b) => {
+            const order = { running: 0, paused: 1, stopped: 2 };
+            return (order[a.status] || 3) - (order[b.status] || 3);
+          });
+
+          if (sortedInstances.length > 0) {
+            // 添加分隔线
+            optionsHtml += `<div class="symbol-filter-divider"></div>`;
+            
+            for (const inst of sortedInstances) {
+              const statusIcon = inst.status === "running" ? "🟢" : inst.status === "paused" ? "🟡" : "⚪";
+              const isActive = currentValue === `instance_${inst.id}`;
+              const symbolsData = (inst.tradingSymbols || []).join(",");
+              optionsHtml += `<div class="symbol-filter-option${isActive ? " active" : ""}" data-value="instance_${inst.id}" data-instance-id="${inst.id}" data-symbols="${symbolsData}" data-account-id="${inst.account_id || ""}"><span class="status-icon">${statusIcon}</span>${this.escapeHtml(inst.name)}</div>`;
+            }
+          }
+
+          // 缓存实例数据
+          this.accountInstancesCache = sortedInstances;
+        }
+      } catch (err) {
+        console.warn("[symbolFilter] 加载任务实例失败:", err);
+      }
+    }
+
+    this.symbolFilterMenu.innerHTML = optionsHtml;
+
+    // 更新显示的标签
+    const activeOption = this.symbolFilterMenu.querySelector(".symbol-filter-option.active");
+    if (this.symbolFilterLabel && activeOption) {
+      this.symbolFilterLabel.textContent = activeOption.textContent?.trim() || t("symbolFilter.allSymbols", "All Symbols");
+    }
+    
+    // 触发一次筛选更新
+    this.onSymbolFilterChange(currentValue);
+  }
+
+  /**
+   * 处理币种筛选切换
+   * @param {string} filterValue - 'all' 或 'instance_xxx'
+   */
+  async onSymbolFilterChange(filterValue) {
+    console.log("[symbolFilter] 切换筛选:", filterValue);
+    this.currentSymbolFilter = filterValue;
+
+    if (filterValue === "all") {
+      // 选择"所有交易对"：加载交易所全部合约（按成交量排序）
+      this.currentFilterInstanceId = null;
+      this.currentFilterAccountId = null;
+      
+      // 显示加载状态
+      if (this.symbolListEl) {
+        this.symbolListEl.innerHTML = '<div class="loading-indicator"><div class="spinner"></div><span data-i18n="loading">Loading...</span></div>';
+      }
+      
+      await this.loadExchangeAllSymbols();
+    } else if (filterValue.startsWith("instance_")) {
+      // 选择任务实例：只显示该实例策略配置的币种
+      const instanceId = Number(filterValue.replace("instance_", ""));
+      this.currentFilterInstanceId = instanceId;
+      
+      // 从缓存中获取任务实例信息（包括账户ID，用于筛选K线标记）
+      const instance = this.accountInstancesCache?.find(inst => inst.id === instanceId);
+      this.currentFilterAccountId = instance?.account_id || null;
+      
+      // 从选项元素或缓存中获取币种列表
+      const option = this.symbolFilterMenu?.querySelector(`.symbol-filter-option[data-value="${filterValue}"]`);
+      let symbolsStr = option?.dataset?.symbols || "";
+      
+      // 如果选项中没有，从缓存中获取
+      if (!symbolsStr && instance?.tradingSymbols) {
+        symbolsStr = Array.isArray(instance.tradingSymbols) 
+          ? instance.tradingSymbols.join(",") 
+          : String(instance.tradingSymbols);
+      }
+      
+      const symbols = symbolsStr.split(",").map(s => s.trim().toUpperCase()).filter(Boolean);
+      
+      if (symbols.length > 0) {
+        this.applyInstanceSymbols(symbols);
+      } else {
+        // 如果没有配置币种，显示空列表
+        this.availableSymbols = new Set();
+        this.symbolOrder = [];
+        this.renderSymbolList();
+      }
+    }
+
+    // 刷新 K 线图的交易标记（根据新的筛选条件）
+    this.refreshCurrentChartMarkers();
+  }
+
+  /**
+   * 刷新当前 K 线图的交易标记
+   */
+  refreshCurrentChartMarkers() {
+    if (!this.candleSeries || !this.activeSymbol) return;
+    
+    // 获取当前 K 线的时间范围
+    const visibleRange = this.chart?.timeScale?.()?.getVisibleRange?.();
+    if (visibleRange && visibleRange.from && visibleRange.to) {
+      void this.loadTradeMarkers(this.activeSymbol, Math.floor(visibleRange.from), Math.ceil(visibleRange.to));
+    }
+  }
+
+  /**
+   * 加载交易所的所有 USDT 永续合约（按成交量排序）
+   */
+  async loadExchangeAllSymbols() {
+    try {
+      console.log("[symbolFilter] 加载交易所所有合约...");
+      const data = await this.fetchJson("/api/exchange/symbols");
+      
+      // 检查是否有错误
+      if (data?.error) {
+        console.warn("[symbolFilter] 加载合约失败:", data.error);
+        if (this.symbolListEl) {
+          this.symbolListEl.innerHTML = `<div class="error-message" style="padding: 10px; color: var(--red); text-align: center;">${data.error}</div>`;
+        }
+        return;
+      }
+      
+      if (data?.symbols && Array.isArray(data.symbols) && data.symbols.length > 0) {
+        this.allExchangeSymbols = data.symbols;
+        
+        // 更新可用币种列表
+        const symbols = data.symbols.map(s => s.symbol.toUpperCase());
+        this.symbolOrder = symbols;
+        this.availableSymbols = new Set(symbols);
+        
+        // 更新价格显示
+        for (const item of data.symbols) {
+          const symbol = item.symbol.toUpperCase();
+          const price = Number.parseFloat(item.price);
+          const change = item.change24h;
+          if (Number.isFinite(price)) {
+            this.prices.set(symbol, price);
+          }
+          if (Number.isFinite(change)) {
+            this.priceChanges.set(symbol, change);
+          }
+        }
+
+        // 如果当前选中的币种不在列表中，切换到第一个
+        if (!this.availableSymbols.has(this.activeSymbol) && symbols.length > 0) {
+          this.activeSymbol = symbols[0];
+          this.updateChartTitle();
+          void this.loadCandles(this.activeSymbol);
+        }
+
+        this.renderSymbolList();
+        console.log(`[symbolFilter] 已加载 ${symbols.length} 个合约 (${data.provider})`);
+      } else {
+        console.warn("[symbolFilter] 未获取到合约列表，可能需要登录并选择账户");
+        if (this.symbolListEl) {
+          this.symbolListEl.innerHTML = `<div class="empty-message" style="padding: 10px; text-align: center; color: var(--text-secondary);" data-i18n="noSymbolsFound">No symbols found</div>`;
+        }
+      }
+    } catch (err) {
+      console.error("[symbolFilter] 加载交易所合约失败:", err);
+      if (this.symbolListEl) {
+        this.symbolListEl.innerHTML = `<div class="error-message" style="padding: 10px; color: var(--red); text-align: center;">Failed to load symbols</div>`;
+      }
+    }
+  }
+
+  /**
+   * 应用任务实例的币种列表
+   * @param {string[]} symbols - 币种列表
+   */
+  applyInstanceSymbols(symbols) {
+    this.symbolOrder = symbols;
+    this.availableSymbols = new Set(symbols);
+
+    // 如果当前选中的币种不在列表中，切换到第一个
+    if (!this.availableSymbols.has(this.activeSymbol) && symbols.length > 0) {
+      this.activeSymbol = symbols[0];
+      this.updateChartTitle();
+      void this.loadCandles(this.activeSymbol);
+    }
+
+    this.renderSymbolList();
+    
+    // 订阅价格更新
+    this.schedulePriceSubscriptionUpdate();
+  }
+
   renderSymbolList() {
     if (!this.symbolListEl) return;
 
@@ -2276,21 +2604,33 @@ class TradingMonitor {
       if (!normalized) {
         return;
       }
-      if (this.availableSymbols.has(normalized) && !seen.has(normalized)) {
+      // 如果选择了特定任务实例，只显示该任务的币种，不检查 availableSymbols
+      // 如果选择了 "所有交易对"，则检查 availableSymbols
+      const isAllMode = this.currentSymbolFilter === "all" || !this.currentFilterInstanceId;
+      const shouldInclude = isAllMode 
+        ? this.availableSymbols.has(normalized) 
+        : true; // 特定任务模式下总是包含
+      
+      if (shouldInclude && !seen.has(normalized)) {
         symbolsInOrder.push(normalized);
         seen.add(normalized);
       }
     });
 
-    const remaining = [];
-    this.availableSymbols.forEach((symbol) => {
-      if (!seen.has(symbol)) {
-        remaining.push(symbol);
-      }
-    });
-    remaining.sort();
-
-    const symbols = symbolsInOrder.concat(remaining);
+    // 如果选择了 "所有交易对"，添加剩余的可用币种
+    // 如果选择了特定任务实例，不添加额外币种
+    let symbols = symbolsInOrder;
+    const isAllMode = this.currentSymbolFilter === "all" || !this.currentFilterInstanceId;
+    if (isAllMode) {
+      const remaining = [];
+      this.availableSymbols.forEach((symbol) => {
+        if (!seen.has(symbol)) {
+          remaining.push(symbol);
+        }
+      });
+      remaining.sort();
+      symbols = symbolsInOrder.concat(remaining);
+    }
 
     const html = symbols
       .map((symbol) => {
@@ -4533,10 +4873,6 @@ class TradingMonitor {
       this.renderSymbolList();
     }
 
-    if (updated) {
-      this.updateTimestamp(this.pricesUpdatedEl, timestamp);
-    }
-
     if (newSymbolAdded) {
       this.schedulePriceSubscriptionUpdate();
     }
@@ -4650,8 +4986,16 @@ class TradingMonitor {
       return;
     }
 
-    // 获取该币种的所有交易记录（限制500条以避免性能问题）
-    const data = await this.fetchJson(`/api/trades?symbol=${encodeURIComponent(symbol)}&limit=500`);
+    // 构建 API 请求 URL
+    // 如果选择了特定任务实例，添加 accountId 参数以筛选该账户的交易
+    let tradesUrl = `/api/trades?symbol=${encodeURIComponent(symbol)}&limit=500`;
+    if (this.currentFilterInstanceId && this.currentFilterAccountId) {
+      // 选择了特定任务实例，筛选该账户的交易记录
+      tradesUrl += `&accountId=${this.currentFilterAccountId}`;
+    }
+
+    // 获取该币种的交易记录（根据筛选条件）
+    const data = await this.fetchJson(tradesUrl);
     if (!data || !Array.isArray(data.trades)) {
       console.warn(`无法加载 ${symbol} 的交易标记`);
       return;
@@ -5444,8 +5788,10 @@ class TradingMonitor {
         this.instancesCacheLoaded = false;
         void this.fetchFullConfig(true); // 强制刷新完整配置，覆盖公开配置缓存
         void this.fetchTradingLoopStatus();
-        void this.loadAccountsList();
+        await this.loadAccountsList(); // 等待账户列表加载完成
         void this.refreshRunningTasksPanel(true);
+        // 账户列表加载完成后刷新币种筛选器
+        void this.refreshSymbolFilterOptions();
       } else {
         this.accountsCache = [];
         this.instancesCache = [];
@@ -8048,6 +8394,19 @@ class TradingMonitor {
       const successMessage = payload.message || this.translate("accounts.messages.activateSuccess", "Account activated");
       this.showToast("success", this.translate("common.success", "Success"), successMessage);
       await this.loadAccountsList();
+      
+      // 刷新币种筛选器（加载新账户的任务实例）
+      try {
+        // 重置筛选器到 "所有交易对"
+        this.currentSymbolFilter = "all";
+        this.currentFilterInstanceId = null;
+        this.currentFilterAccountId = null;
+        // 刷新筛选选项（会加载新账户的任务实例）
+        await this.refreshSymbolFilterOptions();
+      } catch (filterError) {
+        console.warn("刷新币种筛选器失败:", filterError);
+      }
+      
       try {
         await this.refreshAll();
       } catch (refreshError) {

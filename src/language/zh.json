@@ -32,6 +32,11 @@
 		"languageTooltip": "界面语言：{{language}}"
 	},
 	"tradingSymbols": "交易币种",
+	"symbolFilter": {
+		"allSymbols": "所有交易对",
+		"instancePrefix": "任务：",
+		"loadingSymbols": "加载合约列表..."
+	},
 	"loading": "加载中...",
 	"interval": {
 		"1m": "1分钟",

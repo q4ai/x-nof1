@@ -321,6 +321,43 @@ export class BitgetClient {
     }));
   }
 
+  /**
+   * 获取所有 USDT 永续合约的 ticker 数据（包含成交量、价格、涨跌幅）
+   * 用于按成交量排序展示合约列表
+   */
+  async getAllSwapTickers(): Promise<Array<{
+    symbol: string;
+    volume24h: number;
+    price: string;
+    change24h: number;
+  }>> {
+    const tickers = await this.request<any[]>("GET", "/api/v2/mix/market/tickers", {
+      productType: "USDT-FUTURES",
+    }, undefined, false);
+
+    const result: Array<{ symbol: string; volume24h: number; price: string; change24h: number }> = [];
+
+    for (const ticker of tickers || []) {
+      if (ticker.symbol && ticker.symbol.endsWith("USDT")) {
+        const symbol = ticker.symbol.replace(/USDT$/, "");
+        const volume24h = Number.parseFloat(ticker.usdtVolume || ticker.quoteVolume || "0");
+        const price = ticker.lastPr || ticker.last || "0";
+        // Bitget 的 change24h 可能是小数形式（如 0.05 表示 5%），需要乘以 100
+        const rawChange = Number.parseFloat(ticker.change24h || ticker.priceChangePercent || "0");
+        const change24h = Math.abs(rawChange) < 1 ? rawChange * 100 : rawChange;
+        
+        result.push({
+          symbol,
+          volume24h,
+          price,
+          change24h,
+        });
+      }
+    }
+
+    return result;
+  }
+
   async setLeverage(contract: string, leverage: number, marginMode: "cross" | "isolated" = "cross") {
     const symbol = this.contractToSymbol(contract);
     try {

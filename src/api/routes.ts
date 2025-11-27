@@ -1846,13 +1846,47 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   // ========== Strategy Tasks 管理 API ==========
 
   /**
-   * 获取所有 Strategy Tasks
+   * 获取所有 Strategy Tasks（包含策略交易币种）
+   * 可选参数 ?accountId=xxx 过滤特定账户的任务
    */
   app.get("/api/trading-instances", requireAuth, async (c) => {
     try {
       const { getAllTradingInstances } = await import("../services/tradingInstanceService");
-      const instances = await getAllTradingInstances();
-      return c.json({ instances });
+      const { StrategyFileManager } = await import("../services/strategyFileManager");
+      
+      const accountIdParam = c.req.query("accountId");
+      const accountId = accountIdParam ? Number(accountIdParam) : undefined;
+      
+      let instances = await getAllTradingInstances();
+      
+      // 如果指定了账户ID，过滤任务
+      if (accountId && Number.isFinite(accountId)) {
+        instances = instances.filter(inst => inst.account_id === accountId);
+      }
+      
+      // 为每个任务加载策略的交易币种
+      const instancesWithSymbols = await Promise.all(
+        instances.map(async (instance) => {
+          let tradingSymbols: string[] = [];
+          try {
+            const strategy = await StrategyFileManager.loadStrategy(instance.strategy_name);
+            if (strategy?.params?.tradingSymbols) {
+              tradingSymbols = strategy.params.tradingSymbols
+                .split(",")
+                .map(s => s.trim().toUpperCase())
+                .filter(Boolean);
+            }
+          } catch (err) {
+            logger.warn(`加载策略 ${instance.strategy_name} 的交易币种失败`);
+          }
+          return {
+            ...instance,
+            tradingSymbols,
+          };
+        })
+      );
+      
+      return c.json({ instances: instancesWithSymbols });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "未知错误";
       logger.error("获取 Strategy Tasks 失败:", error);
@@ -2731,23 +2765,52 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const okxClient = await createExchangeClientFromActiveAccount();
       const prices: Record<string, number> = {};
       
-      // 并发获取所有币种价格
-      await Promise.all(
-        symbols.map(async (symbol) => {
-          try {
-            const contract = `${symbol}_USDT`;
-            const ticker = await okxClient.getFuturesTicker(contract);
-            prices[symbol] = Number.parseFloat(ticker.last || "0");
-          } catch (error: unknown) {
-            if (error instanceof Error) {
-              logger.error(`获取 ${symbol} 价格失败:`, error);
-            } else {
-              logger.error(`获取 ${symbol} 价格失败: 未知错误`, error as Record<string, unknown>);
+      try {
+        // 尝试批量获取所有 ticker，避免触发 API 频率限制
+        const allTickers = await okxClient.getAllSwapTickers();
+        const tickerMap = new Map<string, number>();
+        
+        for (const ticker of allTickers) {
+          tickerMap.set(ticker.symbol.toUpperCase(), Number.parseFloat(ticker.price));
+        }
+
+        // 填充请求的币种价格
+        for (const symbol of symbols) {
+          const upperSymbol = symbol.toUpperCase();
+          const price = tickerMap.get(upperSymbol);
+          if (price !== undefined) {
+            prices[symbol] = price;
+          } else {
+            // 如果批量获取中没有，尝试单独获取（作为回退）
+            try {
+              const contract = `${symbol}_USDT`;
+              const ticker = await okxClient.getFuturesTicker(contract);
+              prices[symbol] = Number.parseFloat(ticker.last || "0");
+            } catch (e) {
+              prices[symbol] = 0;
             }
-            prices[symbol] = 0;
           }
-        })
-      );
+        }
+      } catch (error) {
+        logger.warn("批量获取价格失败，降级为单独获取:", error);
+        // 降级方案：并发获取所有币种价格
+        await Promise.all(
+          symbols.map(async (symbol) => {
+            try {
+              const contract = `${symbol}_USDT`;
+              const ticker = await okxClient.getFuturesTicker(contract);
+              prices[symbol] = Number.parseFloat(ticker.last || "0");
+            } catch (error: unknown) {
+              if (error instanceof Error) {
+                logger.error(`获取 ${symbol} 价格失败:`, error);
+              } else {
+                logger.error(`获取 ${symbol} 价格失败: 未知错误`, error as Record<string, unknown>);
+              }
+              prices[symbol] = 0;
+            }
+          })
+        );
+      }
       
       return c.json({ prices });
     } catch (error: unknown) {
@@ -3308,6 +3371,77 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
   });
 
   /**
+   * 获取当前账户交易所的所有 USDT 永续合约列表（按24小时成交量降序排列）
+   * 返回格式: { symbols: [{symbol: "BTC", volume24h: 1234567890, price: "95000.5", change24h: 2.5}, ...] }
+   */
+  app.get("/api/exchange/symbols", async (c) => {
+    try {
+      const { getActiveAccount } = await import("../services/accountConfigService");
+      const { getConfigValue } = await import("../database/init-config");
+      
+      const activeAccount = await getActiveAccount();
+      const systemProxyUrl = await getConfigValue("HTTP_PROXY_URL");
+      
+      // 如果没有激活账户，尝试使用环境变量中的默认配置
+      // 或者如果没有配置，使用默认的 OKX 公共访问
+      const provider = activeAccount?.provider || process.env.EXCHANGE_PROVIDER || "okx";
+      const apiKey = activeAccount?.api_key || process.env.OKX_API_KEY || "";
+      const apiSecret = activeAccount?.api_secret || process.env.OKX_API_SECRET || "";
+      const apiPassphrase = activeAccount?.api_passphrase || process.env.OKX_API_PASSPHRASE || "";
+      const usePaper = activeAccount ? activeAccount.use_paper : (process.env.OKX_USE_PAPER === "true");
+      
+      // 代理优先级: 账户独立代理 > 系统全局代理 > 环境变量代理
+      const proxyUrl = activeAccount?.proxy_url || systemProxyUrl || process.env.HTTP_PROXY || process.env.HTTPS_PROXY || undefined;
+
+      let symbols: Array<{ symbol: string; volume24h: number; price: string; change24h: number }> = [];
+
+      if (provider === "okx") {
+        const { OkxClient } = await import("../services/okxClient");
+        const okxClient = new OkxClient(
+          apiKey,
+          apiSecret,
+          apiPassphrase,
+          usePaper,
+          proxyUrl
+        );
+        symbols = await okxClient.getAllSwapTickers();
+      } else if (provider === "binance") {
+        const { BinanceClient } = await import("../services/binanceClient");
+        const binanceClient = new BinanceClient(
+          apiKey,
+          apiSecret,
+          usePaper,
+          proxyUrl
+        );
+        symbols = await binanceClient.getAllSwapTickers();
+      } else if (provider === "bitget") {
+        const { BitgetClient } = await import("../services/bitgetClient");
+        const bitgetClient = new BitgetClient(
+          apiKey,
+          apiSecret,
+          apiPassphrase,
+          usePaper,
+          proxyUrl
+        );
+        symbols = await bitgetClient.getAllSwapTickers();
+      }
+
+      // 按 24 小时成交量降序排序
+      symbols.sort((a, b) => b.volume24h - a.volume24h);
+
+      return c.json({ 
+        symbols,
+        provider,
+        count: symbols.length,
+      });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : "未知错误";
+      logger.error("获取交易所合约列表失败:", error);
+      return c.json({ symbols: [], error: message }, 500);
+    }
+  });
+
+  /**
    * 获取账户价值历史（用于绘图）
    */
   app.get("/api/history", async (c) => {
@@ -3538,25 +3672,37 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const isBinance = activeAccount?.provider === 'binance';
 
       const rawLimit = Number.parseInt(c.req.query("limit") || "10", 10);
-      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 200) : 10;
+      const limit = Number.isFinite(rawLimit) ? Math.min(Math.max(rawLimit, 1), 500) : 10;
       const rawPage = Number.parseInt(c.req.query("page") || "1", 10);
       const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
       const offset = (page - 1) * limit;
       const symbol = c.req.query("symbol"); // 可选，筛选特定币种
+      const accountIdParam = c.req.query("accountId"); // 可选，筛选特定账户的交易
 
-      // 从数据库获取历史交易记录
-      let sql = "SELECT * FROM trades ORDER BY timestamp DESC LIMIT ? OFFSET ?";
-      let args: Array<string | number> = [limit, offset];
-
-      let countSql = "SELECT COUNT(*) AS total FROM trades";
-      let countArgs: Array<string | number> = [];
+      // 构建 WHERE 子句条件
+      const conditions: string[] = [];
+      const args: Array<string | number> = [];
 
       if (symbol) {
-        sql = "SELECT * FROM trades WHERE symbol = ? ORDER BY timestamp DESC LIMIT ? OFFSET ?";
-        args = [symbol, limit, offset];
-        countSql = "SELECT COUNT(*) AS total FROM trades WHERE symbol = ?";
-        countArgs = [symbol];
+        conditions.push("symbol = ?");
+        args.push(symbol);
       }
+
+      if (accountIdParam) {
+        const accountId = Number.parseInt(accountIdParam, 10);
+        if (Number.isFinite(accountId) && accountId > 0) {
+          conditions.push("account_id = ?");
+          args.push(accountId);
+        }
+      }
+
+      // 组合 SQL
+      const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+      const sql = `SELECT * FROM trades ${whereClause} ORDER BY timestamp DESC LIMIT ? OFFSET ?`;
+      const countSql = `SELECT COUNT(*) AS total FROM trades ${whereClause}`;
+      
+      args.push(limit, offset);
+      const countArgs = conditions.length > 0 ? args.slice(0, -2) : [];
 
       const [result, countResult] = await Promise.all([
         dbClient.execute({ sql, args }),
