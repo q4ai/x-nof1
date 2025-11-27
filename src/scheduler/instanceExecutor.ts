@@ -151,6 +151,12 @@ interface InstanceExecutionConfig {
   strategyName: string;
 }
 
+interface TradingStatusContext extends Record<string, unknown> {
+  accountId: number;
+  instanceId: number;
+  instanceName: string;
+}
+
 /**
  * 从 TradingInstanceWithDetails 提取执行配置
  */
@@ -567,11 +573,12 @@ export async function executeInstanceTradingDecision(
   }
   
   const { instanceId, instanceName, accountId, strategyName, accountConfig } = config;
+  const statusContext = { accountId, instanceId, instanceName };
   
   logger.info(`[实例 ${instanceName}] 开始执行交易决策`);
   
   // 广播准备执行状态
-  websocketService.pushTradingStatus("preparing", `准备执行实例 ${instanceName}`, "scheduled");
+  websocketService.pushTradingStatus("preparing", `准备执行实例 ${instanceName}`, "scheduled", statusContext);
   
   try {
     // 1. 创建交易所客户端
@@ -591,14 +598,14 @@ export async function executeInstanceTradingDecision(
     
     // 3. 在实例上下文中执行交易决策
     await runWithInstanceContext(instanceContext, async () => {
-      await executeWithContext(config, exchangeClient, instance.interval_minutes);
+      await executeWithContext(config, exchangeClient, instance.interval_minutes, statusContext);
     });
     
   } catch (error) {
     logger.error(`[实例 ${instanceName}] 执行失败:`, error);
     // 广播执行错误状态
     const errorMessage = error instanceof Error ? error.message : "未知错误";
-    websocketService.pushTradingStatus("error", `实例 ${instanceName} 执行失败: ${errorMessage}`, "scheduled");
+    websocketService.pushTradingStatus("error", `实例 ${instanceName} 执行失败: ${errorMessage}`, "scheduled", statusContext);
     throw error;
   }
 }
@@ -611,7 +618,8 @@ export async function executeInstanceTradingDecision(
 async function executeWithContext(
   config: InstanceExecutionConfig,
   exchangeClient: any,
-  intervalMinutes: number
+  intervalMinutes: number,
+  statusContext: TradingStatusContext
 ): Promise<void> {
   const { instanceId, instanceName, accountId, strategyName } = config;
   
@@ -620,7 +628,7 @@ async function executeWithContext(
   logger.info(`[实例 ${instanceName}] 交易对: ${symbols.join(", ")}`);
   
   // 广播收集数据状态
-  websocketService.pushTradingStatus("collecting_data", `收集 ${symbols.length} 个交易对的市场数据`, "scheduled");
+  websocketService.pushTradingStatus("collecting_data", `收集 ${symbols.length} 个交易对的市场数据`, "scheduled", statusContext);
   
   // 2. 收集市场数据
   const marketData = await collectMarketDataForInstance(exchangeClient, symbols, accountId);
@@ -646,7 +654,7 @@ async function executeWithContext(
   logger.info(`[实例 ${instanceName}] 当前持仓: ${activePositions.length} 个`);
   
   // 广播分析市场状态
-  websocketService.pushTradingStatus("analyzing", `分析 ${validSymbols.length} 个交易对的市场行情`, "scheduled");
+  websocketService.pushTradingStatus("analyzing", `分析 ${validSymbols.length} 个交易对的市场行情`, "scheduled", statusContext);
   
   // 5. 创建 AI Agent
   const { agent, instructions, modelName } = await createAgentForInstance(config, intervalMinutes);
@@ -666,7 +674,7 @@ async function executeWithContext(
   logger.info(`[实例 ${instanceName}] 调用 AI 模型: ${modelName}`);
   
   // 广播 AI 决策中状态
-  websocketService.pushTradingStatus("ai_deciding", `AI 模型 ${modelName} 正在决策`, "scheduled");
+  websocketService.pushTradingStatus("ai_deciding", `AI 模型 ${modelName} 正在决策`, "scheduled", statusContext);
   
   // 记录执行开始时间，用于捕获期间的交易动作
   const executionStartedAt = getChinaTimeISO();
@@ -743,7 +751,7 @@ async function executeWithContext(
   if (actionsTakenRecords.length > 0) {
     logger.info(`[实例 ${instanceName}] 捕获到 ${actionsTakenRecords.length} 条交易动作`);
     // 广播执行交易状态
-    websocketService.pushTradingStatus("executing_trades", `执行了 ${actionsTakenRecords.length} 个交易操作`, "scheduled");
+    websocketService.pushTradingStatus("executing_trades", `执行了 ${actionsTakenRecords.length} 个交易操作`, "scheduled", statusContext);
   }
   
   // 10. 记录到 agent_request_logs 表（决策日志 Tab 使用此表）
@@ -782,7 +790,7 @@ async function executeWithContext(
   logger.info(`[实例 ${instanceName}] 决策记录已保存到两个表`);
   
   // 广播执行完成状态
-  websocketService.pushTradingStatus("completed", `实例 ${instanceName} 执行完成`, "scheduled");
+  websocketService.pushTradingStatus("completed", `实例 ${instanceName} 执行完成`, "scheduled", statusContext);
 }
 
 /**

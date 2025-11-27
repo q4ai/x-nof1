@@ -247,6 +247,7 @@ export async function executeOpenPosition({
   marginMode = "cross",
   orderType = "market",
   price,
+  skipWhitelistCheck = false,
 }: {
   symbol: string;
   side: "long" | "short";
@@ -258,6 +259,7 @@ export async function executeOpenPosition({
   marginMode?: "cross" | "isolated";
   orderType?: "market" | "limit";
   price?: number;
+  skipWhitelistCheck?: boolean;
 }) {
   const effectiveAmount = amount ?? amountUsdt ?? 0;
   // 开仓时不设置止盈止损，由 AI 在每个周期主动决策
@@ -307,9 +309,11 @@ export async function executeOpenPosition({
   
   try {
     // 0. 检查白名单
-    const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
-    if (!allowedSymbols.has(normalizedSymbol)) {
-      return fail(`该币种 ${normalizedSymbol} 不在当前交易白名单中`);
+    if (!skipWhitelistCheck) {
+      const allowedSymbols = new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
+      if (!allowedSymbols.has(normalizedSymbol)) {
+        return fail(`该币种 ${normalizedSymbol} 不在当前交易白名单中`);
+      }
     }
 
     //  参数验证

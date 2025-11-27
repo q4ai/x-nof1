@@ -317,11 +317,12 @@ a:hover {
 }
 
 .sidebar-header {
-  padding: 10px 12px;
+  padding: 0; /* 移除内边距，让下拉框填满 */
   border-bottom: 1px solid var(--border-color);
   display: flex;
   align-items: center;
   flex-shrink: 0;
+  height: 45px; /* 设置固定高度，与右侧 chart-header 对齐 */
 }
 
 .sidebar-header h3 {
@@ -335,33 +336,34 @@ a:hover {
   position: relative;
   flex: 1;
   min-width: 0;
+  height: 100%; /* 填满父容器高度 */
 }
 
 .symbol-filter-trigger {
   width: 100%;
+  height: 100%; /* 填满父容器高度 */
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
-  padding: 8px 10px;
-  font-size: 12px;
+  padding: 0 12px; /* 左右内边距 */
+  font-size: 13px; /* 稍微调大字体 */
   font-weight: 500;
   color: var(--text-primary);
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
+  background: transparent; /* 去掉背景色 */
+  border: none; /* 去掉边框 */
+  border-radius: 0; /* 去掉圆角 */
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease;
 }
 
 .symbol-filter-trigger:hover {
-  border-color: var(--accent-color);
-  background: var(--bg-secondary);
+  background: var(--bg-tertiary); /* 悬停时显示背景色 */
 }
 
 .symbol-filter-dropdown.is-open .symbol-filter-trigger {
-  border-color: var(--accent-color);
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  background: var(--bg-tertiary);
+  box-shadow: none; /* 移除阴影 */
 }
 
 .symbol-filter-label {
@@ -384,14 +386,15 @@ a:hover {
 
 .symbol-filter-menu {
   position: absolute;
-  top: calc(100% + 4px);
+  top: 100%; /* 紧贴触发器下方 */
   left: 0;
   right: 0;
   max-height: 280px;
   overflow-y: auto;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: 6px;
+  border-top: none; /* 移除上边框，看起来更连贯 */
+  border-radius: 0 0 6px 6px; /* 只有底部有圆角 */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   z-index: 100;
   display: none;
@@ -430,8 +433,10 @@ a:hover {
   color: var(--accent-color);
 }
 
-.symbol-filter-option .status-icon {
+.symbol-filter-option .status-icon,
+.symbol-filter-label .status-icon {
   font-size: 10px;
+  margin-right: 6px;
 }
 
 .symbol-filter-divider {
@@ -453,6 +458,24 @@ a:hover {
 .symbol-list::-webkit-scrollbar-thumb {
   background: var(--border-color);
   border-radius: 2px;
+}
+
+.symbol-list .loading,
+.symbol-list .loading-indicator {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.symbol-list .loading-indicator .spinner {
+  width: 24px;
+  height: 24px;
+  border-width: 2px;
 }
 
 .symbol-item {
@@ -664,10 +687,19 @@ a:hover {
 }
 
 /* AI 模型标识 Overlay */
-.ai-model-overlay {
+.ai-model-overlay-stack {
   position: absolute;
   left: 8px;
   bottom: 36px;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 6px;
+  pointer-events: none;
+  z-index: 100;
+}
+
+.ai-model-overlay {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -677,7 +709,6 @@ a:hover {
   border: none;
   cursor: pointer;
   pointer-events: auto;
-  z-index: 100;
   transition: all 0.3s ease;
   transform: none;
 }

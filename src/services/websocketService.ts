@@ -103,6 +103,8 @@ class WebSocketService {
   private connectHandlers: ClientLifecycleHandler[] = [];
   private disconnectHandlers: ClientLifecycleHandler[] = [];
   private messageHandlers: ClientMessageHandler[] = [];
+  private latestTradingStatus: TradingStatusMessage | null = null;
+  private cachedStatusMap: Map<string, TradingStatusMessage> = new Map();
 
   /**
    * 初始化 WebSocket 服务器
@@ -244,14 +246,27 @@ class WebSocketService {
     trigger?: "manual" | "scheduled",
     data?: Record<string, unknown>
   ): void {
-    this.broadcast({
+    const payload: TradingStatusMessage = {
       type: "trading_status",
       status,
       message,
       timestamp: new Date().toISOString(),
       trigger,
       data,
-    });
+    };
+
+    this.latestTradingStatus = payload;
+    const cacheKey = this.buildStatusCacheKey(payload);
+
+    // 仅缓存活跃状态（执行中的阶段），已完成/错误/空闲则移除缓存
+    const activeStatuses = new Set(["preparing", "collecting_data", "analyzing", "ai_deciding", "executing_trades"]);
+    if (activeStatuses.has(status)) {
+      this.cachedStatusMap.set(cacheKey, payload);
+    } else {
+      this.cachedStatusMap.delete(cacheKey);
+    }
+
+    this.broadcast(payload);
   }
 
   /**
@@ -282,6 +297,18 @@ class WebSocketService {
     return this.clients;
   }
 
+  getLatestTradingStatus(): TradingStatusMessage | null {
+    return this.latestTradingStatus;
+  }
+
+  getCachedTradingStatuses(): TradingStatusMessage[] {
+    return Array.from(this.cachedStatusMap.values()).sort((a, b) => {
+      const timeA = new Date(a.timestamp).getTime();
+      const timeB = new Date(b.timestamp).getTime();
+      return timeB - timeA;
+    });
+  }
+
   /**
    * 关闭 WebSocket 服务器
    */
@@ -295,6 +322,34 @@ class WebSocketService {
       this.wss = null;
       logger.info("WebSocket 服务器已关闭");
     }
+  }
+
+  private buildStatusCacheKey(message: TradingStatusMessage): string {
+    if (message?.data && typeof message.data === "object") {
+      const instanceId = this.extractNumericId(message.data.instanceId ?? message.data.instance_id);
+      if (instanceId !== null) {
+        return `instance:${instanceId}`;
+      }
+
+      const accountId = this.extractNumericId(message.data.accountId ?? message.data.account_id);
+      if (accountId !== null) {
+        return `account:${accountId}`;
+      }
+    }
+    return "global";
+  }
+
+  private extractNumericId(value: unknown): number | null {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+    if (typeof value === "string" && value.trim() !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+    return null;
   }
 }
 

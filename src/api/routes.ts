@@ -45,6 +45,8 @@ import { initTradingSystem } from "../scheduler/tradingSystemInit";
 import { summarizeAgentResponseText } from "../database/agent-request-logs";
 import { getActiveAccount } from "../services/accountConfigService";
 import { isSystemInstalled, installSystem } from "../services/installService";
+import { dashboardBroadcaster } from "../services/dashboardBroadcaster";
+import { websocketService } from "../services/websocketService";
 
 const logger = createLogger({
   name: "api-routes",
@@ -2462,6 +2464,12 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         enforceWhitelist: false,
       });
       const success = Boolean(result?.success);
+
+      if (success) {
+        // 平仓成功后，立即刷新持仓数据并广播给前端
+        void dashboardBroadcaster.refreshPositions();
+      }
+
       const message = typeof result?.message === "string" && result.message.length > 0
         ? result.message
         : success
@@ -3063,6 +3071,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
           marginMode: marginMode || "cross",
           orderType: orderType === "limit" ? "limit" : "market",
           price: orderType === "limit" ? Number(price) : undefined,
+          skipWhitelistCheck: true, // Manual trade skips whitelist check
         });
 
       } else if (action === "close") {
@@ -3072,13 +3081,17 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         result = await executeClosePosition({
           symbol: normalizedSymbol,
           percentage: 100,
-          skipGuards: true, // Manual close skips minimum holding time guards
+          skipGuards: true,
+          enforceWhitelist: false, // Manual close skips whitelist check
         });
       } else {
         return c.json({ success: false, error: "无效的操作类型" }, 400);
       }
 
       if (result.success) {
+        // 交易成功后，立即刷新持仓数据并广播给前端
+        void dashboardBroadcaster.refreshPositions();
+        
         return c.json({ success: true, data: result });
       } else {
         return c.json({ success: false, error: result.message }, 400);
@@ -3348,6 +3361,20 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
     } catch (error: unknown) {
       logger.error("获取公开实例状态失败:", error);
       return c.json({ runningInstance: null });
+    }
+  });
+
+  /**
+   * 获取最近一次的交易状态快照
+   * 解决页面刷新后等待下一次 WebSocket 推送的问题
+   */
+  app.get("/api/public/trading-status/latest", async (c) => {
+    try {
+      const statuses = websocketService.getCachedTradingStatuses();
+      return c.json({ statuses });
+    } catch (error: unknown) {
+      logger.error("获取交易状态快照失败:", error);
+      return c.json({ statuses: [] });
     }
   });
 

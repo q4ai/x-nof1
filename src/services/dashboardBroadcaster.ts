@@ -136,6 +136,7 @@ class DashboardBroadcaster {
   private latestCandles = new Map<string, CandlesSnapshotMessage>();
   private priceFetchInFlight = false;
   private positionFetchInFlight = false;
+  private pendingPositionFetch = false;
   private candleFetchInFlight = new Map<string, boolean>();
   private priceTimer: NodeJS.Timeout | null = null;
   private positionTimer: NodeJS.Timeout | null = null;
@@ -500,9 +501,11 @@ class DashboardBroadcaster {
 
   private async fetchAndBroadcastPositions(targets?: Set<WebSocketClient>): Promise<void> {
     if (this.positionFetchInFlight) {
+      this.pendingPositionFetch = true;
       return;
     }
     this.positionFetchInFlight = true;
+    this.pendingPositionFetch = false;
     try {
       const positions = await getCurrentPositions();
       const timestamp = new Date().toISOString();
@@ -524,6 +527,9 @@ class DashboardBroadcaster {
       this.logger.error("获取持仓数据失败:", error);
     } finally {
       this.positionFetchInFlight = false;
+      if (this.pendingPositionFetch) {
+        void this.fetchAndBroadcastPositions();
+      }
     }
   }
 
@@ -553,6 +559,13 @@ class DashboardBroadcaster {
     for (const client of clients) {
       websocketService.send(client, message);
     }
+  }
+
+  /**
+   * 强制刷新持仓数据并广播
+   */
+  public async refreshPositions(): Promise<void> {
+    await this.fetchAndBroadcastPositions();
   }
 }
 

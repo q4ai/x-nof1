@@ -479,6 +479,7 @@ class TradingMonitor {
     this.emptyPositionsTimeout = null;
     this.lastPositionsData = null;
     this.lastPositionsTimestamp = 0;
+    this.forcePositionsUpdateUntil = 0; // 手动平仓后短期内强制更新持仓
     
     // 手动交易设置缓存（按币种）
     this.manualTradeSettings = new Map();
@@ -558,6 +559,10 @@ class TradingMonitor {
     this.aiOverlay = null;
     this.aiOverlayText = null;
     this.aiOverlayIcon = null;
+    this.aiOverlayContainer = null;
+    this.aiOverlayEntries = new Map();
+    this.aiOverlayDefaultKey = "default";
+    this.visibleAiOverlayKeys = new Set();
     this.toastContainer = document.getElementById("toast-container");
     // this.accountModal = document.getElementById("account-modal"); // Removed
     // this.accountsListModal = document.getElementById("accounts-list-modal"); // Removed
@@ -616,6 +621,8 @@ class TradingMonitor {
     this.setupTabSwitching();
     this.setupModals();
     this.setupSidebarTabs();
+    this.initAiModelOverlay();
+    void this.prefetchLatestTradingStatuses();
     this.connectWebSocket();
     this.initViewAllControls();
     this.setupRecordsControls();
@@ -631,7 +638,6 @@ class TradingMonitor {
     this.initAccountSwitcher();
     this.initStrategyDraftPersistence();
     this.setupVariableGuideModal();
-    this.initAiModelOverlay();
     this.bindViewSwitcher(); // 绑定视图切换
     void this.fetchPublicModelInfo();
 
@@ -2359,7 +2365,7 @@ class TradingMonitor {
 
     // 更新显示的标签
     if (this.symbolFilterLabel) {
-      this.symbolFilterLabel.textContent = optionEl?.textContent?.trim() || value;
+      this.symbolFilterLabel.innerHTML = optionEl?.innerHTML || value;
     }
 
     // 关闭下拉菜单
@@ -2435,7 +2441,7 @@ class TradingMonitor {
     // 更新显示的标签
     const activeOption = this.symbolFilterMenu.querySelector(".symbol-filter-option.active");
     if (this.symbolFilterLabel && activeOption) {
-      this.symbolFilterLabel.textContent = activeOption.textContent?.trim() || t("symbolFilter.allSymbols", "All Symbols");
+      this.symbolFilterLabel.innerHTML = activeOption.innerHTML;
     }
     
     // 触发一次筛选更新
@@ -3051,21 +3057,27 @@ class TradingMonitor {
     console.log(`[loadEquityHistory] 已加载 ${history.length} 条权益数据`);
   }
 
-  async loadPositions() {
+  async loadPositions(options = {}) {
     const data = await this.fetchJson("/api/positions");
     if (!data) return;
 
     const { positions = [] } = data;
     const list = Array.isArray(positions) ? positions : [];
-    this.applyPositionsData(list, Date.now());
+    this.applyPositionsData(list, Date.now(), options);
   }
 
-  applyPositionsData(rawPositions, timestamp) {
+  applyPositionsData(rawPositions, timestamp, options = {}) {
     if (!this.positionsContainerEl) {
       return;
     }
 
     const positions = Array.isArray(rawPositions) ? rawPositions : [];
+    const now = Date.now();
+    const effectiveTimestamp = Number.isFinite(timestamp) ? timestamp : now;
+    const forceByOption = Boolean(options?.forceUpdate);
+    const forceByWindow = typeof this.forcePositionsUpdateUntil === "number" && this.forcePositionsUpdateUntil > now;
+    const forceByPending = this.pendingPositionClosures.size > 0;
+    const shouldForceUpdate = forceByOption || forceByWindow || forceByPending;
     let newSymbolAdded = false;
 
     positions.forEach((pos) => {
@@ -3079,25 +3091,36 @@ class TradingMonitor {
 
     // Check if we're receiving an empty positions array
     if (!positions.length) {
-      // If we had positions before and now receiving empty, this might be a temporary glitch
-      // Only clear after debounce timeout to avoid flickering
-      const timeSinceLastUpdate = timestamp - this.lastPositionsTimestamp;
-      
-      // If last update was recent (< 30 seconds) and we had positions, ignore this empty update
-      if (this.lastPositionsData && this.lastPositionsData.length > 0 && timeSinceLastUpdate < 30000) {
+      const hadPositions = Array.isArray(this.lastPositionsData) && this.lastPositionsData.length > 0;
+      const timeSinceLastUpdate = effectiveTimestamp - this.lastPositionsTimestamp;
+      const shouldIgnoreEmpty = !shouldForceUpdate && hadPositions && timeSinceLastUpdate < 30000;
+
+      if (shouldIgnoreEmpty) {
         console.warn('[Positions] 收到空持仓数据，但上次更新有持仓且时间较近，忽略此次更新以防止闪烁');
         return;
       }
-      
-      // Debounce empty state to prevent flickering
-      if (!this.emptyPositionsTimeout) {
+
+      const renderEmptyState = () => {
+        this.resetCloseConfirmationState();
+        this.positionsContainerEl.innerHTML = `<p class="empty-state">${t("tables.positions.empty")}</p>`;
+        this.updateTimestamp(this.positionsUpdatedEl, effectiveTimestamp);
+        this.lastPositionsData = null;
+        this.lastPositionsTimestamp = effectiveTimestamp;
+        this.emptyPositionsTimeout = null;
+      };
+
+      if (this.emptyPositionsTimeout) {
+        clearTimeout(this.emptyPositionsTimeout);
+        this.emptyPositionsTimeout = null;
+      }
+
+      if (shouldForceUpdate) {
+        renderEmptyState();
+        this.forcePositionsUpdateUntil = 0;
+      } else {
         this.emptyPositionsTimeout = setTimeout(() => {
-          this.resetCloseConfirmationState();
-          this.positionsContainerEl.innerHTML = `<p class="empty-state">${t("tables.positions.empty")}</p>`;
-          this.updateTimestamp(this.positionsUpdatedEl, timestamp);
+          renderEmptyState();
           this.emptyPositionsTimeout = null;
-          this.lastPositionsData = null;
-          this.lastPositionsTimestamp = timestamp;
         }, 500);
       }
       
@@ -3115,7 +3138,7 @@ class TradingMonitor {
 
     // Cache the current positions data
     this.lastPositionsData = positions;
-    this.lastPositionsTimestamp = timestamp;
+    this.lastPositionsTimestamp = effectiveTimestamp;
 
     const showActions = Boolean(this.isAuthenticated);
     const rows = positions
@@ -3198,7 +3221,7 @@ class TradingMonitor {
       </table>
     `;
 
-    this.updateTimestamp(this.positionsUpdatedEl, timestamp);
+    this.updateTimestamp(this.positionsUpdatedEl, effectiveTimestamp);
 
     if (newSymbolAdded) {
       this.schedulePriceSubscriptionUpdate();
@@ -3627,8 +3650,9 @@ class TradingMonitor {
 
       const result = await response.json().catch(() => ({}));
       if (response.ok && result && result.success !== false) {
+        this.forcePositionsUpdateUntil = Date.now() + 15000;
         this.showToast("success", t("tables.positions.actions.successTitle"), t("tables.positions.actions.successMessage", { symbol }));
-        await this.loadPositions();
+        await this.loadPositions({ forceUpdate: true });
       } else {
         const reason = typeof result?.message === "string" && result.message.trim()
           ? result.message.trim()
@@ -5659,40 +5683,67 @@ class TradingMonitor {
       return;
     }
 
-    const overlay = document.createElement("div");
-    overlay.className = "ai-model-overlay";
-    // 默认隐藏，直到有任务运行时才显示
-    overlay.style.display = "none";
+    const stack = document.createElement("div");
+    stack.className = "ai-model-overlay-stack";
+    stack.style.display = "none";
+    container.appendChild(stack);
 
-    const icon = document.createElement("img");
-    icon.className = "ai-model-icon";
-    icon.setAttribute("alt", t("chart.modelIconAlt"));
-    icon.decoding = "async";
-    icon.loading = "lazy";
-    icon.src = DEFAULT_AI_ICON;
-    icon.addEventListener("error", () => {
-      const fallbackUrl = this.toAbsoluteUrl(DEFAULT_AI_ICON);
-      if (icon.src !== fallbackUrl) {
-        icon.src = DEFAULT_AI_ICON;
-      }
-    });
+    this.aiOverlayContainer = stack;
 
-    const text = document.createElement("span");
-    text.className = "ai-model-text";
-    text.textContent = t("chart.modelBadge");
+    const defaultEntry = this.createAiOverlayEntry(this.aiOverlayDefaultKey);
+    stack.appendChild(defaultEntry.element);
+    this.aiOverlayEntries.set(this.aiOverlayDefaultKey, defaultEntry);
 
-    overlay.append(icon, text);
-    container.appendChild(overlay);
-
-    this.aiOverlay = overlay;
-    this.aiOverlayText = text;
-    this.aiOverlayIcon = icon;
-
-    // 添加点击事件处理器，支持手动触发 AI 决策（绑定到整个 overlay）
-    overlay.addEventListener("click", () => this.handleManualAiExecution());
+    this.aiOverlay = defaultEntry.element;
+    this.aiOverlayText = defaultEntry.textEl;
+    this.aiOverlayIcon = defaultEntry.iconEl;
 
     // 根据登录状态设置点击行为
     this.updateAiOverlayClickable();
+  }
+
+  async prefetchLatestTradingStatuses() {
+    if (!this.aiOverlayContainer) {
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/public/trading-status/latest", {
+        cache: "no-store",
+        credentials: "same-origin",
+      });
+
+      if (!response.ok) {
+        return;
+      }
+
+      const payload = await response.json();
+      const statuses = Array.isArray(payload?.statuses) ? payload.statuses : [];
+      if (!statuses.length) {
+        return;
+      }
+
+      // 只处理活跃状态（后端应该只返回这些，但前端也做一次过滤）
+      const activeStatuses = new Set(["preparing", "collecting_data", "analyzing", "ai_deciding", "executing_trades"]);
+      const sorted = statuses
+        .filter((item) => {
+          if (!item || typeof item !== "object" || item.type !== "trading_status") {
+            return false;
+          }
+          return activeStatuses.has(item.status);
+        })
+        .sort((a, b) => {
+          const timeA = new Date(a.timestamp || 0).getTime();
+          const timeB = new Date(b.timestamp || 0).getTime();
+          return timeA - timeB;
+        });
+
+      sorted.forEach((status) => {
+        this.handleTradingStatusUpdate(status);
+      });
+    } catch (error) {
+      console.warn("[ai-overlay] 预取交易状态失败", error);
+    }
   }
 
   async fetchPublicModelInfo() {
@@ -5957,31 +6008,229 @@ class TradingMonitor {
   }
 
   updateAiOverlayVisibility(isActive) {
-    if (!this.aiOverlay) {
+    if (!this.aiOverlayContainer) {
       return;
     }
 
-    if (isActive) {
-      this.aiOverlay.classList.remove("hidden");
-    } else {
-      this.aiOverlay.classList.add("hidden");
-    }
+    // 使用 style.display 与 setVisibleAiOverlayKeys 保持一致
+    // 避免 .hidden 类的 !important 覆盖问题
+    this.aiOverlayContainer.style.display = isActive ? "" : "none";
   }
 
   updateAiOverlayClickable() {
-    if (!this.aiOverlay) {
+    if (!this.aiOverlayEntries || this.aiOverlayEntries.size === 0) {
       return;
     }
 
-    if (!this.isAuthenticated) {
-      this.aiOverlay.classList.add("disabled");
-      this.aiOverlay.style.cursor = "not-allowed";
-      this.aiOverlay.title = t("chart.loginRequired");
-    } else {
-      this.aiOverlay.classList.remove("disabled");
-      this.aiOverlay.style.cursor = "pointer";
-      this.aiOverlay.title = t("chart.manualTrigger");
+    const disable = !this.isAuthenticated;
+    const title = disable ? t("chart.loginRequired") : t("chart.manualTrigger");
+    const cursor = disable ? "not-allowed" : "pointer";
+
+    this.aiOverlayEntries.forEach((entry) => {
+      entry.element.classList.toggle("disabled", disable);
+      entry.element.style.cursor = cursor;
+      entry.element.title = title;
+    });
+  }
+
+  getOverlayEntryKey(instanceId) {
+    const normalized = this.normalizeNumericId(instanceId);
+    if (!normalized) {
+      return this.aiOverlayDefaultKey;
     }
+    return `instance-${normalized}`;
+  }
+
+  createAiOverlayEntry(key) {
+    const overlay = document.createElement("div");
+    overlay.className = "ai-model-overlay";
+    overlay.style.display = "none";
+    overlay.dataset.overlayKey = key;
+
+    const icon = document.createElement("img");
+    icon.className = "ai-model-icon";
+    icon.setAttribute("alt", t("chart.modelIconAlt"));
+    icon.decoding = "async";
+    icon.loading = "lazy";
+    icon.src = DEFAULT_AI_ICON;
+    icon.addEventListener("error", () => {
+      const fallbackUrl = this.toAbsoluteUrl(DEFAULT_AI_ICON);
+      if (icon.src !== fallbackUrl) {
+        icon.src = DEFAULT_AI_ICON;
+      }
+    });
+
+    const text = document.createElement("span");
+    text.className = "ai-model-text";
+    text.textContent = t("chart.modelBadge");
+
+    overlay.append(icon, text);
+    overlay.addEventListener("click", () => this.handleManualAiExecution());
+
+    return {
+      key,
+      element: overlay,
+      iconEl: icon,
+      textEl: text,
+      defaultText: text.textContent,
+      isStatusLocked: false,
+      resetTimer: null,
+    };
+  }
+
+  ensureAiOverlayEntry(key, options = {}) {
+    if (!this.aiOverlayContainer) {
+      return null;
+    }
+
+    let entry = this.aiOverlayEntries.get(key);
+    let created = false;
+    if (!entry) {
+      entry = this.createAiOverlayEntry(key);
+      this.aiOverlayEntries.set(key, entry);
+      this.aiOverlayContainer.appendChild(entry.element);
+      created = true;
+    }
+
+    const { iconSrc, instanceId, instanceName, defaultText } = options;
+
+    if (iconSrc) {
+      this.setOverlayEntryIcon(entry, iconSrc);
+    }
+
+    if (instanceId !== undefined) {
+      entry.instanceId = instanceId;
+      if (instanceId === null) {
+        entry.element.removeAttribute("data-instance-id");
+      } else {
+        entry.element.dataset.instanceId = String(instanceId);
+      }
+    }
+
+    if (instanceName) {
+      entry.instanceName = instanceName;
+    }
+
+    if (defaultText) {
+      entry.defaultText = defaultText;
+      if (!entry.isStatusLocked) {
+        entry.textEl.textContent = defaultText;
+      }
+    }
+
+    if (entry.element.style.display === "none") {
+      entry.element.style.display = "";
+    }
+
+    if (key === this.aiOverlayDefaultKey) {
+      this.aiOverlay = entry.element;
+      this.aiOverlayText = entry.textEl;
+      this.aiOverlayIcon = entry.iconEl;
+    }
+
+    if (created) {
+      this.updateAiOverlayClickable();
+    }
+
+    return entry;
+  }
+
+  setOverlayEntryIcon(entry, iconSrc) {
+    if (!entry || !entry.iconEl || !iconSrc) {
+      return;
+    }
+    const resolvedUrl = this.toAbsoluteUrl(iconSrc);
+    if (entry.iconEl.src !== resolvedUrl) {
+      entry.iconEl.src = iconSrc;
+    }
+  }
+
+  setVisibleAiOverlayKeys(keys) {
+    if (!this.aiOverlayContainer) {
+      return;
+    }
+
+    const visibleSet = new Set(keys);
+    this.visibleAiOverlayKeys = visibleSet;
+    let hasVisible = false;
+    this.aiOverlayEntries.forEach((entry, key) => {
+      const shouldShow = visibleSet.has(key);
+      entry.element.style.display = shouldShow ? "" : "none";
+      if (shouldShow) {
+        hasVisible = true;
+      } else {
+        this.setOverlayEntryExecuting(entry, false);
+      }
+    });
+
+    this.aiOverlayContainer.style.display = hasVisible ? "" : "none";
+  }
+
+  setOverlayEntryExecuting(entry, isExecuting) {
+    if (!entry) {
+      return;
+    }
+    if (isExecuting) {
+      if (entry.resetTimer) {
+        clearTimeout(entry.resetTimer);
+        entry.resetTimer = null;
+      }
+      entry.element.classList.add("executing");
+      entry.isStatusLocked = true;
+    } else {
+      entry.element.classList.remove("executing");
+      entry.isStatusLocked = false;
+    }
+  }
+
+  scheduleOverlayEntryReset(entry, delayMs, expectedText) {
+    if (!entry) {
+      return;
+    }
+    if (entry.resetTimer) {
+      clearTimeout(entry.resetTimer);
+    }
+    entry.resetTimer = window.setTimeout(() => {
+      if (expectedText && entry.textEl.textContent !== expectedText) {
+        return;
+      }
+      this.setOverlayEntryExecuting(entry, false);
+      if (entry.defaultText) {
+        entry.textEl.textContent = entry.defaultText;
+      }
+      entry.resetTimer = null;
+    }, delayMs);
+  }
+
+  isAnyOverlayEntryExecuting() {
+    if (!this.aiOverlayEntries || this.aiOverlayEntries.size === 0) {
+      return false;
+    }
+    for (const entry of this.aiOverlayEntries.values()) {
+      if (entry.element.classList.contains("executing")) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  getOverlayTargetInstances() {
+    if (!Array.isArray(this.instancesCache) || !this.instancesCache.length) {
+      return [];
+    }
+    const accountId = this.normalizeNumericId(this.currentFilterAccountId ?? this.activeAccountId);
+    return this.instancesCache
+      .filter((inst) => {
+        if (this.normalizeInstanceStatus(inst.status) !== "running") {
+          return false;
+        }
+        const instAccountId = this.normalizeNumericId(inst.account_id);
+        if (accountId && instAccountId && instAccountId !== accountId) {
+          return false;
+        }
+        return true;
+      })
+      .sort((a, b) => (a?.id || 0) - (b?.id || 0));
   }
 
   async fetchTradingLoopStatus() {
@@ -6468,11 +6717,16 @@ class TradingMonitor {
     }
 
     // 更新 AI Overlay 状态
-    if (!this.aiOverlay || !this.aiOverlayText) {
+    if (!this.aiOverlayContainer) {
       return;
     }
 
-    // 状态文本映射
+    const statusAccountId = this.normalizeNumericId(message?.data?.accountId);
+    const statusInstanceId = this.normalizeNumericId(message?.data?.instanceId);
+    if (!this.shouldDisplayTradingStatus(statusAccountId, statusInstanceId)) {
+      return;
+    }
+
     const statusTextMap = {
       idle: t("aiOverlay.status.idle"),
       preparing: t("aiOverlay.status.preparing"),
@@ -6486,20 +6740,60 @@ class TradingMonitor {
 
     const triggerTextMap = {
       manual: t("chart.triggerType.manual"),
-      scheduled: t("chart.triggerType.scheduled"),
     };
 
+    const statusInstanceName = typeof message?.data?.instanceName === "string"
+      ? message.data.instanceName.trim()
+      : "";
+
+    const fallbackModelName = this.formatModelDisplayName(
+      typeof (this.latestConfig?.AI_MODEL_NAME) === "string" ? this.latestConfig.AI_MODEL_NAME : "",
+    );
+
+    // 当实例缓存未加载或只有一个运行实例时，使用默认 key 以避免重复创建条目
+    const runningInstances = this.getOverlayTargetInstances();
+    const cacheNotLoaded = !this.instancesCacheLoaded;
+    const useDefaultKey = cacheNotLoaded || runningInstances.length <= 1;
+    const entryKey = useDefaultKey ? this.aiOverlayDefaultKey : this.getOverlayEntryKey(statusInstanceId);
+
+    const entry = this.ensureAiOverlayEntry(entryKey, {
+      iconSrc: this.resolveAiModelIcon(this.latestConfig?.AI_MODEL_NAME || ""),
+      instanceId: statusInstanceId ?? null,
+      instanceName: statusInstanceName || undefined,
+      defaultText: statusInstanceName || fallbackModelName,
+    });
+    if (!entry) {
+      return;
+    }
+
+    // 确保条目在可见列表中，并确保容器可见
+    if (!this.visibleAiOverlayKeys?.has(entry.key)) {
+      const mergedKeys = new Set(this.visibleAiOverlayKeys || []);
+      mergedKeys.add(entry.key);
+      this.setVisibleAiOverlayKeys(Array.from(mergedKeys));
+    } else {
+      // 条目已在可见列表中，但仍需确保容器可见
+      this.updateAiOverlayVisibility(true);
+    }
+
     const parts = [];
+    if (statusInstanceName) {
+      parts.push(statusInstanceName);
+    }
     const translatedStatus = statusTextMap[status];
     if (translatedStatus) {
       parts.push(translatedStatus);
     }
 
-    if (!translatedStatus && normalizedStatusMessage) {
-      parts.push(normalizedStatusMessage);
+    const detailText = this.buildTradingStatusDetail(normalizedStatusMessage, message?.data);
+    const allowDetailStatuses = new Set(["executing_trades", "completed", "error"]);
+    if (detailText
+      && (!translatedStatus || allowDetailStatuses.has(status))
+      && !this.isTradingStatusDetailRedundant(detailText, translatedStatus)) {
+      parts.push(detailText);
     }
 
-    if (trigger && triggerTextMap[trigger]) {
+    if (trigger === "manual" && triggerTextMap[trigger]) {
       parts.push(triggerTextMap[trigger]);
     }
 
@@ -6514,35 +6808,117 @@ class TradingMonitor {
     }
 
     const displayText = parts.join(" · ");
-    this.aiOverlayText.textContent = displayText;
+    entry.textEl.textContent = displayText;
 
-    // 根据状态添加/移除 executing 类
     if (status === "idle" || status === "completed" || status === "error") {
-      this.aiOverlay.classList.remove("executing");
-      
-      // completed 或 error 状态2秒后恢复默认文本
-      if (status === "completed" || status === "error") {
-        setTimeout(() => {
-          if (this.aiOverlayText && this.aiOverlayText.textContent === displayText) {
-            this.updateAiOverlay();
-          }
-        }, 2000);
-      } else if (status === "idle") {
-        // idle 状态立即恢复默认文本
-        setTimeout(() => {
-          this.updateAiOverlay();
-        }, 100);
-      }
+      this.setOverlayEntryExecuting(entry, false);
+      const delay = status === "idle" ? 100 : 2000;
+      this.scheduleOverlayEntryReset(entry, delay, displayText);
     } else {
-      this.aiOverlay.classList.add("executing");
+      this.setOverlayEntryExecuting(entry, true);
     }
 
-    // 执行完成后刷新数据
     if (status === "completed") {
       setTimeout(() => {
         this.refreshData();
       }, 1000);
     }
+  }
+
+  normalizeNumericId(value) {
+    if (value === null || value === undefined) {
+      return undefined;
+    }
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+
+  shouldDisplayTradingStatus(statusAccountId, statusInstanceId) {
+    const currentAccountId = this.normalizeNumericId(this.currentFilterAccountId ?? this.activeAccountId);
+    if (currentAccountId && statusAccountId && currentAccountId !== statusAccountId) {
+      return false;
+    }
+
+    if (!statusInstanceId) {
+      return true;
+    }
+
+    if (!Array.isArray(this.accountInstances)) {
+      return true;
+    }
+
+    const targetInstanceId = this.normalizeNumericId(this.currentFilterInstanceId);
+    const instanceMatchesAccount = this.accountInstances.some((instance) => {
+      const instanceId = this.normalizeNumericId(instance?.id);
+      if (!instanceId || instanceId !== statusInstanceId) {
+        return false;
+      }
+
+      const instanceAccountId = this.normalizeNumericId(instance?.accountId);
+      if (currentAccountId && instanceAccountId && currentAccountId !== instanceAccountId) {
+        return false;
+      }
+
+      if (targetInstanceId && targetInstanceId !== statusInstanceId) {
+        return false;
+      }
+
+      return true;
+    });
+
+    if (instanceMatchesAccount) {
+      return true;
+    }
+
+    if (targetInstanceId && targetInstanceId === statusInstanceId) {
+      return true;
+    }
+
+    return !targetInstanceId;
+  }
+
+  buildTradingStatusDetail(statusMessage, statusData) {
+    if (typeof statusMessage === "string" && statusMessage.trim()) {
+      return statusMessage.trim();
+    }
+
+    if (statusData && typeof statusData === "object") {
+      if (typeof statusData.detail === "string" && statusData.detail.trim()) {
+        return statusData.detail.trim();
+      }
+
+      const progressBits = [];
+      const progress = Number(statusData.progress);
+      if (Number.isFinite(progress)) {
+        progressBits.push(`${Math.round(progress)}%`);
+      }
+
+      const symbol = typeof statusData.symbol === "string" ? statusData.symbol.trim().toUpperCase() : "";
+      if (symbol) {
+        progressBits.unshift(symbol);
+      }
+
+      if (progressBits.length > 0) {
+        return progressBits.join(" · ");
+      }
+    }
+
+    return "";
+  }
+
+  isTradingStatusDetailRedundant(detailText, translatedStatus) {
+    if (!detailText || !translatedStatus) {
+      return false;
+    }
+
+    const normalize = (text) => text
+      .replace(/[…·•\s]/g, "")
+      .replace(/[。\.]/g, "")
+      .toLowerCase();
+
+    const detailNorm = normalize(detailText);
+    const statusNorm = normalize(translatedStatus);
+    return detailNorm.includes(statusNorm);
   }
 
   /**
@@ -6560,7 +6936,7 @@ class TradingMonitor {
     }
 
     // 防止重复触发（通过检查 executing 类）
-    if (this.aiOverlay?.classList.contains("executing")) {
+    if (this.isAnyOverlayEntryExecuting()) {
       this.showToast(
         "info",
         t("aiManual.executingTitle"),
@@ -6803,55 +7179,73 @@ class TradingMonitor {
   }
 
   updateAiOverlay(config) {
-    if (!this.aiOverlay) {
+    if (!this.aiOverlayContainer) {
       return;
     }
 
-    if (!this.aiOverlayText || !this.aiOverlayIcon) {
-      this.aiOverlayText = this.aiOverlay.querySelector(".ai-model-text");
-      this.aiOverlayIcon = this.aiOverlay.querySelector(".ai-model-icon");
-    }
-
-    const textEl = this.aiOverlayText;
-    const iconEl = this.aiOverlayIcon;
-    if (!textEl || !iconEl) {
-      return;
-    }
-
-    const cfg = config || this.latestConfig;
-    const rawName = cfg && typeof cfg.AI_MODEL_NAME === "string" ? cfg.AI_MODEL_NAME.trim() : "";
-    
-    // 获取当前活跃账户
-    const activeAccount = this.accountsCache?.find(acc => acc.is_active);
-    const activeAccountId = activeAccount?.id;
-    
-    // 检查是否有与当前账户关联的运行中任务
-    const hasRunningInstances = this.instancesCache && this.instancesCache.some(
-      inst => (inst.status === "running" || inst.status === "paused") && 
-              (!activeAccountId || inst.account_id === activeAccountId)
-    );
-    
-    // 如果没有运行中的任务，隐藏图标
-    if (!hasRunningInstances) {
-      this.aiOverlay.style.display = "none";
-      return;
-    }
-    
-    // 有运行中的任务，显示图标并更新内容
-    this.aiOverlay.style.display = "";
-    
+    const cfg = config || this.latestConfig || {};
+    const rawName = typeof cfg.AI_MODEL_NAME === "string" ? cfg.AI_MODEL_NAME.trim() : "";
+    const modelDisplayName = this.formatModelDisplayName(rawName);
     const iconSrc = this.resolveAiModelIcon(rawName);
 
-    const resolvedUrl = this.toAbsoluteUrl(iconSrc);
-    if (iconEl.src !== resolvedUrl) {
-      iconEl.src = iconSrc;
+    const runningInstances = this.getOverlayTargetInstances();
+    const visibleKeys = [];
+
+    // 如果实例缓存未加载，不要贸然隐藏所有 overlay，以免覆盖 prefetch 的状态
+    if (!this.instancesCacheLoaded) {
+      // 仅更新默认 entry 的图标和名称（如果存在）
+      const defaultEntry = this.aiOverlayEntries.get(this.aiOverlayDefaultKey);
+      if (defaultEntry) {
+        if (iconSrc) {
+          this.setOverlayEntryIcon(defaultEntry, iconSrc);
+        }
+        if (!defaultEntry.isStatusLocked) {
+          defaultEntry.defaultText = modelDisplayName;
+          defaultEntry.textEl.textContent = modelDisplayName;
+        }
+      }
+      return;
     }
-    iconEl.setAttribute("alt", t("chart.modelIconAlt"));
-    
-    // 默认状态：显示完整模型名称（去掉提供商前缀，但保留版本号等信息）
-    // WebSocket 的 handleTradingStatusUpdate 会在执行过程中动态更新为状态文本
-    const displayName = this.formatModelDisplayName(rawName);
-    textEl.textContent = displayName;
+
+    if (runningInstances.length === 0) {
+      this.setVisibleAiOverlayKeys([]);
+      return;
+    }
+
+    if (runningInstances.length === 1) {
+      const instance = runningInstances[0];
+      const entry = this.ensureAiOverlayEntry(this.aiOverlayDefaultKey, {
+        iconSrc,
+        instanceId: instance.id,
+        instanceName: instance.name,
+        defaultText: instance.name || modelDisplayName,
+      });
+      if (entry && !entry.isStatusLocked) {
+        entry.textEl.textContent = entry.defaultText;
+      }
+      if (entry) {
+        visibleKeys.push(entry.key);
+      }
+    } else {
+      runningInstances.forEach((instance) => {
+        const key = this.getOverlayEntryKey(instance.id);
+        const entry = this.ensureAiOverlayEntry(key, {
+          iconSrc,
+          instanceId: instance.id,
+          instanceName: instance.name,
+          defaultText: instance.name || modelDisplayName,
+        });
+        if (entry && !entry.isStatusLocked) {
+          entry.textEl.textContent = entry.defaultText;
+        }
+        if (entry) {
+          visibleKeys.push(entry.key);
+        }
+      });
+    }
+
+    this.setVisibleAiOverlayKeys(visibleKeys);
+    this.updateAiOverlayVisibility(visibleKeys.length > 0);
   }
 
   /**
@@ -8613,6 +9007,25 @@ class TradingMonitor {
 
     targetEl.dataset.actionsBound = "true";
     targetEl.addEventListener("click", (event) => {
+      // Handle popover actions
+      const confirmBtn = event.target.closest(".confirm-delete-instance");
+      if (confirmBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        const instanceId = Number(confirmBtn.dataset.instanceId);
+        void this.deleteInstance(instanceId, confirmBtn);
+        this.hideInstanceDeleteConfirm();
+        return;
+      }
+
+      const cancelBtn = event.target.closest(".cancel-delete-instance");
+      if (cancelBtn) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.hideInstanceDeleteConfirm();
+        return;
+      }
+
       const actionBtn = event.target.closest("[data-instance-action]");
       if (!actionBtn) {
         return;
@@ -8625,8 +9038,60 @@ class TradingMonitor {
         return;
       }
 
+      if (action === "delete") {
+        this.showInstanceDeleteConfirm(instanceId, actionBtn);
+        return;
+      }
+
       void this.handleInstanceAction(action, instanceId, actionBtn);
     });
+  }
+
+  showInstanceDeleteConfirm(instanceId, triggerBtn) {
+    this.hideInstanceDeleteConfirm();
+
+    const wrapper = triggerBtn.closest(".strategy-delete-wrapper");
+    if (!wrapper) {
+      return;
+    }
+
+    const popover = wrapper.querySelector(".strategy-delete-popover");
+    if (!popover) {
+      return;
+    }
+
+    popover.classList.add("is-visible");
+    popover.setAttribute("aria-hidden", "false");
+    this.instanceDeleteActivePopover = popover;
+
+    this.instanceDeleteOutsideHandler = (event) => {
+      if (!event) return;
+      const target = event.target;
+      if (!target) return;
+      if (wrapper.contains(target)) {
+        return;
+      }
+      this.hideInstanceDeleteConfirm();
+    };
+
+    window.setTimeout(() => {
+      if (this.instanceDeleteOutsideHandler) {
+        document.addEventListener("click", this.instanceDeleteOutsideHandler);
+      }
+    }, 0);
+  }
+
+  hideInstanceDeleteConfirm() {
+    if (this.instanceDeleteActivePopover) {
+      this.instanceDeleteActivePopover.classList.remove("is-visible");
+      this.instanceDeleteActivePopover.setAttribute("aria-hidden", "true");
+      this.instanceDeleteActivePopover = null;
+    }
+
+    if (this.instanceDeleteOutsideHandler) {
+      document.removeEventListener("click", this.instanceDeleteOutsideHandler);
+      this.instanceDeleteOutsideHandler = null;
+    }
   }
 
   initStrategyBottomTabs() {
@@ -8707,17 +9172,19 @@ class TradingMonitor {
   async loadInstancesList() {
     const container = document.getElementById("instances-list-container");
     const loading = document.getElementById("instances-loading");
-    if (!container) return;
+    // if (!container) return; // 移除此行，即使 container 不存在也要更新 footer 列表
 
     if (!this.isAuthenticated) {
       if (loading) loading.style.display = "none";
       this.instancesCache = [];
       this.instancesCacheLoaded = false;
-      container.innerHTML = `
-        <div class="empty-accounts">
-          <div class="empty-accounts-text">${this.escapeHtml(this.translate("instances.messages.loginRequired", "Please sign in to manage strategy tasks."))}</div>
-        </div>
-      `;
+      if (container) {
+        container.innerHTML = `
+          <div class="empty-accounts">
+            <div class="empty-accounts-text">${this.escapeHtml(this.translate("instances.messages.loginRequired", "Please sign in to manage strategy tasks."))}</div>
+          </div>
+        `;
+      }
       this.renderAllTasks([]);
       this.renderRunningTasks([]);
       return;
@@ -8729,18 +9196,22 @@ class TradingMonitor {
       if (loading) loading.style.display = "none";
 
       if (!instances.length) {
-        container.innerHTML = `
-          <div class="empty-accounts">
-            <div class="empty-accounts-icon">🧠</div>
-            <div class="empty-accounts-text">${this.escapeHtml(this.translate("instances.empty", "No strategy tasks configured"))}</div>
-          </div>
-        `;
+        if (container) {
+          container.innerHTML = `
+            <div class="empty-accounts">
+              <div class="empty-accounts-icon">🧠</div>
+              <div class="empty-accounts-text">${this.escapeHtml(this.translate("instances.empty", "No strategy tasks configured"))}</div>
+            </div>
+          `;
+        }
         this.renderAllTasks([]);
         this.renderRunningTasks([]);
         return;
       }
 
-      container.innerHTML = instances.map((instance) => this.renderInstanceCard(instance)).join("");
+      if (container) {
+        container.innerHTML = instances.map((instance) => this.renderInstanceCard(instance)).join("");
+      }
       this.renderAllTasks(instances);
       this.renderRunningTasks(
         instances.filter((item) => this.normalizeInstanceStatus(item.status) === "running"),
@@ -8750,11 +9221,13 @@ class TradingMonitor {
       if (loading) loading.style.display = "none";
       this.instancesCacheLoaded = false;
       const message = this.translate("instances.messages.loadError", "Failed to load strategy tasks.");
-      container.innerHTML = `
-        <div class="empty-accounts">
-          <div class="empty-accounts-text" style="color: var(--accent-red);">${this.escapeHtml(message)}</div>
-        </div>
-      `;
+      if (container) {
+        container.innerHTML = `
+          <div class="empty-accounts">
+            <div class="empty-accounts-text" style="color: var(--accent-red);">${this.escapeHtml(message)}</div>
+          </div>
+        `;
+      }
       this.renderAllTasks([]);
       this.renderRunningTasks([]);
       this.showToast("error", this.translate("common.error", "Error"), message);
@@ -9170,11 +9643,12 @@ class TradingMonitor {
       return;
     }
 
-    const instance = this.instancesCache.find((item) => item.id === instanceId) || null;
-    const confirmMessage = this.translate("instances.messages.deleteConfirm", 'Delete strategy task "{{name}}"?', { name: instance?.name || `#${instanceId}` });
-    if (!window.confirm(confirmMessage)) {
-      return;
-    }
+    // Confirmation is now handled by the popover in the UI
+    // const instance = this.instancesCache.find((item) => item.id === instanceId) || null;
+    // const confirmMessage = this.translate("instances.messages.deleteConfirm", 'Delete strategy task "{{name}}"?', { name: instance?.name || `#${instanceId}` });
+    // if (!window.confirm(confirmMessage)) {
+    //   return;
+    // }
 
     this.setButtonLoading(triggerBtn, true, "instances.actions.delete", "instances.actions.delete");
 
@@ -9206,6 +9680,18 @@ class TradingMonitor {
   }
 
   async refreshRunningTasksPanel(forceFetch = false) {
+    // 尝试重新获取元素，防止初始化时未找到或被移除
+    if (!this.runningTasksListEl || !this.runningTasksEmptyEl) {
+      this.runningTasksListEl = document.getElementById("running-tasks-list");
+      this.runningTasksEmptyEl = document.getElementById("running-tasks-empty");
+      if (this.runningTasksListEl) this.bindInstanceTableActions(this.runningTasksListEl);
+    }
+    if (!this.allTasksListEl || !this.allTasksEmptyEl) {
+      this.allTasksListEl = document.getElementById("all-tasks-list");
+      this.allTasksEmptyEl = document.getElementById("all-tasks-empty");
+      if (this.allTasksListEl) this.bindInstanceTableActions(this.allTasksListEl);
+    }
+
     const noRunningTargets = !this.runningTasksListEl || !this.runningTasksEmptyEl;
     const noAllTargets = !this.allTasksListEl || !this.allTasksEmptyEl;
     if (noRunningTargets && noAllTargets) {
@@ -9361,6 +9847,30 @@ class TradingMonitor {
     }
 
     const extraClass = action === "delete" ? "btn-delete" : "";
+    
+    if (action === "delete") {
+      const confirmMessage = this.escapeHtml(
+        this.translate("instances.messages.deleteConfirm", 'Delete strategy task "{{name}}"?', { name: instance.name || `#${instance.id}` })
+      );
+      const confirmLabel = this.escapeHtml(this.translate("common.confirm", "Confirm"));
+      const cancelLabel = this.escapeHtml(this.translate("common.cancel", "Cancel"));
+      
+      return `
+        <div class="strategy-delete-wrapper" style="display: inline-block; position: relative;">
+          <button type="button" class="account-action-btn running-task-action-btn ${extraClass}" data-instance-action="${action}" data-instance-id="${instance.id}" ${disabled ? "disabled" : ""}>
+            ${this.escapeHtml(label)}
+          </button>
+          <div class="strategy-delete-popover" role="alert" aria-hidden="true" data-instance-id="${instance.id}">
+            <p class="strategy-delete-text">${confirmMessage}</p>
+            <div class="strategy-delete-actions">
+              <button type="button" class="link-button cancel-delete-instance" data-instance-id="${instance.id}">${cancelLabel}</button>
+              <button type="button" class="btn-danger btn-small confirm-delete-instance" data-instance-id="${instance.id}">${confirmLabel}</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     return `
       <button type="button" class="account-action-btn running-task-action-btn ${extraClass}" data-instance-action="${action}" data-instance-id="${instance.id}" ${disabled ? "disabled" : ""}>
         ${this.escapeHtml(label)}
