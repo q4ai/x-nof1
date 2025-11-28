@@ -141,6 +141,12 @@ export async function resetLiveDataToDefaults(accountId?: string): Promise<Reset
     await client.execute("BEGIN");
 
     for (const tableName of DATA_TABLES) {
+      // trading_signals 表没有 account_id 字段，且为市场公共数据，
+      // 当指定账户重置时，跳过该表；仅在全量重置时清空。
+      if (tableName === "trading_signals" && targetAccountId) {
+        continue;
+      }
+
       const deleteConditions = targetAccountId
         ? "account_id = ? OR account_id IS NULL OR account_id = 'default'"
         : "1=1";

@@ -1,7 +1,7 @@
 import { createHash, createHmac } from "node:crypto";
 import { ProxyAgent, type Dispatcher } from "undici";
 import { createLogger } from "../utils/loggerUtils";
-import { getBinancePrecision, formatBinanceQuantity } from "../database/binancePrecision";
+import { getBinancePrecision, normalizeBinanceQuantity, computePrecisionFromStep } from "../database/binancePrecision";
 
 const logger = createLogger({
   name: "binance-client",
@@ -51,6 +51,81 @@ function toNumber(value: string | number | undefined, fallback = 0): number {
   return Number.isFinite(num) ? num : fallback;
 }
 
+function parsePositiveNumber(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  if (typeof value === "string") {
+    const num = Number.parseFloat(value);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }
+  return null;
+}
+
+function deriveStepFromPrecision(precision?: number | null): number | null {
+  if (!Number.isFinite(precision) || precision === null || precision === undefined) {
+    return null;
+  }
+  return precision >= 0 ? Math.pow(10, -precision) : null;
+}
+
+function trimTrailingZeros(value: string): string {
+  if (!value.includes(".")) {
+    return value;
+  }
+  return value.replace(/\.0+$/, "").replace(/(\.\d*?[1-9])0+$/, "$1");
+}
+
+function selectEffectiveStepSize(lotFilter?: any, marketFilter?: any, fallback?: string): string {
+  const candidates = [parsePositiveNumber(marketFilter?.stepSize), parsePositiveNumber(lotFilter?.stepSize), parsePositiveNumber(fallback)];
+  const valid = candidates.filter((value): value is number => value !== null);
+  if (!valid.length) {
+    return "1";
+  }
+  return Math.max(...valid).toString();
+}
+
+function selectEffectiveMinQty(lotFilter?: any, marketFilter?: any, fallback?: string): string {
+  const candidates = [parsePositiveNumber(marketFilter?.minQty), parsePositiveNumber(lotFilter?.minQty), parsePositiveNumber(fallback)];
+  const valid = candidates.filter((value): value is number => value !== null);
+  if (!valid.length) {
+    return "0.001";
+  }
+  return Math.max(...valid).toString();
+}
+
+function selectEffectiveMaxQty(lotFilter?: any, marketFilter?: any, fallback?: string): string {
+  const candidates = [parsePositiveNumber(marketFilter?.maxQty), parsePositiveNumber(lotFilter?.maxQty), parsePositiveNumber(fallback)];
+  const valid = candidates.filter((value): value is number => value !== null);
+  if (!valid.length) {
+    return "100000";
+  }
+  return Math.min(...valid).toString();
+}
+
+type QuantityRule = {
+  step: number;
+  precision: number;
+  expiresAt: number;
+};
+
+type BinanceContractInfo = {
+  instId: string;
+  contract: string;
+  tickSize: string;
+  minSize: string;
+  maxSize: string;
+  lotSize: string;
+  contractValue: string;
+  contractMultiplier: string;
+  quoteCcy: string;
+  baseCcy: string;
+  orderSizeMin: string;
+  orderSizeMax: string;
+  quantoMultiplier: string;
+  quantityPrecision?: number;
+};
+
 function buildNewClientOrderId(symbol: string, quantity: number): string {
   const seed = `${Date.now()}-${symbol}-${quantity}`;
   const digest = createHash("md5").update(seed).digest("hex");
@@ -63,6 +138,8 @@ export class BinanceClient {
   private readonly baseUrl: string;
   private readonly dispatcher?: Dispatcher;
   private readonly recvWindow = 5000;
+  private readonly quantityRuleCache = new Map<string, QuantityRule>();
+  private readonly contractInfoCache = new Map<string, { info: BinanceContractInfo; expiresAt: number }>();
 
   constructor(apiKey: string, apiSecret: string, useTestnet: boolean, proxyUrl?: string) {
     this.apiKey = apiKey;
@@ -94,6 +171,55 @@ export class BinanceClient {
       search.append(key, String(value));
     }
     return search;
+  }
+
+  private async resolveQuantityRule(contract: string): Promise<QuantityRule | null> {
+    const cached = this.quantityRuleCache.get(contract);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached;
+    }
+
+    const [precisionRecord, contractInfo] = await Promise.all([
+      getBinancePrecision(contract).catch(() => null),
+      this.getContractInfo(contract).catch((error: unknown) => {
+        logger.warn(`获取 Binance 合约 ${contract} 信息失败: ${error instanceof Error ? error.message : String(error)}`);
+        return null;
+      }),
+    ]);
+
+    const stepCandidates: number[] = [];
+    const pushStepCandidate = (value: number | null) => {
+      if (value === null || !Number.isFinite(value) || value <= 0) {
+        return;
+      }
+      stepCandidates.push(value);
+    };
+
+    pushStepCandidate(parsePositiveNumber(precisionRecord?.step_size));
+    pushStepCandidate(parsePositiveNumber(contractInfo?.lotSize));
+    pushStepCandidate(deriveStepFromPrecision(precisionRecord?.precision));
+    pushStepCandidate(deriveStepFromPrecision(contractInfo?.quantityPrecision));
+
+    if (!stepCandidates.length) {
+      return null;
+    }
+
+    const step = Math.max(...stepCandidates);
+    const precision = computePrecisionFromStep(step.toString(), 6);
+    const rule: QuantityRule = {
+      step,
+      precision,
+      expiresAt: Date.now() + 5 * 60 * 1000,
+    };
+    this.quantityRuleCache.set(contract, rule);
+    return rule;
+  }
+
+  private formatQuantityByRule(quantity: number, rule: QuantityRule): string {
+    const normalized = normalizeBinanceQuantity(quantity, Math.min(rule.precision, 12), rule.step);
+    const digits = Math.min(rule.precision, 8);
+    const formatted = digits > 0 ? normalized.toFixed(digits) : normalized.toFixed(0);
+    return trimTrailingZeros(formatted);
   }
 
   private async request<T>(method: HttpMethod, path: string, params?: RequestParams, auth = false): Promise<T> {
@@ -286,7 +412,12 @@ export class BinanceClient {
     };
   }
 
-  async getContractInfo(contract: string) {
+  async getContractInfo(contract: string): Promise<BinanceContractInfo> {
+    const cached = this.contractInfoCache.get(contract);
+    if (cached && cached.expiresAt > Date.now()) {
+      return cached.info;
+    }
+
     const symbol = contractToSymbol(contract);
     const info = await this.request<any>("GET", "/fapi/v1/exchangeInfo", { symbol }, false);
     const instrument = info.symbols?.[0];
@@ -295,14 +426,19 @@ export class BinanceClient {
     }
 
     const tickSize = instrument.filters?.find((f: any) => f.filterType === "PRICE_FILTER")?.tickSize ?? "0.1";
-    const lotSize = instrument.filters?.find((f: any) => f.filterType === "LOT_SIZE")?.stepSize ?? "1";
+    const lotSizeFilter = instrument.filters?.find((f: any) => f.filterType === "LOT_SIZE");
+    const marketLotSizeFilter = instrument.filters?.find((f: any) => f.filterType === "MARKET_LOT_SIZE");
+    const lotSize = selectEffectiveStepSize(lotSizeFilter, marketLotSizeFilter, instrument.stepSize);
+    const minSize = selectEffectiveMinQty(lotSizeFilter, marketLotSizeFilter, instrument.minQty);
+    const maxSize = selectEffectiveMaxQty(lotSizeFilter, marketLotSizeFilter, instrument.maxQty);
+    const quantityPrecision = typeof instrument.quantityPrecision === "number" ? instrument.quantityPrecision : undefined;
 
-    return {
+    const result: BinanceContractInfo = {
       instId: `${symbol}-SWAP`,
       contract,
       tickSize,
-      minSize: instrument.filters?.find((f: any) => f.filterType === "LOT_SIZE")?.minQty ?? "0.001",
-      maxSize: instrument.filters?.find((f: any) => f.filterType === "LOT_SIZE")?.maxQty ?? "100000",
+      minSize,
+      maxSize,
       lotSize,
       contractValue: instrument.contractSize || "1",
       contractMultiplier: instrument.contractSize || "1",
@@ -311,7 +447,11 @@ export class BinanceClient {
       orderSizeMin: instrument.filters?.find((f: any) => f.filterType === "LOT_SIZE")?.minQty ?? lotSize,
       orderSizeMax: instrument.filters?.find((f: any) => f.filterType === "LOT_SIZE")?.maxQty ?? "100000",
       quantoMultiplier: instrument.contractSize || "1",
+      quantityPrecision,
     };
+
+    this.contractInfoCache.set(contract, { info: result, expiresAt: Date.now() + 5 * 60 * 1000 });
+    return result;
   }
 
   async getAllContracts() {
@@ -405,12 +545,12 @@ export class BinanceClient {
 
     if (quantity > 0) {
       try {
-        const precisionRecord = await getBinancePrecision(params.contract);
-        if (precisionRecord) {
-          formattedQuantity = formatBinanceQuantity(params.contract, quantity, precisionRecord);
+        const rule = await this.resolveQuantityRule(params.contract);
+        if (rule) {
+          formattedQuantity = this.formatQuantityByRule(quantity, rule);
         }
       } catch (error) {
-        logger.warn(`读取 ${params.contract} 精度失败，使用原始数量: ${String(error)}`);
+        logger.warn(`计算 ${params.contract} 下单精度失败，使用原始数量: ${String(error)}`);
       }
     }
     const clientOrderId = buildNewClientOrderId(symbol, quantity);

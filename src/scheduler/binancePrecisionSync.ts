@@ -25,6 +25,44 @@ function extractFilter(instrument: any, type: string) {
   return instrument?.filters?.find((filter: any) => filter?.filterType === type);
 }
 
+function parsePositive(value: unknown): number | null {
+  if (typeof value === "number") {
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }
+  if (typeof value === "string") {
+    const num = Number.parseFloat(value);
+    return Number.isFinite(num) && num > 0 ? num : null;
+  }
+  return null;
+}
+
+function pickStepSize(lotSize?: any, marketLotSize?: any, fallback?: string): string {
+  const candidates = [parsePositive(lotSize?.stepSize), parsePositive(marketLotSize?.stepSize), parsePositive(fallback)];
+  const valid = candidates.filter((value): value is number => value !== null);
+  if (!valid.length) {
+    return "1";
+  }
+  return Math.max(...valid).toString();
+}
+
+function pickMinQty(lotSize?: any, marketLotSize?: any, fallback?: string): string {
+  const candidates = [parsePositive(lotSize?.minQty), parsePositive(marketLotSize?.minQty), parsePositive(fallback)];
+  const valid = candidates.filter((value): value is number => value !== null);
+  if (!valid.length) {
+    return "0.001";
+  }
+  return Math.max(...valid).toString();
+}
+
+function pickMaxQty(lotSize?: any, marketLotSize?: any, fallback?: string): string {
+  const candidates = [parsePositive(lotSize?.maxQty), parsePositive(marketLotSize?.maxQty), parsePositive(fallback)];
+  const valid = candidates.filter((value): value is number => value !== null);
+  if (!valid.length) {
+    return "1000000";
+  }
+  return Math.min(...valid).toString();
+}
+
 async function fetchBinancePrecisionRecords(): Promise<BinancePrecisionRecord[]> {
   const credentials = getExchangeCredentials();
   if (credentials.provider !== "binance") {
@@ -62,12 +100,12 @@ async function fetchBinancePrecisionRecords(): Promise<BinancePrecisionRecord[]>
     const priceFilter = extractFilter(instrument, "PRICE_FILTER") || {};
     const minNotional = extractFilter(instrument, "MIN_NOTIONAL") || {};
 
-    const stepSize = marketLotSize.stepSize || lotSize.stepSize || instrument.stepSize || "1";
-    const minQty = marketLotSize.minQty || lotSize.minQty || instrument.minQty || "0.001";
-    const maxQty = marketLotSize.maxQty || lotSize.maxQty || instrument.maxQty || "1000000";
-    const precision = Number.isInteger(instrument.quantityPrecision)
-      ? instrument.quantityPrecision
-      : computePrecisionFromStep(stepSize, 6);
+    const stepSize = pickStepSize(lotSize, marketLotSize, instrument.stepSize);
+    const minQty = pickMinQty(lotSize, marketLotSize, instrument.minQty);
+    const maxQty = pickMaxQty(lotSize, marketLotSize, instrument.maxQty);
+    
+    // 优先从 stepSize 计算精度，因为 quantityPrecision 可能是资产精度而非交易精度
+    const precision = computePrecisionFromStep(stepSize, 6);
 
     records.push({
       contract: symbolToContract(instrument.symbol),

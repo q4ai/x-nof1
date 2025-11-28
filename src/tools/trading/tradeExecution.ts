@@ -137,7 +137,13 @@ async function buildLotSizingInfo(
         if (Number.isFinite(lotSizeRaw) && lotSizeRaw > 0) {
           lotSize = lotSizeRaw;
         }
-        if (Number.isFinite(precisionRecord.precision)) {
+        
+        // 优先使用 step_size 计算精度，因为 DB 中的 precision 可能来自 quantityPrecision (资产精度)
+        // 而非交易对的 stepSize 精度
+        const computedPrecision = computeLotSizePrecision(lotSizeString);
+        if (computedPrecision > 0) {
+          lotSizePrecision = computedPrecision;
+        } else if (Number.isFinite(precisionRecord.precision)) {
           lotSizePrecision = Math.max(precisionRecord.precision, 0);
         } else {
           lotSizePrecision = computeLotSizePrecision(lotSizeString);

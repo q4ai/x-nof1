@@ -704,6 +704,10 @@ class TradingMonitor {
     const nav = document.getElementById("tab-nav");
     if (!nav) return;
 
+    // 获取对应的 tab-content 容器，避免影响其他区域（如策略页面的 tabs）
+    const container = nav.closest(".bottom-tabs");
+    const content = container ? container.querySelector(".tab-content") : null;
+
     nav.addEventListener("click", (event) => {
       const button = event.target.closest(".tab-btn");
       if (!button) return;
@@ -714,9 +718,11 @@ class TradingMonitor {
       nav.querySelectorAll(".tab-btn").forEach((btn) => btn.classList.remove("active"));
       button.classList.add("active");
 
-      document.querySelectorAll(".tab-panel").forEach((panel) => {
-        panel.classList.toggle("active", panel.id === `tab-${tab}`);
-      });
+      if (content) {
+        content.querySelectorAll(".tab-panel").forEach((panel) => {
+          panel.classList.toggle("active", panel.id === `tab-${tab}`);
+        });
+      }
     });
   }
 
@@ -2177,9 +2183,10 @@ class TradingMonitor {
     const rows = requests
       .map((request, index) => {
         const timestamp = request.createdAt ? this.formatTime(request.createdAt) : "--";
-        const model = request.modelName ? this.escapeHtml(String(request.modelName)) : "--";
+        const modelName = request.modelName || request.model;
+        const model = modelName ? this.escapeHtml(String(modelName)) : "--";
         const summary = this.escapeHtml(this.getDecisionRequestSummaryText(request));
-        const durationLabel = this.formatOutputDuration(request.outputDurationMs);
+        const durationLabel = this.formatOutputDuration(request.outputDurationMs ?? request.durationMs);
 
         return `
           <tr data-decision-request-index="${index}">
@@ -3179,6 +3186,23 @@ class TradingMonitor {
         const entryPrice = this.formatPrice(pos.entryPrice);
         const markPrice = this.formatPrice(pos.currentPrice ?? pos.markPrice);
         const pnl = Number(pos.unrealizedPnl ?? pos.unrealisedPnl ?? 0);
+
+        // 计算盈亏比例: 盈亏金额 / (开仓价 * 数量 / 杠杆)
+        let pnlPercentDisplay = "";
+        const entryPriceVal = Number(pos.entryPrice);
+        const leverageVal = Number(pos.leverage) || 1;
+        
+        if (Number.isFinite(entryPriceVal) && entryPriceVal > 0 && 
+            Number.isFinite(actualQuantity) && actualQuantity > 0 && 
+            Number.isFinite(leverageVal) && leverageVal > 0) {
+            const initialMargin = (entryPriceVal * actualQuantity) / leverageVal;
+            if (initialMargin > 0) {
+                const pnlPercent = (pnl / initialMargin) * 100;
+                const sign = pnlPercent > 0 ? "+" : "";
+                pnlPercentDisplay = `(${sign}${pnlPercent.toFixed(2)}%)`;
+            }
+        }
+
         const pnlClass = pnl >= 0 ? "positive" : "negative";
         const pnlLabel = this.formatCurrency(pnl, 2, true);
         const openedAtRaw = pos.exchangeOpenedAt || pos.openedAt || pos.opened_at;
@@ -3194,7 +3218,7 @@ class TradingMonitor {
             <td${contractsLabel ? ` title="${contractsLabel}"` : ""}>${quantityCell}</td>
             <td>${entryPrice}</td>
             <td>${markPrice}</td>
-            <td class="${pnlClass}">${this.formatCurrency(pnl, 2, true)}</td>
+            <td class="${pnlClass}">${this.formatCurrency(pnl, 2, true)} <span style="font-size: 0.85em;">${pnlPercentDisplay}</span></td>
             <td>${openedAt}</td>
             ${actionCell}
           </tr>
@@ -4742,7 +4766,8 @@ class TradingMonitor {
     const timestamp = request?.createdAt ? this.formatTime(request.createdAt) : "--";
     const iterationValue = Number(request?.iteration);
     const iteration = Number.isFinite(iterationValue) ? `#${iterationValue}` : "--";
-    const modelName = request?.modelName ? this.escapeHtml(String(request.modelName)) : "--";
+    const modelNameRaw = request?.modelName || request?.model;
+    const modelName = modelNameRaw ? this.escapeHtml(String(modelNameRaw)) : "--";
     const statusKey = typeof request?.status === "string" ? request.status.toLowerCase() : "unknown";
     const statusLabelKey = `decisionRequest.status.${statusKey}`;
     let statusLabel = t(statusLabelKey);
@@ -4750,11 +4775,12 @@ class TradingMonitor {
       statusLabel = request?.status || t("decisionRequest.status.unknown");
     }
     const statusClass = statusKey === "error" ? "decision-request-status negative" : "decision-request-status";
-    const errorMessage = request?.errorMessage && String(request.errorMessage).trim() !== ""
-      ? this.escapeHtml(String(request.errorMessage))
+    const errorRaw = request?.errorMessage || request?.error;
+    const errorMessage = errorRaw && String(errorRaw).trim() !== ""
+      ? this.escapeHtml(String(errorRaw))
       : "";
 
-    const durationDisplay = this.formatOutputDuration(request?.outputDurationMs);
+    const durationDisplay = this.formatOutputDuration(request?.outputDurationMs ?? request?.durationMs);
     const durationMeta = durationDisplay !== "--"
       ? t("decisionRequest.detail.durationLabel", { value: durationDisplay })
       : "";
