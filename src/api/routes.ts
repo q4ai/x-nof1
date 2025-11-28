@@ -4056,21 +4056,31 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         }),
       ]);
 
-      const logs = asDbRows(result.rows).map((row) => ({
-        id: toStringSafe(row.id),
-        createdAt: toStringSafe(row.created_at),
-        instructions: toStringSafe(row.instructions),
-        prompt: toStringSafe(row.prompt),
-        response: toStringSafe(row.response),
-        modelName: toStringSafe(row.model_name), // 改为 modelName 以匹配前端
-        model: toStringSafe(row.model_name), // 保留 model 以兼容
-        durationMs: toNumber(row.duration_ms),
-        outputDurationMs: toNumber(row.duration_ms), // 添加 outputDurationMs 字段
-        tokensInput: toNumber(row.tokens_input),
-        tokensOutput: toNumber(row.tokens_output),
-        errorMessage: toStringSafe(row.error_message), // 改为 errorMessage 以匹配前端
-        error: toStringSafe(row.error_message), // 保留 error 以兼容
-      }));
+      const logs = asDbRows(result.rows).map((row) => {
+        const outputDuration = toNumber(row.output_duration_ms);
+        const legacyDuration = toNumber((row as Record<string, unknown>).duration_ms);
+        const normalizedDuration = Number.isFinite(outputDuration) ? outputDuration : legacyDuration;
+        const rawStatus = toStringSafe(row.status);
+        const defaultStatus = row.error_message ? "error" : row.response ? "success" : "unknown";
+        const normalizedStatus = rawStatus || defaultStatus;
+
+        return {
+          id: toStringSafe(row.id),
+          createdAt: toStringSafe(row.created_at),
+          instructions: toStringSafe(row.instructions),
+          prompt: toStringSafe(row.prompt),
+          response: toStringSafe(row.response),
+          modelName: toStringSafe(row.model_name), // 改为 modelName 以匹配前端
+          model: toStringSafe(row.model_name), // 保留 model 以兼容
+          durationMs: normalizedDuration,
+          outputDurationMs: normalizedDuration,
+          status: normalizedStatus,
+          tokensInput: toNumber(row.tokens_input),
+          tokensOutput: toNumber(row.tokens_output),
+          errorMessage: toStringSafe(row.error_message), // 改为 errorMessage 以匹配前端
+          error: toStringSafe(row.error_message), // 保留 error 以兼容
+        };
+      });
 
       const totalRows = asDbRows(countResult.rows);
       const total = totalRows.length > 0 ? toNumber(totalRows[0].total, logs.length) : logs.length;

@@ -274,7 +274,7 @@ export async function executeOpenPosition({
   
   // 获取交易所客户端（优先实例上下文，回退全局）
   const client = await getExchangeClient();
-  const accountId = (await getCurrentAccountId()).toString();
+  const accountId = await getCurrentAccountId();
   
   // 获取交易所提供商
   const exchangeProvider = await getCurrentProvider();
@@ -297,6 +297,7 @@ export async function executeOpenPosition({
     const { rawRequest, rawResponse, ...rest } = result;
     await recordTradeLog({
       action: "open",
+      accountId,
       symbol: normalizedSymbol,
       side,
       leverage,
@@ -783,7 +784,7 @@ export async function executeClosePosition({
   
   // 获取交易所客户端（优先实例上下文，回退全局）
   const client = await getExchangeClient();
-  const accountId = (await getCurrentAccountId()).toString();
+  const accountId = await getCurrentAccountId();
   
   // 获取交易所提供商
   const exchangeProvider = await getCurrentProvider();
@@ -811,6 +812,7 @@ export async function executeClosePosition({
       const { rawRequest, rawResponse, ...rest } = result;
       await recordTradeLog({
         action: "close",
+        accountId,
         symbol: normalizedSymbol,
         side: logSide,
         leverage: logLeverage,
@@ -1292,6 +1294,7 @@ export const cancelOrderTool = createTool({
   execute: async ({ orderId }) => {
     // 获取交易所客户端（优先实例上下文，回退全局）
     const client = await getExchangeClient();
+    const accountId = await getCurrentAccountId();
     const requestPayload = { orderId };
     const finalize = async (result: {
       success: boolean;
@@ -1303,6 +1306,7 @@ export const cancelOrderTool = createTool({
       const { rawRequest, rawResponse, ...rest } = result;
       await recordTradeLog({
         action: "cancel",
+        accountId,
         orderId,
         status: rest.success ? "success" : "failed",
         message: rest.message || "",

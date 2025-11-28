@@ -2,6 +2,7 @@ import { createClient } from "@libsql/client";
 import { getChinaTimeISO } from "./timeUtils";
 import { createLogger } from "./loggerUtils";
 import { getActiveAccount } from "../services/accountConfigService";
+import { getInstanceAccountId } from "../services/instanceContext";
 
 type TradeLogStatus = "success" | "failed" | "warning";
 type TradeLogAction = "open" | "close" | "cancel" | "adjust";
@@ -10,6 +11,7 @@ type TradeLogEntry = {
   action: TradeLogAction;
   message: string;
   status: TradeLogStatus;
+  accountId?: number;
   symbol?: string;
   side?: "long" | "short";
   leverage?: number;
@@ -49,8 +51,19 @@ function safeSerialize(value: unknown): string | null {
 
 export async function recordTradeLog(entry: TradeLogEntry): Promise<void> {
   try {
-    const activeAccount = await getActiveAccount();
-    const accountId = activeAccount ? activeAccount.id.toString() : "default";
+    let resolvedAccountId: number | null = null;
+
+    if (typeof entry.accountId === "number" && Number.isFinite(entry.accountId)) {
+      resolvedAccountId = entry.accountId;
+    } else {
+      const contextAccountId = getInstanceAccountId();
+      if (contextAccountId !== null) {
+        resolvedAccountId = contextAccountId;
+      } else {
+        const activeAccount = await getActiveAccount();
+        resolvedAccountId = activeAccount?.id ?? null;
+      }
+    }
 
     await dbClient.execute({
       sql: `INSERT INTO trade_logs (
@@ -69,7 +82,7 @@ export async function recordTradeLog(entry: TradeLogEntry): Promise<void> {
         created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
       args: [
-        accountId,
+        resolvedAccountId,
         entry.action,
         entry.symbol || null,
         entry.side || null,
