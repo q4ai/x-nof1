@@ -8,7 +8,10 @@
 import { createClient } from "@libsql/client";
 import { getQuantoMultiplier } from "../utils/contractUtils";
 import { createLogger } from "../utils/loggerUtils";
-import { createExchangeClient } from "./okxClient";
+import {
+	createExchangeClientForAccount,
+	createExchangeClientFromActiveAccount,
+} from "./okxClient";
 import { getActiveAccount } from "./accountConfigService";
 
 const logger = createLogger({
@@ -82,9 +85,11 @@ export interface CandlePoint {
 }
 
 export async function getCurrentPositions(): Promise<PositionSnapshot[]> {
-	const exchangeClient = createExchangeClient();
-	const exchangePositions = await exchangeClient.getPositions();
 	const activeAccount = await getActiveAccount();
+	const exchangeClient = activeAccount
+		? createExchangeClientForAccount(activeAccount)
+		: await createExchangeClientFromActiveAccount();
+	const exchangePositions = await exchangeClient.getPositions();
 	const isBitget = activeAccount?.provider === "bitget";
 	const isBinance = activeAccount?.provider === "binance";
 

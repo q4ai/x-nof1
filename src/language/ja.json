@@ -707,6 +707,9 @@
 		"reset": {
 			"sectionTitle": "⚠️ 実運用データをリセット",
 			"hint": "この操作は取引データとストラテジー設定を初期化します (API・プロキシ設定は維持)。実運用を停止したうえで実行してください。",
+			"accountLabel": "リセット対象のアカウントを選択",
+			"accountOptionCurrent": "現在のアクティブアカウント",
+			"accountHint": "選択したアカウントの実運用データのみが削除されます。",
 			"trigger": "実運用データをリセット",
 			"confirmHint": "続行するには <code>RESET</code> と入力してください。",
 			"confirmPlaceholder": "RESET と入力",

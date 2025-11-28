@@ -54,6 +54,7 @@ export interface PricesUpdateMessage {
 export interface PositionsUpdateMessage {
   type: "positions_update";
   timestamp: string;
+  accountId?: number | null; // 推送数据所属的账户ID
   positions: Array<Record<string, unknown>>;
 }
 

@@ -1103,6 +1103,13 @@
               <div class="settings-danger-zone">
                 <h4 data-i18n-html="settings.reset.sectionTitle">⚠️ Reset Live Environment</h4>
                 <p class="danger-hint" data-i18n="settings.reset.hint">This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.</p>
+                <div class="form-group reset-account-select">
+                  <label for="reset-live-data-account" data-i18n="settings.reset.accountLabel">Choose target account</label>
+                  <select id="reset-live-data-account">
+                    <option value="" data-i18n="settings.reset.accountOptionCurrent">Current active account</option>
+                  </select>
+                  <p class="field-hint" data-i18n="settings.reset.accountHint">Select which account's live data will be cleared.</p>
+                </div>
                 <button type="button" class="btn-danger" id="reset-live-data-btn" data-i18n="settings.reset.trigger">Reset Live Data</button>
                 <div class="reset-confirm hidden" id="reset-live-data-confirm">
                   <p class="confirm-hint" data-i18n-html="settings.reset.confirmHint">Type <code>RESET</code> to confirm.</p>

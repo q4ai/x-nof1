@@ -7,8 +7,12 @@
 import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
 import { getDefaultConfigSnapshot } from "./init-config";
-import { createExchangeClientFromActiveAccount } from "../services/okxClient";
+import {
+  createExchangeClientForAccount,
+  createExchangeClientFromActiveAccount,
+} from "../services/okxClient";
 import { getActiveAccount } from "../services/accountConfigService";
+import type { AccountConfig } from "./schema";
 
 const logger = createLogger({
   name: "reset-live-data",
@@ -78,14 +82,14 @@ export interface ResetLiveDataResult {
   clearedMemoryTables: string[];
 }
 
-export async function resetLiveDataToDefaults(accountId?: string): Promise<ResetLiveDataResult> {
+export async function resetLiveDataToDefaults(targetAccount?: AccountConfig | null): Promise<ResetLiveDataResult> {
   const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
   const client = createClient({
     url: dbUrl,
   });
 
-  const activeAccount = await getActiveAccount();
-  const targetAccountId = accountId || activeAccount?.id?.toString() || null;
+  const resolvedAccount = targetAccount ?? (await getActiveAccount());
+  const targetAccountId = resolvedAccount?.id ? resolvedAccount.id.toString() : null;
 
   const defaults = getDefaultConfigSnapshot();
   const timestamp = new Date().toISOString();
@@ -104,7 +108,9 @@ export async function resetLiveDataToDefaults(accountId?: string): Promise<Reset
   };
 
   try {
-    const exchangeClient = await createExchangeClientFromActiveAccount();
+    const exchangeClient = resolvedAccount
+      ? createExchangeClientForAccount(resolvedAccount)
+      : await createExchangeClientFromActiveAccount();
     const account = await exchangeClient.getFuturesAccount();
 
     const accountTotal = Number.parseFloat(account.total ?? "0");

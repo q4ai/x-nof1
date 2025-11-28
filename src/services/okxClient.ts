@@ -986,43 +986,59 @@ export async function createExchangeClientFromActiveAccount(): Promise<ExchangeH
     return createOkxClient();
   }
   
-  const proxyUrl = getExchangeProxy() || undefined;
+  return createExchangeClientForAccount(activeAccount);
+}
+
+/**
+ * 根据指定的账户配置创建交易所客户端
+ * @param account 账户配置对象
+ * @returns 对应交易所的客户端实例
+ */
+export function createExchangeClientForAccount(account: {
+  provider: string;
+  api_key: string;
+  api_secret: string;
+  api_passphrase?: string;
+  use_paper?: boolean;
+  proxy_url?: string;
+}): ExchangeHttpClient {
+  const proxyUrl = account.proxy_url || getExchangeProxy() || undefined;
   
-  if (activeAccount.provider === "binance") {
-    if (!activeAccount.api_key || !activeAccount.api_secret) {
-      throw new Error("活跃账户缺少 API Key 或 API Secret");
+  if (account.provider === "binance") {
+    if (!account.api_key || !account.api_secret) {
+      throw new Error("账户缺少 API Key 或 API Secret");
     }
     return new BinanceClient(
-      activeAccount.api_key,
-      activeAccount.api_secret,
-      activeAccount.use_paper,
+      account.api_key,
+      account.api_secret,
+      Boolean(account.use_paper),
       proxyUrl
     );
   }
 
-  if (activeAccount.provider === "bitget") {
-    if (!activeAccount.api_key || !activeAccount.api_secret || !activeAccount.api_passphrase) {
-      throw new Error("活跃账户缺少 Bitget 必需凭证");
+  if (account.provider === "bitget") {
+    if (!account.api_key || !account.api_secret || !account.api_passphrase) {
+      throw new Error("账户缺少 Bitget 必需凭证");
     }
     return new BitgetClient(
-      activeAccount.api_key,
-      activeAccount.api_secret,
-      activeAccount.api_passphrase,
-      activeAccount.use_paper,
+      account.api_key,
+      account.api_secret,
+      account.api_passphrase,
+      Boolean(account.use_paper),
       proxyUrl
     );
   }
   
   // OKX
-  if (!activeAccount.api_key || !activeAccount.api_secret || !activeAccount.api_passphrase) {
-    throw new Error("活跃账户缺少 OKX 必需凭证");
+  if (!account.api_key || !account.api_secret || !account.api_passphrase) {
+    throw new Error("账户缺少 OKX 必需凭证");
   }
   
   return new OkxClient(
-    activeAccount.api_key,
-    activeAccount.api_secret,
-    activeAccount.api_passphrase,
-    activeAccount.use_paper,
+    account.api_key,
+    account.api_secret,
+    account.api_passphrase,
+    Boolean(account.use_paper),
     proxyUrl
   );
 }

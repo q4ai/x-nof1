@@ -43,7 +43,7 @@ import { resetLiveDataToDefaults } from "../database/reset-live-data";
 import { getExchangeProxy } from "../config/exchange";
 import { initTradingSystem } from "../scheduler/tradingSystemInit";
 import { summarizeAgentResponseText } from "../database/agent-request-logs";
-import { getActiveAccount } from "../services/accountConfigService";
+import { getActiveAccount, getAccountById } from "../services/accountConfigService";
 import { isSystemInstalled, installSystem } from "../services/installService";
 import { dashboardBroadcaster } from "../services/dashboardBroadcaster";
 import { websocketService } from "../services/websocketService";
@@ -2212,12 +2212,32 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/account", async (c) => {
     try {
-      const okxClient = await createExchangeClientFromActiveAccount();
+      // 支持通过 accountId 参数指定账户，否则使用当前活跃账户
+      const accountIdParam = c.req.query("accountId");
+      const { getActiveAccount, getAccountById } = await import("../services/accountConfigService");
+      const { createExchangeClientForAccount } = await import("../services/okxClient");
+      
+      let activeAccount;
+      if (accountIdParam) {
+        const accountId = Number.parseInt(accountIdParam, 10);
+        if (Number.isFinite(accountId) && accountId > 0) {
+          activeAccount = await getAccountById(accountId);
+        }
+      }
+      if (!activeAccount) {
+        activeAccount = await getActiveAccount();
+      }
+      
+      let okxClient;
+      if (activeAccount) {
+        okxClient = createExchangeClientForAccount(activeAccount);
+      } else {
+        okxClient = await createExchangeClientFromActiveAccount();
+      }
+      
       const account = await okxClient.getFuturesAccount();
       const activeSince = await getActiveAccountSwitchTimestamp();
       
-      const { getActiveAccount } = await import("../services/accountConfigService");
-      const activeAccount = await getActiveAccount();
       const accountId = activeAccount ? activeAccount.id : null;
 
       let historySql = "SELECT total_value, timestamp FROM account_history WHERE ";
@@ -2338,11 +2358,31 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/positions", async (c) => {
     try {
-      const okxClient = await createExchangeClientFromActiveAccount();
+      // 支持通过 accountId 参数指定账户，否则使用当前活跃账户
+      const accountIdParam = c.req.query("accountId");
+      const { getActiveAccount, getAccountById } = await import("../services/accountConfigService");
+      const { createExchangeClientForAccount } = await import("../services/okxClient");
+      
+      let activeAccount;
+      if (accountIdParam) {
+        const accountId = Number.parseInt(accountIdParam, 10);
+        if (Number.isFinite(accountId) && accountId > 0) {
+          activeAccount = await getAccountById(accountId);
+        }
+      }
+      if (!activeAccount) {
+        activeAccount = await getActiveAccount();
+      }
+      
+      let okxClient;
+      if (activeAccount) {
+        okxClient = createExchangeClientForAccount(activeAccount);
+      } else {
+        okxClient = await createExchangeClientFromActiveAccount();
+      }
+      
       const okxPositions = await okxClient.getPositions();
       
-      const { getActiveAccount } = await import("../services/accountConfigService");
-      const activeAccount = await getActiveAccount();
       const isBitget = activeAccount?.provider === 'bitget';
       const isBinance = activeAccount?.provider === 'binance';
 
@@ -2500,10 +2540,31 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.get("/api/open-orders", async (c) => {
     try {
-      const { getConfigValue } = await import("../database/init-config");
-      const provider = (await getConfigValue("EXCHANGE_PROVIDER")) || "okx";
-      const client = await createExchangeClientFromActiveAccount();
+      // 支持通过 accountId 参数指定账户，否则使用当前活跃账户
+      const accountIdParam = c.req.query("accountId");
+      const { getActiveAccount, getAccountById } = await import("../services/accountConfigService");
+      const { createExchangeClientForAccount } = await import("../services/okxClient");
+      
+      let activeAccount;
+      if (accountIdParam) {
+        const accountId = Number.parseInt(accountIdParam, 10);
+        if (Number.isFinite(accountId) && accountId > 0) {
+          activeAccount = await getAccountById(accountId);
+        }
+      }
+      if (!activeAccount) {
+        activeAccount = await getActiveAccount();
+      }
+      
+      let client;
+      if (activeAccount) {
+        client = createExchangeClientForAccount(activeAccount);
+      } else {
+        client = await createExchangeClientFromActiveAccount();
+      }
+      
       const orders = await client.getOpenOrders();
+      const provider = activeAccount?.provider || "okx";
       logger.debug(`获取到 ${orders.length} 个挂单`);
 
       // 统一格式化订单数据
@@ -3833,15 +3894,27 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const rawPage = Number.parseInt(c.req.query("page") || "1", 10);
       const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
       const offset = (page - 1) * limit;
+      const accountIdParam = c.req.query("accountId");
+
+      // 构建 WHERE 子句
+      let whereClause = "";
+      const baseArgs: any[] = [];
+      if (accountIdParam) {
+        const accountId = Number.parseInt(accountIdParam, 10);
+        if (Number.isFinite(accountId) && accountId > 0) {
+          whereClause = "WHERE account_id = ?";
+          baseArgs.push(accountId);
+        }
+      }
 
       const [result, countResult] = await Promise.all([
         dbClient.execute({
-          sql: `SELECT * FROM trade_logs ORDER BY datetime(created_at) DESC LIMIT ? OFFSET ?`,
-          args: [limit, offset],
+          sql: `SELECT * FROM trade_logs ${whereClause} ORDER BY datetime(created_at) DESC LIMIT ? OFFSET ?`,
+          args: [...baseArgs, limit, offset],
         }),
         dbClient.execute({
-          sql: `SELECT COUNT(*) AS total FROM trade_logs`,
-          args: [],
+          sql: `SELECT COUNT(*) AS total FROM trade_logs ${whereClause}`,
+          args: baseArgs,
         }),
       ]);
 
@@ -3895,17 +3968,30 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const rawPage = Number.parseInt(c.req.query("page") || "1", 10);
       const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
       const offset = (page - 1) * limit;
+      const accountIdParam = c.req.query("accountId");
+
+      // 构建 WHERE 子句
+      let whereClause = "";
+      const baseArgs: any[] = [];
+      if (accountIdParam) {
+        const accountId = Number.parseInt(accountIdParam, 10);
+        if (Number.isFinite(accountId) && accountId > 0) {
+          whereClause = "WHERE account_id = ?";
+          baseArgs.push(accountId);
+        }
+      }
 
       const [result, countResult] = await Promise.all([
         dbClient.execute({
           sql: `SELECT * FROM agent_decisions 
+                ${whereClause}
                 ORDER BY datetime(timestamp) DESC 
                 LIMIT ? OFFSET ?`,
-          args: [limit, offset],
+          args: [...baseArgs, limit, offset],
         }),
         dbClient.execute({
-          sql: `SELECT COUNT(*) AS total FROM agent_decisions`,
-          args: [],
+          sql: `SELECT COUNT(*) AS total FROM agent_decisions ${whereClause}`,
+          args: baseArgs,
         }),
       ]);
 
@@ -3946,15 +4032,27 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       const rawPage = Number.parseInt(c.req.query("page") || "1", 10);
       const page = Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
       const offset = (page - 1) * limit;
+      const accountIdParam = c.req.query("accountId");
+
+      // 构建 WHERE 子句
+      let whereClause = "";
+      const baseArgs: any[] = [];
+      if (accountIdParam) {
+        const accountId = Number.parseInt(accountIdParam, 10);
+        if (Number.isFinite(accountId) && accountId > 0) {
+          whereClause = "WHERE account_id = ?";
+          baseArgs.push(accountId);
+        }
+      }
 
       const [result, countResult] = await Promise.all([
         dbClient.execute({
-          sql: `SELECT * FROM agent_request_logs ORDER BY datetime(created_at) DESC LIMIT ? OFFSET ?`,
-          args: [limit, offset],
+          sql: `SELECT * FROM agent_request_logs ${whereClause} ORDER BY datetime(created_at) DESC LIMIT ? OFFSET ?`,
+          args: [...baseArgs, limit, offset],
         }),
         dbClient.execute({
-          sql: `SELECT COUNT(*) AS total FROM agent_request_logs`,
-          args: [],
+          sql: `SELECT COUNT(*) AS total FROM agent_request_logs ${whereClause}`,
+          args: baseArgs,
         }),
       ]);
 
@@ -3964,18 +4062,22 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         instructions: toStringSafe(row.instructions),
         prompt: toStringSafe(row.prompt),
         response: toStringSafe(row.response),
-        model: toStringSafe(row.model_name),
+        modelName: toStringSafe(row.model_name), // 改为 modelName 以匹配前端
+        model: toStringSafe(row.model_name), // 保留 model 以兼容
         durationMs: toNumber(row.duration_ms),
+        outputDurationMs: toNumber(row.duration_ms), // 添加 outputDurationMs 字段
         tokensInput: toNumber(row.tokens_input),
         tokensOutput: toNumber(row.tokens_output),
-        error: toStringSafe(row.error_message),
+        errorMessage: toStringSafe(row.error_message), // 改为 errorMessage 以匹配前端
+        error: toStringSafe(row.error_message), // 保留 error 以兼容
       }));
 
       const totalRows = asDbRows(countResult.rows);
       const total = totalRows.length > 0 ? toNumber(totalRows[0].total, logs.length) : logs.length;
 
       return c.json({
-        logs,
+        requests: logs, // 改为 requests 以匹配前端预期
+        logs, // 保留 logs 键以兼容旧代码
         pagination: {
           page,
           pageSize: limit,
@@ -3993,20 +4095,35 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
    */
   app.post("/api/reset-live-data", requireAuthWithCsrf, async (c) => {
     try {
-      const body = (await c.req.json().catch(() => ({}))) as { confirmation?: unknown };
+      const body = (await c.req.json().catch(() => ({}))) as { confirmation?: unknown; accountId?: unknown };
       if (body.confirmation !== "RESET") {
         return c.json({ error: "确认口令无效" }, 400);
       }
 
-      const activeAccount = await getActiveAccount();
-      const accountId = activeAccount ? activeAccount.id.toString() : "default";
+      let targetAccount = null;
+      const hasAccountSelection = body.accountId !== undefined && body.accountId !== null && body.accountId !== "";
+      if (hasAccountSelection) {
+        const parsedAccountId = typeof body.accountId === "number"
+          ? body.accountId
+          : Number.parseInt(String(body.accountId).trim(), 10);
+        if (!Number.isFinite(parsedAccountId) || parsedAccountId <= 0) {
+          return c.json({ error: "账户ID无效" }, 400);
+        }
+        targetAccount = await getAccountById(parsedAccountId);
+        if (!targetAccount) {
+          return c.json({ error: "指定账户不存在" }, 404);
+        }
+      } else {
+        targetAccount = await getActiveAccount();
+      }
 
-      logger.warn(`收到重置实盘数据请求 (account_id=${accountId})，开始清理数据...`);
+      const accountLabel = targetAccount ? `${targetAccount.name || "account"} (#${targetAccount.id})` : "default";
+      logger.warn(`收到重置实盘数据请求 (account=${accountLabel})，开始清理数据...`);
       
-      // 调用重置逻辑，仅清理当前账户数据
-      const result = await resetLiveDataToDefaults(accountId);
+      // 调用重置逻辑，仅清理指定账户数据
+      const result = await resetLiveDataToDefaults(targetAccount);
       
-      logger.info(`实盘数据重置完成 (account_id=${accountId})`);
+      logger.info(`实盘数据重置完成 (account=${accountLabel})`);
       
       return c.json({ 
         success: true, 

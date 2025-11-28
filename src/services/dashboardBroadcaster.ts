@@ -26,6 +26,7 @@ import {
   type PositionsUpdateMessage,
   type WebSocketClient,
 } from "./websocketService";
+import { getActiveAccount } from "./accountConfigService";
 
 const DEFAULT_SYMBOLS = ["BTC", "ETH", "SOL", "BNB", "XRP", "DOGE"];
 const PRICE_INTERVAL_MS = Number.parseInt(process.env.DASHBOARD_PRICE_INTERVAL_MS || "10000", 10);
@@ -509,10 +510,14 @@ class DashboardBroadcaster {
     try {
       const positions = await getCurrentPositions();
       const timestamp = new Date().toISOString();
+      // 获取当前活跃账户ID
+      const activeAccount = await getActiveAccount();
+      const accountId = activeAccount?.id ?? null;
 
       const message: PositionsUpdateMessage = {
         type: "positions_update",
         timestamp,
+        accountId, // 包含账户ID，前端可以验证是否匹配
         positions: clonePositions(positions),
       };
       this.latestPositions = message;

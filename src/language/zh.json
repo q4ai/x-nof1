@@ -749,6 +749,9 @@
 		"reset": {
 			"sectionTitle": "⚠️ 重置实盘数据",
 			"hint": "该操作会清空交易数据与策略设置，但保留 API 与代理配置。执行前请确保已停止实盘交易。",
+			"accountLabel": "选择要重置的账户",
+			"accountOptionCurrent": "当前激活账户",
+			"accountHint": "系统会清空所选账户的实盘数据，请谨慎确认目标账户。",
 			"trigger": "重置实盘数据",
 			"confirmHint": "输入 <code>RESET</code> 以确认。",
 			"confirmPlaceholder": "请输入 RESET 继续",

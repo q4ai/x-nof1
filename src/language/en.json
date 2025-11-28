@@ -733,6 +733,9 @@
 		"reset": {
 			"sectionTitle": "⚠️ Reset Live Trading Data",
 			"hint": "This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.",
+			"accountLabel": "Select account to reset",
+			"accountOptionCurrent": "Current active account",
+			"accountHint": "Only the selected account's live trading data will be cleared.",
 			"trigger": "Reset Live Data",
 			"confirmHint": "Type <code>RESET</code> to confirm.",
 			"confirmPlaceholder": "Enter RESET to continue",

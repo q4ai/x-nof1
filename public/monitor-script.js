@@ -590,6 +590,7 @@ class TradingMonitor {
   this.resetLiveDataInput = document.getElementById("reset-live-data-input");
   this.resetLiveDataCancelBtn = document.getElementById("reset-live-data-cancel");
   this.resetLiveDataConfirmBtn = document.getElementById("reset-live-data-confirm-btn");
+    this.resetLiveDataAccountSelect = document.getElementById("reset-live-data-account");
     this.communityReportCheckbox = document.querySelector('input[name="COMMUNITY_REPORT_ENABLED"]');
     this.communityShareCheckbox = document.querySelector('input[name="COMMUNITY_SHARE_PROMPTS"]');
     this.statsDetailBtn = document.getElementById("stats-detail-btn");
@@ -617,7 +618,9 @@ class TradingMonitor {
     this.isAuthenticated = false;
 
     this.setupAuthControls();
-    void this.syncAuthState();
+    // 注意：syncAuthState 会加载账户列表并设置 activeAccountId
+    // 需要在 refreshAll 之前完成，所以改为在初始化流程中等待
+    // void this.syncAuthState(); // 移到下面的初始化流程中
 
     this.setupTabSwitching();
     this.setupModals();
@@ -650,7 +653,14 @@ class TradingMonitor {
     this.initChart();
     this.initEquityChart();
     
-    this.refreshAll()
+    // 初始化流程：
+    // 1. 先同步认证状态并加载账户列表（设置 activeAccountId）
+    // 2. 然后再刷新所有数据（此时 activeAccountId 已经设置好）
+    this.syncAuthState()
+      .then(() => {
+        // syncAuthState 完成后，activeAccountId 已经设置
+        return this.refreshAll();
+      })
       .catch((error) => {
         console.error("[init] 初始加载失败", error);
       })
@@ -1914,7 +1924,11 @@ class TradingMonitor {
     } else {
       return;
     }
-    const data = await this.fetchJson(`${endpoint}?page=${page}&limit=${pageSize}`);
+    
+    // 添加账户ID参数，确保查询当前选中账户的数据
+    const accountId = this.activeAccountId;
+    const accountQuery = accountId ? `&accountId=${accountId}` : "";
+    const data = await this.fetchJson(`${endpoint}?page=${page}&limit=${pageSize}${accountQuery}`);
     if (!data) {
       if (this.recordsTableContainer) {
         this.recordsTableContainer.innerHTML = `<p class="empty-state">${t("notifications.loadFailedTitle")}</p>`;
@@ -2989,8 +3003,17 @@ class TradingMonitor {
   }
 
   async loadAccountSummary() {
-    const data = await this.fetchJson("/api/account");
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const query = requestAccountId ? `?accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/account${query}`);
     if (!data) return;
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadAccountSummary] 账户已切换，丢弃过期数据');
+      return;
+    }
 
     // 后端已经计算好了 totalBalance（包含未实现盈亏），前端不要重复加
     const totalEq = data.totalBalance;
@@ -3037,9 +3060,18 @@ class TradingMonitor {
   async loadEquityHistory() {
     if (!this.equityChart) return;
 
-    const data = await this.fetchJson("/api/history?limit=100");
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const accountQuery = requestAccountId ? `&accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/history?limit=100${accountQuery}`);
     if (!data || !data.history || !Array.isArray(data.history)) {
       console.warn('[loadEquityHistory] 无效的历史数据响应:', data);
+      return;
+    }
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadEquityHistory] 账户已切换，丢弃过期数据');
       return;
     }
 
@@ -3066,8 +3098,17 @@ class TradingMonitor {
   }
 
   async loadPositions(options = {}) {
-    const data = await this.fetchJson("/api/positions");
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const query = requestAccountId ? `?accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/positions${query}`);
     if (!data) return;
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadPositions] 账户已切换，丢弃过期数据');
+      return;
+    }
 
     const { positions = [] } = data;
     const list = Array.isArray(positions) ? positions : [];
@@ -3267,9 +3308,18 @@ class TradingMonitor {
   }
 
   async loadOpenOrders() {
-    const data = await this.fetchJson("/api/open-orders");
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const query = requestAccountId ? `?accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/open-orders${query}`);
     if (!data) {
       console.warn("[loadOpenOrders] 获取挂单数据失败");
+      return;
+    }
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadOpenOrders] 账户已切换，丢弃过期数据');
       return;
     }
 
@@ -3725,8 +3775,17 @@ class TradingMonitor {
   }
 
   async loadTrades() {
-    const data = await this.fetchJson("/api/trades?limit=20");
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const accountQuery = requestAccountId ? `&accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/trades?limit=20${accountQuery}`);
     if (!data || !this.tradesContainerEl) return;
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadTrades] 账户已切换，丢弃过期数据');
+      return;
+    }
 
     const { trades = [] } = data;
 
@@ -3836,8 +3895,17 @@ class TradingMonitor {
   }
 
   async loadTradeLogs() {
-    const data = await this.fetchJson("/api/trade-logs?limit=20");
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const accountQuery = requestAccountId ? `&accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/trade-logs?limit=20${accountQuery}`);
     if (!data || !this.logsContainerEl) return;
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadTradeLogs] 账户已切换，丢弃过期数据');
+      return;
+    }
 
     const { logs = [] } = data;
 
@@ -3918,7 +3986,17 @@ class TradingMonitor {
   async loadDecisionRequests() {
     if (!this.decisionLogsContainerEl) return;
     const timestamp = Date.now();
-    const data = await this.fetchJson(`/api/decision-requests?limit=10&_t=${timestamp}`);
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const accountQuery = requestAccountId ? `&accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/decision-requests?limit=10&_t=${timestamp}${accountQuery}`);
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadDecisionRequests] 账户已切换，丢弃过期数据');
+      return;
+    }
+
     const rawRequests = Array.isArray(data?.requests)
       ? data.requests
       : Array.isArray(data?.logs)
@@ -3986,8 +4064,17 @@ class TradingMonitor {
   async loadDecisions() {
     // 添加时间戳参数强制刷新，避免缓存
     const timestamp = Date.now();
-    const data = await this.fetchJson(`/api/logs?limit=10&_t=${timestamp}`);
+    // 记录请求发起时的账户ID，用于验证响应时账户是否已切换
+    const requestAccountId = this.activeAccountId;
+    const accountQuery = requestAccountId ? `&accountId=${requestAccountId}` : "";
+    const data = await this.fetchJson(`/api/logs?limit=10&_t=${timestamp}${accountQuery}`);
     if (!data || !this.decisionListEl) return;
+
+    // 检查账户是否在请求期间切换，防止竞态条件
+    if (this.activeAccountId !== requestAccountId) {
+      console.log('[loadDecisions] 账户已切换，丢弃过期数据');
+      return;
+    }
 
     const { logs = [] } = data;
     
@@ -6673,6 +6760,18 @@ class TradingMonitor {
       return;
     }
 
+    // 检查WebSocket推送的账户ID是否匹配当前选中的账户
+    // message.accountId 是后端活跃账户的ID
+    // this.activeAccountId 是前端当前选中的账户ID
+    const pushAccountId = message.accountId ?? null;
+    const currentAccountId = this.activeAccountId ?? null;
+    
+    // 如果前端选择了特定账户，但WebSocket推送的是其他账户的数据，则忽略
+    if (currentAccountId !== null && pushAccountId !== null && currentAccountId !== pushAccountId) {
+      console.log(`[WebSocket] 忽略其他账户(${pushAccountId})的持仓推送，当前选中账户: ${currentAccountId}`);
+      return;
+    }
+
     const timestamp = this.normalizeTimestamp(message.timestamp);
     this.applyPositionsData(message.positions, timestamp ?? Date.now());
   }
@@ -7646,6 +7745,7 @@ class TradingMonitor {
       return;
     }
     const confirmationCode = this.resetLiveDataInput ? this.resetLiveDataInput.value.trim().toUpperCase() : "";
+    const selectedAccountId = this.resetLiveDataAccountSelect ? this.resetLiveDataAccountSelect.value.trim() : "";
     if (confirmationCode !== "RESET") {
       this.showToast("warning", "确认口令错误", "请输入 RESET 以继续重置。");
       if (this.resetLiveDataInput) {
@@ -7664,6 +7764,12 @@ class TradingMonitor {
 
     try {
       const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
+      const payload = {
+        confirmation: confirmationCode,
+      };
+      if (selectedAccountId) {
+        payload.accountId = selectedAccountId;
+      }
       const response = await fetch("/api/reset-live-data", {
         method: "POST",
         headers: {
@@ -7671,7 +7777,7 @@ class TradingMonitor {
           "x-csrf-token": csrfToken,
         },
         credentials: "same-origin",
-        body: JSON.stringify({ confirmation: confirmationCode }),
+        body: JSON.stringify(payload),
       });
 
       const result = await response.json().catch(() => ({}));
@@ -8345,11 +8451,13 @@ class TradingMonitor {
       
       // 绑定每个账户卡片的事件
       this.bindAccountCardEvents();
+      this.updateResetAccountOptions();
       
     } catch (error) {
       console.error("加载账户列表失败:", error);
       this.accountsCache = [];
       this.updateAccountSwitcherDisplay();
+      this.updateResetAccountOptions();
       if (loading) {
         loading.style.display = "none";
       }
@@ -8360,6 +8468,44 @@ class TradingMonitor {
         </div>
       `;
       this.showToast("error", this.translate("common.error", "Error"), errorText);
+    }
+  }
+
+  updateResetAccountOptions() {
+    if (!this.resetLiveDataAccountSelect) {
+      return;
+    }
+
+    const select = this.resetLiveDataAccountSelect;
+    const accounts = Array.isArray(this.accountsCache) ? this.accountsCache : [];
+    const previousValue = select.value;
+    const defaultLabel = this.translate("settings.reset.accountOptionCurrent", "当前激活账户");
+
+    const optionHtml = [
+      `<option value="">${this.escapeHtml(defaultLabel)}</option>`,
+      ...accounts.map((account) => {
+        const providerCode = typeof account.provider === "string" && account.provider
+          ? account.provider.toUpperCase()
+          : "OKX";
+        const providerLabel = this.translate(`accounts.providers.${account.provider}`, providerCode);
+        const baseName = account.name ? String(account.name) : providerLabel;
+        const label = providerLabel ? `${baseName} · ${providerLabel}` : baseName;
+        return `<option value="${account.id}">${this.escapeHtml(label)}</option>`;
+      }),
+    ];
+
+    select.innerHTML = optionHtml.join("");
+
+    const hasPrevious = previousValue && accounts.some((account) => String(account.id) === previousValue);
+    if (hasPrevious) {
+      select.value = previousValue;
+      return;
+    }
+
+    if (this.activeAccountId) {
+      select.value = String(this.activeAccountId);
+    } else {
+      select.value = "";
     }
   }
 
@@ -8833,8 +8979,22 @@ class TradingMonitor {
         console.warn("刷新币种筛选器失败:", filterError);
       }
       
+      // 切换账户后强制刷新所有数据，包括空持仓
       try {
-        await this.refreshAll();
+        // 清除之前账户的持仓缓存，确保切换账户后能正确显示新账户的持仓状态
+        this.lastPositionsData = null;
+        this.lastPositionsTimestamp = 0;
+        // 强制更新持仓，使用 forceUpdate 选项避免被防闪烁逻辑拦截
+        await this.loadPositions({ forceUpdate: true });
+        // 刷新其他数据
+        await Promise.all([
+          this.loadAccountSummary(),
+          this.loadOpenOrders(),
+          this.loadTrades(),
+          this.loadTradeLogs(),
+          this.loadDecisions(),
+          this.loadDecisionRequests(),
+        ]);
       } catch (refreshError) {
         console.warn("切换账户后刷新仪表盘失败", refreshError);
       }
