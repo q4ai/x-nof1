@@ -9,6 +9,7 @@ import { createClient } from "@libsql/client";
 import { getQuantoMultiplier } from "../utils/contractUtils";
 import { createLogger } from "../utils/loggerUtils";
 import {
+	createExchangeClient,
 	createExchangeClientForAccount,
 	createExchangeClientFromActiveAccount,
 } from "./okxClient";
