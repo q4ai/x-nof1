@@ -543,13 +543,40 @@ export async function executeOpenPosition({
     logger.info(`开仓 ${symbol} ${side === "long" ? "做多" : "做空"} ${Math.abs(size)}${unitLabel} (杠杆${leverage}x)`);
     
     //  下单（市价单或限价单）
-    const order = await client.placeOrder({
-      contract,
-      size,
-      price: orderType === "limit" ? executionPrice : 0,
-      positionSide: side,
-      marginMode,
-    });
+    let order;
+    try {
+      order = await client.placeOrder({
+        contract,
+        size,
+        price: orderType === "limit" ? executionPrice : 0,
+        positionSide: side,
+        marginMode,
+      });
+    } catch (error: any) {
+      // 针对 Binance 精度错误 (-1111) 的自动降级重试
+      // 如果 API 提示精度过高，且数量大于 1，尝试取整后重试
+      if (
+        error.message && 
+        (error.message.includes("-1111") || error.message.includes("Precision is over the maximum")) &&
+        Math.abs(size) >= 1 && 
+        !Number.isInteger(Math.abs(size))
+      ) {
+        logger.warn(`下单失败: ${error.message}。尝试降低精度（取整）重试...`);
+        const newSize = Math.trunc(size); // 取整，保留符号
+        
+        order = await client.placeOrder({
+          contract,
+          size: newSize,
+          price: orderType === "limit" ? executionPrice : 0,
+          positionSide: side,
+          marginMode,
+        });
+        logger.info(`降级重试成功: 使用数量 ${newSize}`);
+      } else {
+        throw error;
+      }
+    }
+
     const okxRawRequest = order?.raw?.request;
     const okxRawResponse = order?.raw?.response;
     

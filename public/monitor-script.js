@@ -435,6 +435,7 @@ class TradingMonitor {
     this.currentSymbolFilter = "all"; // 当前选中的币种筛选：'all' 或任务实例ID
     this.currentFilterInstanceId = null; // 当前筛选的任务实例ID
     this.currentFilterAccountId = null; // 当前筛选的任务实例对应的账户ID
+    this.activeAccountId = null; // 当前活跃账户ID
     this.accountInstancesCache = []; // 当前账户的任务实例缓存
     this.chart = null;
     this.candleSeries = null;
@@ -8315,6 +8316,11 @@ class TradingMonitor {
       const data = await response.json();
       const accounts = data.accounts || [];
       this.accountsCache = accounts;
+
+      // 更新当前活跃账户ID
+      const activeAccount = accounts.find(acc => acc.is_active);
+      this.activeAccountId = activeAccount ? activeAccount.id : null;
+
       this.updateAccountSwitcherDisplay();
       
       // 账户数据更新后，刷新 AI 图标显示（根据当前账户的任务状态）

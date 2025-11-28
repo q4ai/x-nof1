@@ -435,7 +435,17 @@ async function performExchangeConnectionTest(payload: ExchangeTestPayload): Prom
 }
 
 async function runAccountConnectionTest(options: AccountConnectionTestOptions): Promise<AccountConnectionTestResult> {
-  const proxyCheck = normalizeProxyUrl(options.proxyUrl);
+  let proxyUrl = options.proxyUrl;
+
+  // 如果没有提供代理，尝试从系统配置获取
+  if (!proxyUrl) {
+    const systemProxy = await getSystemConfigString("HTTP_PROXY_URL");
+    if (systemProxy) {
+      proxyUrl = systemProxy;
+    }
+  }
+
+  const proxyCheck = normalizeProxyUrl(proxyUrl);
   if (!proxyCheck.ok) {
     return { success: false, error: proxyCheck.error };
   }
