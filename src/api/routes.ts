@@ -547,7 +547,17 @@ async function getActiveAccountSwitchTimestamp(): Promise<string | null> {
 
 async function recordActiveAccountSnapshot(snapshotTimestamp: string): Promise<void> {
   try {
-    const client = createOkxClient();
+    // 获取当前活跃账户配置，确保使用正确的账户客户端和ID
+    const { getActiveAccount, getAccountById } = await import("../services/accountConfigService");
+    const { createExchangeClientForAccount } = await import("../services/okxClient");
+    const activeAccount = await getActiveAccount();
+
+    if (!activeAccount) {
+      logger.warn("记录账户切换快照时未找到活跃账户，已跳过");
+      return;
+    }
+
+    const client = createExchangeClientForAccount(activeAccount);
     const account = await client.getFuturesAccount();
 
     const accountTotal = Number.parseFloat(account.total || "0");
@@ -556,12 +566,12 @@ async function recordActiveAccountSnapshot(snapshotTimestamp: string): Promise<v
     const totalBalance = accountTotal + unrealisedPnl;
 
     await dbClient.execute({
-      sql: `INSERT INTO account_history (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent)
-            VALUES (?, ?, ?, ?, ?, ?)`,
-      args: [snapshotTimestamp, totalBalance, availableBalance, unrealisedPnl, 0, 0],
+      sql: `INSERT INTO account_history (timestamp, total_value, available_cash, unrealized_pnl, realized_pnl, return_percent, account_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      args: [snapshotTimestamp, totalBalance, availableBalance, unrealisedPnl, 0, 0, activeAccount.id],
     });
 
-    logger.info("已记录账户切换快照，用于刷新统计数据");
+    logger.info(`已记录账户 ${activeAccount.id} 的切换快照，用于刷新统计数据`);
   } catch (error) {
     logger.error("记录账户切换快照失败:", error);
   }
@@ -2236,7 +2246,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
       }
       
       const account = await okxClient.getFuturesAccount();
-      const activeSince = await getActiveAccountSwitchTimestamp();
+      // const activeSince = await getActiveAccountSwitchTimestamp();
       
       const accountId = activeAccount ? activeAccount.id : null;
 
@@ -2248,11 +2258,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
         historyArgs.push(accountId);
       } else {
         historySql += "(account_id IS NULL OR account_id = 'default') ";
-      }
-
-      if (activeSince) {
-        historySql += "AND timestamp >= ? ";
-        historyArgs.push(activeSince);
       }
       
       historySql += "ORDER BY timestamp ASC";
@@ -2289,11 +2294,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
           tradesArgs.push(accountId);
         } else {
           tradesSql += "AND (account_id IS NULL OR account_id = 'default') ";
-        }
-
-        if (activeSince) {
-          tradesSql += "AND timestamp >= ? ";
-          tradesArgs.push(activeSince);
         }
 
         const closedTradesResult = await dbClient.execute({ sql: tradesSql, args: tradesArgs });
