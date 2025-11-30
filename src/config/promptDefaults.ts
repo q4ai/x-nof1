@@ -9,7 +9,10 @@ function loadUltraShortPrompts(): StrategyPrompts {
 		const profile = getStrategyProfile("ultra-short");
 		return profile.prompts;
 	} catch (error) {
-		console.warn("[promptDefaults] 加载超短线策略模板失败，将使用空字符串", error);
+		console.warn(
+			"[promptDefaults] 加载超短线策略模板失败，将使用空字符串",
+			error,
+		);
 		return {
 			entryPrompt: "",
 			exitPrompt: "",

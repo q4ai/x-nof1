@@ -762,6 +762,10 @@
                   <img src="/static/icons/bitget.png" alt="Bitget">
                   <span data-i18n="accounts.providers.bitget">Bitget</span>
                 </div>
+                <div class="provider-option-compact" data-value="gate">
+                  <img src="/static/icons/gate.png" alt="Gate.io">
+                  <span data-i18n="accounts.providers.gate">Gate.io</span>
+                </div>
               </div>
             </div>
           </div>
@@ -841,6 +845,29 @@
                   <input type="password" id="account-edit-bitget-passphrase" placeholder="Bitget Passphrase" data-i18n-placeholder="accounts.form.bitgetPassphrasePlaceholder" autocomplete="off" />
                   <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
                 </div>
+              </div>
+            </div>
+
+            <div class="exchange-panel" data-account-panel="gate">
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.gateApiKey">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-gate-key" placeholder="Gate.io API Key" data-i18n-placeholder="accounts.form.gateApiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.gateApiSecret">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-gate-secret" placeholder="Gate.io API Secret" data-i18n-placeholder="accounts.form.gateApiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="account-edit-gate-testnet" />
+                  <span data-i18n="accounts.form.gateUseTestnet">Use Testnet</span>
+                </label>
               </div>
             </div>
 

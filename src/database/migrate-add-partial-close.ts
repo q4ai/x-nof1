@@ -24,64 +24,63 @@
 import { createClient } from "@libsql/client";
 
 type TableInfoRow = {
-  name?: string | null;
+	name?: string | null;
 };
 
 function isTableInfoRow(row: unknown): row is TableInfoRow {
-  return Boolean(row && typeof row === "object" && "name" in row);
+	return Boolean(row && typeof row === "object" && "name" in row);
 }
 
 async function migrate() {
-  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
-  const dbClient = createClient({
-    url: dbUrl,
-  });
+	const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
+	const dbClient = createClient({
+		url: dbUrl,
+	});
 
-  try {
-    console.log("开始数据库迁移...");
+	try {
+		console.log("开始数据库迁移...");
 
-    // 检查字段是否已存在
-    const tableInfo = await dbClient.execute({
-      sql: "PRAGMA table_info(positions)",
-      args: [],
-    });
+		// 检查字段是否已存在
+		const tableInfo = await dbClient.execute({
+			sql: "PRAGMA table_info(positions)",
+			args: [],
+		});
 
-    const hasPartialCloseField = tableInfo.rows.some(
-      (row) => isTableInfoRow(row) && row.name === "partial_close_percentage"
-    );
+		const hasPartialCloseField = tableInfo.rows.some(
+			(row) => isTableInfoRow(row) && row.name === "partial_close_percentage",
+		);
 
-    if (hasPartialCloseField) {
-      console.log("✅ partial_close_percentage 字段已存在，跳过迁移");
-      return;
-    }
+		if (hasPartialCloseField) {
+			console.log("✅ partial_close_percentage 字段已存在，跳过迁移");
+			return;
+		}
 
-    // 添加新字段
-    await dbClient.execute({
-      sql: "ALTER TABLE positions ADD COLUMN partial_close_percentage REAL DEFAULT 0",
-      args: [],
-    });
+		// 添加新字段
+		await dbClient.execute({
+			sql: "ALTER TABLE positions ADD COLUMN partial_close_percentage REAL DEFAULT 0",
+			args: [],
+		});
 
-    console.log("✅ 成功添加 partial_close_percentage 字段");
+		console.log("✅ 成功添加 partial_close_percentage 字段");
 
-    // 验证字段已添加
-    const verifyResult = await dbClient.execute({
-      sql: "SELECT partial_close_percentage FROM positions LIMIT 1",
-      args: [],
-    });
+		// 验证字段已添加
+		const verifyResult = await dbClient.execute({
+			sql: "SELECT partial_close_percentage FROM positions LIMIT 1",
+			args: [],
+		});
 
-    console.log("✅ 字段验证通过");
-    console.log("迁移完成！");
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      console.error("❌ 迁移失败:", error.message);
-    } else {
-      console.error("❌ 迁移失败: 未知错误", error);
-    }
-    process.exit(1);
-  } finally {
-    dbClient.close();
-  }
+		console.log("✅ 字段验证通过");
+		console.log("迁移完成！");
+	} catch (error: unknown) {
+		if (error instanceof Error) {
+			console.error("❌ 迁移失败:", error.message);
+		} else {
+			console.error("❌ 迁移失败: 未知错误", error);
+		}
+		process.exit(1);
+	} finally {
+		dbClient.close();
+	}
 }
 
 migrate();
-

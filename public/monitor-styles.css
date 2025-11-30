@@ -3348,6 +3348,11 @@ span.test-result {
   color: #00f0ff;
 }
 
+.account-badge.badge-gate {
+  background: rgba(45, 136, 255, 0.2);
+  color: #2d88ff;
+}
+
 .account-badge.badge-paper {
   background: rgba(168, 85, 247, 0.2);
   color: #a855f7;

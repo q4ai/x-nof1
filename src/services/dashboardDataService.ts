@@ -9,7 +9,6 @@ import { createClient } from "@libsql/client";
 import { getQuantoMultiplier } from "../utils/contractUtils";
 import { createLogger } from "../utils/loggerUtils";
 import {
-	createExchangeClient,
 	createExchangeClientForAccount,
 	createExchangeClientFromActiveAccount,
 } from "./okxClient";
@@ -207,7 +206,7 @@ export async function getSymbolPrices(
 		return [];
 	}
 
-	const exchangeClient = createExchangeClient();
+	const exchangeClient = await createExchangeClientFromActiveAccount();
 	const uniqueSymbols = Array.from(
 		new Set(
 			symbols
@@ -218,60 +217,52 @@ export async function getSymbolPrices(
 		),
 	);
 
-	const priceEntries: PricePoint[] = [];
-
 	try {
-		// 尝试批量获取所有 ticker，避免触发 API 频率限制
+		// 仅使用批量接口，彻底避免逐个请求触发限流
 		const allTickers = await exchangeClient.getAllSwapTickers();
 		const tickerMap = new Map<string, number>();
-		
+
 		for (const ticker of allTickers) {
-			// getAllSwapTickers 返回的 symbol 是基础币种 (如 BTC)
-			tickerMap.set(ticker.symbol.toUpperCase(), Number.parseFloat(ticker.price));
+			const rawSymbol =
+				typeof ticker.symbol === "string"
+					? ticker.symbol.trim().toUpperCase()
+					: "";
+			if (!rawSymbol) {
+				continue;
+			}
+			const priceValue = Number.parseFloat(
+				typeof ticker.price === "string"
+					? ticker.price
+					: ticker.price !== undefined
+						? String(ticker.price)
+						: "0",
+			);
+			if (!Number.isFinite(priceValue)) {
+				continue;
+			}
+			tickerMap.set(rawSymbol, priceValue);
 		}
 
-		for (const symbol of uniqueSymbols) {
-			const price = tickerMap.get(symbol);
-			if (price !== undefined) {
-				priceEntries.push({ symbol, price });
-			} else {
-				// 如果批量获取中没有找到，尝试单独获取（作为回退，但通常不应该发生）
-				// 或者直接返回 0，避免再次触发限流
-				// 这里选择尝试单独获取，但为了安全起见，可以记录日志
-				// logger.warn(`批量获取未找到 ${symbol} 价格，尝试单独获取`);
-				try {
-					const contract = `${symbol}_USDT`;
-					const ticker = await exchangeClient.getFuturesTicker(contract);
-					const last = Number.parseFloat(ticker.last || "0");
-					priceEntries.push({ symbol, price: Number.isFinite(last) ? last : 0 });
-				} catch (error) {
-					// 忽略单独获取的错误，避免刷屏
-					priceEntries.push({ symbol, price: 0 });
-				}
+		const supportedSymbols = new Set(tickerMap.keys());
+		const validSymbols = uniqueSymbols.filter((symbol) => supportedSymbols.has(symbol));
+		if (validSymbols.length !== uniqueSymbols.length) {
+			const missingSymbols = uniqueSymbols.filter((symbol) => !supportedSymbols.has(symbol));
+			if (missingSymbols.length) {
+				logger.debug?.(
+					`过滤掉 ${missingSymbols.length} 个不受当前交易所支持的标的: ${missingSymbols.slice(0, 20).join(",")}`,
+				);
 			}
 		}
+
+		return validSymbols.map((symbol) => {
+			const price = tickerMap.get(symbol);
+			return { symbol, price: price ?? 0 } satisfies PricePoint;
+		});
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
-		logger.error(`批量获取价格失败: ${message}，尝试降级为单独获取`);
-		
-		// 降级方案：并发单独获取（注意：这可能会再次触发限流）
-		await Promise.all(
-			uniqueSymbols.map(async (symbol) => {
-				const contract = `${symbol}_USDT`;
-				try {
-					const ticker = await exchangeClient.getFuturesTicker(contract);
-					const last = Number.parseFloat(ticker.last || "0");
-					priceEntries.push({ symbol, price: Number.isFinite(last) ? last : 0 });
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					logger.error(`获取 ${symbol} 价格失败: ${message}`);
-					priceEntries.push({ symbol, price: 0 });
-				}
-			}),
-		);
+		logger.error(`批量获取价格失败: ${message}，已返回默认价格 0`);
+		return uniqueSymbols.map((symbol) => ({ symbol, price: 0 }));
 	}
-
-	return priceEntries;
 }
 
 function normalizeCandleEntry(entry: unknown): CandlePoint | null {
@@ -338,7 +329,7 @@ export async function getCandles(
 	interval: string,
 	limit: number,
 ): Promise<CandlePoint[]> {
-	const exchangeClient = createExchangeClient();
+	const exchangeClient = await createExchangeClientFromActiveAccount();
 	const contract = `${symbol}_USDT`;
 	const raw = await exchangeClient.getFuturesCandles(contract, interval, limit);
 

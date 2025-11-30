@@ -126,11 +126,11 @@
 		"account": {
 			"title": "账户配置"
 		},
-			"switcher": {
-				"label": "账户",
-				"noActive": "未选择账户",
-				"empty": "暂无其他账户"
-			},
+		"switcher": {
+			"label": "账户",
+			"noActive": "未选择账户",
+			"empty": "暂无其他账户"
+		},
 		"accountsList": {
 			"title": "账户管理"
 		},
@@ -389,7 +389,8 @@
 		"providers": {
 			"okx": "OKX",
 			"binance": "Binance",
-			"bitget": "Bitget"
+			"bitget": "Bitget",
+			"gate": "Gate.io"
 		},
 		"form": {
 			"name": "账户名称 <span class=\"required\">*</span>",
@@ -413,6 +414,11 @@
 			"bitgetApiSecretPlaceholder": "输入 Bitget API Secret",
 			"bitgetPassphrase": "API Passphrase <span class=\"required\">*</span>",
 			"bitgetPassphrasePlaceholder": "输入 Bitget Passphrase",
+			"gateApiKey": "API Key <span class=\"required\">*</span>",
+			"gateApiKeyPlaceholder": "输入 Gate.io API Key",
+			"gateApiSecret": "API Secret <span class=\"required\">*</span>",
+			"gateApiSecretPlaceholder": "输入 Gate.io API Secret",
+			"gateUseTestnet": "使用测试网",
 			"proxyUrl": "代理地址 (可选)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
 			"testConnection": "测试连接",
@@ -460,7 +466,8 @@
 				"missingName": "请填写账户名称",
 				"missingOkx": "请填写完整的 OKX 凭证",
 				"missingBinance": "请填写完整的 Binance 凭证",
-				"missingBitget": "请填写完整的 Bitget 凭证"
+				"missingBitget": "请填写完整的 Bitget 凭证",
+				"missingGate": "请填写完整的 Gate.io 凭证"
 			}
 		}
 	},

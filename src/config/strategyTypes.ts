@@ -1,4 +1,10 @@
-export type TradingStrategy = "conservative" | "balanced" | "aggressive" | "ultra-short" | "swing-trend" | "dca";
+export type TradingStrategy =
+	| "conservative"
+	| "balanced"
+	| "aggressive"
+	| "ultra-short"
+	| "swing-trend"
+	| "dca";
 
 export const SUPPORTED_STRATEGY_LANGUAGES = ["en", "zh", "ja"] as const;
 
@@ -15,7 +21,10 @@ export const ALL_TRADING_STRATEGIES: TradingStrategy[] = [
 	"dca",
 ];
 
-const STRATEGY_LABELS: Record<StrategyLanguage, Record<TradingStrategy, string>> = {
+const STRATEGY_LABELS: Record<
+	StrategyLanguage,
+	Record<TradingStrategy, string>
+> = {
 	en: {
 		conservative: "Capital Preservation",
 		balanced: "Balanced Expansion",
@@ -42,13 +51,18 @@ const STRATEGY_LABELS: Record<StrategyLanguage, Record<TradingStrategy, string>>
 	},
 };
 
-export const TRADING_STRATEGY_LABELS = STRATEGY_LABELS[DEFAULT_STRATEGY_LANGUAGE];
+export const TRADING_STRATEGY_LABELS =
+	STRATEGY_LABELS[DEFAULT_STRATEGY_LANGUAGE];
 
-export function isSupportedStrategyLanguage(language: string): language is StrategyLanguage {
+export function isSupportedStrategyLanguage(
+	language: string,
+): language is StrategyLanguage {
 	return SUPPORTED_STRATEGY_LANGUAGES.includes(language as StrategyLanguage);
 }
 
-export function normalizeStrategyLanguage(language?: string | null): StrategyLanguage {
+export function normalizeStrategyLanguage(
+	language?: string | null,
+): StrategyLanguage {
 	if (typeof language !== "string") {
 		return DEFAULT_STRATEGY_LANGUAGE;
 	}
@@ -66,6 +80,13 @@ export function normalizeStrategyLanguage(language?: string | null): StrategyLan
 	return DEFAULT_STRATEGY_LANGUAGE;
 }
 
-export function getStrategyLabel(strategy: TradingStrategy, language: StrategyLanguage = DEFAULT_STRATEGY_LANGUAGE): string {
-	return STRATEGY_LABELS[language]?.[strategy] ?? STRATEGY_LABELS[DEFAULT_STRATEGY_LANGUAGE][strategy] ?? strategy;
+export function getStrategyLabel(
+	strategy: TradingStrategy,
+	language: StrategyLanguage = DEFAULT_STRATEGY_LANGUAGE,
+): string {
+	return (
+		STRATEGY_LABELS[language]?.[strategy] ??
+		STRATEGY_LABELS[DEFAULT_STRATEGY_LANGUAGE][strategy] ??
+		strategy
+	);
 }

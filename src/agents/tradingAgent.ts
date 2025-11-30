@@ -16,21 +16,28 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { createOpenAI } from "@ai-sdk/openai";
 /**
  * 交易 Agent 配置（仅依赖策略提示词）
  */
 import { Agent, Memory } from "@voltagent/core";
 import { LibSQLMemoryAdapter } from "@voltagent/libsql";
 import { createPinoLogger } from "@voltagent/logger";
-import { createOpenAI } from "@ai-sdk/openai";
-import * as tradingTools from "../tools/trading";
-import { getLocalizedPromptTemplate } from "../prompts/templateLoader";
-import { formatChinaTime } from "../utils/timeUtils";
+import {
+	DEFAULT_PROMPT_ENTRY,
+	DEFAULT_PROMPT_EXIT,
+	DEFAULT_PROMPT_VARIABLES,
+} from "../config/promptDefaults";
 import { RISK_PARAMS, getConfigStringValue } from "../config/riskParams.new";
-import { getStrategyProfile } from "../strategies";
-import type { StrategyLanguage, TradingStrategy } from "../config/strategyTypes";
-import { DEFAULT_PROMPT_ENTRY, DEFAULT_PROMPT_EXIT, DEFAULT_PROMPT_VARIABLES } from "../config/promptDefaults";
+import type {
+	StrategyLanguage,
+	TradingStrategy,
+} from "../config/strategyTypes";
+import { getLocalizedPromptTemplate } from "../prompts/templateLoader";
 import { StrategyFileManager } from "../services/strategyFileManager";
+import { getStrategyProfile } from "../strategies";
+import * as tradingTools from "../tools/trading";
+import { formatChinaTime } from "../utils/timeUtils";
 
 const logger = createPinoLogger({
 	name: "trading-agent",
@@ -47,7 +54,9 @@ async function getPromptLanguage(): Promise<StrategyLanguage> {
 		const { getConfigValue } = await import("../database/init-config");
 		const language = await getConfigValue("UI_LANGUAGE");
 		if (language) {
-			const { normalizeStrategyLanguage } = await import("../config/strategyTypes");
+			const { normalizeStrategyLanguage } = await import(
+				"../config/strategyTypes"
+			);
 			return normalizeStrategyLanguage(language);
 		}
 	} catch (error) {
@@ -61,7 +70,9 @@ function getActiveStrategyName(): string {
 	return name?.trim() || "custom";
 }
 
-async function loadInstructionsTemplate(language: StrategyLanguage): Promise<string> {
+async function loadInstructionsTemplate(
+	language: StrategyLanguage,
+): Promise<string> {
 	const cached = instructionsTemplateCache.get(language);
 	if (cached) {
 		return cached;
@@ -89,37 +100,46 @@ export interface AccountRiskConfig {
 
 let accountRiskConfigCache: AccountRiskConfig | null = null;
 
-export async function getAccountRiskConfig(forceReload = false): Promise<AccountRiskConfig> {
+export async function getAccountRiskConfig(
+	forceReload = false,
+): Promise<AccountRiskConfig> {
 	if (!forceReload && accountRiskConfigCache) {
 		return accountRiskConfigCache;
 	}
 
 	try {
 		const { getConfigValue } = await import("../database/init-config");
-        const { getActiveAccount } = await import("../services/accountConfigService");
-        
-        const activeAccount = await getActiveAccount();
+		const { getActiveAccount } = await import(
+			"../services/accountConfigService"
+		);
+
+		const activeAccount = await getActiveAccount();
 		const syncFlag = await getConfigValue("SYNC_CONFIG_ON_STARTUP");
-		const syncOnStartup = (syncFlag ?? process.env.SYNC_CONFIG_ON_STARTUP) === "true";
+		const syncOnStartup =
+			(syncFlag ?? process.env.SYNC_CONFIG_ON_STARTUP) === "true";
 
-        let stopLossUsdt: number | undefined;
-        let takeProfitUsdt: number | undefined;
+		let stopLossUsdt: number | undefined;
+		let takeProfitUsdt: number | undefined;
 
-        if (activeAccount) {
-            // If active account exists, use its values. 0 or null/undefined means disabled.
-            stopLossUsdt = activeAccount.stop_loss_usdt || undefined;
-            takeProfitUsdt = activeAccount.take_profit_usdt || undefined;
-        } else {
-            // Fallback to legacy env/db config
-            const stopLossStr = await getConfigValue("ACCOUNT_STOP_LOSS_USDT");
-            const takeProfitStr = await getConfigValue("ACCOUNT_TAKE_PROFIT_USDT");
-            
-            const sl = Number.parseFloat(stopLossStr || process.env.ACCOUNT_STOP_LOSS_USDT || "50");
-            stopLossUsdt = Number.isFinite(sl) ? sl : 50;
-            
-            const tp = Number.parseFloat(takeProfitStr || process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000");
-            takeProfitUsdt = Number.isFinite(tp) ? tp : 20000;
-        }
+		if (activeAccount) {
+			// If active account exists, use its values. 0 or null/undefined means disabled.
+			stopLossUsdt = activeAccount.stop_loss_usdt || undefined;
+			takeProfitUsdt = activeAccount.take_profit_usdt || undefined;
+		} else {
+			// Fallback to legacy env/db config
+			const stopLossStr = await getConfigValue("ACCOUNT_STOP_LOSS_USDT");
+			const takeProfitStr = await getConfigValue("ACCOUNT_TAKE_PROFIT_USDT");
+
+			const sl = Number.parseFloat(
+				stopLossStr || process.env.ACCOUNT_STOP_LOSS_USDT || "50",
+			);
+			stopLossUsdt = Number.isFinite(sl) ? sl : 50;
+
+			const tp = Number.parseFloat(
+				takeProfitStr || process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000",
+			);
+			takeProfitUsdt = Number.isFinite(tp) ? tp : 20000;
+		}
 
 		accountRiskConfigCache = {
 			stopLossUsdt,
@@ -127,11 +147,16 @@ export async function getAccountRiskConfig(forceReload = false): Promise<Account
 			syncOnStartup,
 		};
 	} catch (error) {
-		const fallbackMessage = error instanceof Error ? error.message : String(error);
+		const fallbackMessage =
+			error instanceof Error ? error.message : String(error);
 		logger.warn(`读取账户风控配置失败，回落使用环境变量: ${fallbackMessage}`);
 
-		const stopLossEnv = Number.parseFloat(process.env.ACCOUNT_STOP_LOSS_USDT || "50");
-		const takeProfitEnv = Number.parseFloat(process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000");
+		const stopLossEnv = Number.parseFloat(
+			process.env.ACCOUNT_STOP_LOSS_USDT || "50",
+		);
+		const takeProfitEnv = Number.parseFloat(
+			process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000",
+		);
 
 		accountRiskConfigCache = {
 			stopLossUsdt: Number.isFinite(stopLossEnv) ? stopLossEnv : 50,
@@ -148,8 +173,12 @@ function getRiskConfigSnapshot(): AccountRiskConfig {
 		return accountRiskConfigCache;
 	}
 
-	const stopLossEnv = Number.parseFloat(process.env.ACCOUNT_STOP_LOSS_USDT || "50");
-	const takeProfitEnv = Number.parseFloat(process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000");
+	const stopLossEnv = Number.parseFloat(
+		process.env.ACCOUNT_STOP_LOSS_USDT || "50",
+	);
+	const takeProfitEnv = Number.parseFloat(
+		process.env.ACCOUNT_TAKE_PROFIT_USDT || "20000",
+	);
 	const syncFlag = process.env.SYNC_CONFIG_ON_STARTUP === "true";
 
 	return {
@@ -163,7 +192,9 @@ function formatNumber(value: number, decimals = 0): string {
 	if (!Number.isFinite(value)) {
 		return "0";
 	}
-	return decimals === 0 ? Math.round(value).toString() : value.toFixed(decimals);
+	return decimals === 0
+		? Math.round(value).toString()
+		: value.toFixed(decimals);
 }
 
 function normalizeTemplateInput(value: string): string {
@@ -178,7 +209,10 @@ export interface PromptSections {
 	variables: string;
 }
 
-function applyTemplateVariables(template: string, variables: PromptVariables): string {
+function applyTemplateVariables(
+	template: string,
+	variables: PromptVariables,
+): string {
 	return template.replace(/{{\s*([A-Z0-9_]+)\s*}}/g, (match, key: string) => {
 		if (Object.hasOwn(variables, key)) {
 			return variables[key];
@@ -196,25 +230,46 @@ function buildBasePromptVariables(
 ): PromptVariables {
 	const symbolSeparator = language === "zh" ? "、" : ", ";
 	// 优先使用策略中配置的交易币种，若无则回退到全局配置
-	const symbols = tradingSymbols && tradingSymbols.length > 0 ? tradingSymbols : RISK_PARAMS.TRADING_SYMBOLS;
+	const symbols =
+		tradingSymbols && tradingSymbols.length > 0
+			? tradingSymbols
+			: RISK_PARAMS.TRADING_SYMBOLS;
 	const symbolList = symbols.join(symbolSeparator);
 
 	// 支持传入 strategy 对象或仅传入 strategyId
-	const strategyObj = typeof strategyIdOrObj === "object" && strategyIdOrObj !== null ? strategyIdOrObj : null;
+	const strategyObj =
+		typeof strategyIdOrObj === "object" && strategyIdOrObj !== null
+			? strategyIdOrObj
+			: null;
 	const strategyParams = strategyObj?.params ?? null;
 
 	// 基础变量（来自全局与账户风控）
 	const base: PromptVariables = {
-		STRATEGY_ID: typeof strategyIdOrObj === "string" ? strategyIdOrObj : (strategyObj?.meta?.name ?? "custom"),
+		STRATEGY_ID:
+			typeof strategyIdOrObj === "string"
+				? strategyIdOrObj
+				: (strategyObj?.meta?.name ?? "custom"),
 		TRADING_INTERVAL_MINUTES: formatNumber(intervalMinutes, 0),
 		MAX_HOLDING_HOURS: formatNumber(RISK_PARAMS.MAX_HOLDING_HOURS, 0),
 		MIN_HOLDING_MINUTES: formatNumber(RISK_PARAMS.MIN_HOLDING_MINUTES, 0),
 		MAX_HOLDING_CYCLES: formatNumber(RISK_PARAMS.MAX_HOLDING_CYCLES, 0),
 		MAX_POSITIONS: formatNumber(RISK_PARAMS.MAX_POSITIONS, 0),
-		EXTREME_STOP_LOSS_PERCENT: formatNumber(RISK_PARAMS.EXTREME_STOP_LOSS_PERCENT, 0),
-		ACCOUNT_STOP_LOSS_USDT: riskConfig.stopLossUsdt !== undefined ? formatNumber(riskConfig.stopLossUsdt, 0) : "Disabled",
-		ACCOUNT_TAKE_PROFIT_USDT: riskConfig.takeProfitUsdt !== undefined ? formatNumber(riskConfig.takeProfitUsdt, 0) : "Disabled",
-		ACCOUNT_DRAWDOWN_WARNING_PERCENT: formatNumber(RISK_PARAMS.ACCOUNT_DRAWDOWN_WARNING_PERCENT, 0),
+		EXTREME_STOP_LOSS_PERCENT: formatNumber(
+			RISK_PARAMS.EXTREME_STOP_LOSS_PERCENT,
+			0,
+		),
+		ACCOUNT_STOP_LOSS_USDT:
+			riskConfig.stopLossUsdt !== undefined
+				? formatNumber(riskConfig.stopLossUsdt, 0)
+				: "Disabled",
+		ACCOUNT_TAKE_PROFIT_USDT:
+			riskConfig.takeProfitUsdt !== undefined
+				? formatNumber(riskConfig.takeProfitUsdt, 0)
+				: "Disabled",
+		ACCOUNT_DRAWDOWN_WARNING_PERCENT: formatNumber(
+			RISK_PARAMS.ACCOUNT_DRAWDOWN_WARNING_PERCENT,
+			0,
+		),
 		ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT: formatNumber(
 			RISK_PARAMS.ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT,
 			0,
@@ -232,41 +287,98 @@ function buildBasePromptVariables(
 			const p: any = strategyParams;
 
 			// 使用策略提供的 intervalMinutes 覆盖（如果存在且为有效数值）
-			if (p.intervalMinutes !== undefined && Number.isFinite(Number(p.intervalMinutes))) {
-				base.TRADING_INTERVAL_MINUTES = formatNumber(Number(p.intervalMinutes), 0);
+			if (
+				p.intervalMinutes !== undefined &&
+				Number.isFinite(Number(p.intervalMinutes))
+			) {
+				base.TRADING_INTERVAL_MINUTES = formatNumber(
+					Number(p.intervalMinutes),
+					0,
+				);
 				// 重新计算 holding cycles
-				if (p.maxHoldingHours !== undefined && Number.isFinite(Number(p.maxHoldingHours))) {
-					const maxCycles = Math.floor((Number(p.maxHoldingHours) * 60) / Number(p.intervalMinutes || intervalMinutes));
+				if (
+					p.maxHoldingHours !== undefined &&
+					Number.isFinite(Number(p.maxHoldingHours))
+				) {
+					const maxCycles = Math.floor(
+						(Number(p.maxHoldingHours) * 60) /
+							Number(p.intervalMinutes || intervalMinutes),
+					);
 					base.MAX_HOLDING_CYCLES = String(maxCycles);
 				}
 			}
 
-			if (p.maxHoldingHours !== undefined && Number.isFinite(Number(p.maxHoldingHours))) {
+			if (
+				p.maxHoldingHours !== undefined &&
+				Number.isFinite(Number(p.maxHoldingHours))
+			) {
 				base.MAX_HOLDING_HOURS = formatNumber(Number(p.maxHoldingHours), 0);
 			}
-			if (p.minHoldingMinutes !== undefined && Number.isFinite(Number(p.minHoldingMinutes))) {
+			if (
+				p.minHoldingMinutes !== undefined &&
+				Number.isFinite(Number(p.minHoldingMinutes))
+			) {
 				base.MIN_HOLDING_MINUTES = formatNumber(Number(p.minHoldingMinutes), 0);
 			}
-			if (p.maxPositions !== undefined && Number.isFinite(Number(p.maxPositions))) {
+			if (
+				p.maxPositions !== undefined &&
+				Number.isFinite(Number(p.maxPositions))
+			) {
 				base.MAX_POSITIONS = formatNumber(Number(p.maxPositions), 0);
 			}
-			if (p.extremeStopLossPercent !== undefined && Number.isFinite(Number(p.extremeStopLossPercent))) {
-				base.EXTREME_STOP_LOSS_PERCENT = formatNumber(Number(p.extremeStopLossPercent), 0);
+			if (
+				p.extremeStopLossPercent !== undefined &&
+				Number.isFinite(Number(p.extremeStopLossPercent))
+			) {
+				base.EXTREME_STOP_LOSS_PERCENT = formatNumber(
+					Number(p.extremeStopLossPercent),
+					0,
+				);
 			}
-			if (p.accountStopLoss !== undefined && Number.isFinite(Number(p.accountStopLoss))) {
-				base.ACCOUNT_STOP_LOSS_USDT = formatNumber(Number(p.accountStopLoss), 0);
+			if (
+				p.accountStopLoss !== undefined &&
+				Number.isFinite(Number(p.accountStopLoss))
+			) {
+				base.ACCOUNT_STOP_LOSS_USDT = formatNumber(
+					Number(p.accountStopLoss),
+					0,
+				);
 			}
-			if (p.accountTakeProfit !== undefined && Number.isFinite(Number(p.accountTakeProfit))) {
-				base.ACCOUNT_TAKE_PROFIT_USDT = formatNumber(Number(p.accountTakeProfit), 0);
+			if (
+				p.accountTakeProfit !== undefined &&
+				Number.isFinite(Number(p.accountTakeProfit))
+			) {
+				base.ACCOUNT_TAKE_PROFIT_USDT = formatNumber(
+					Number(p.accountTakeProfit),
+					0,
+				);
 			}
-			if (p.drawdownWarning !== undefined && Number.isFinite(Number(p.drawdownWarning))) {
-				base.ACCOUNT_DRAWDOWN_WARNING_PERCENT = formatNumber(Number(p.drawdownWarning), 0);
+			if (
+				p.drawdownWarning !== undefined &&
+				Number.isFinite(Number(p.drawdownWarning))
+			) {
+				base.ACCOUNT_DRAWDOWN_WARNING_PERCENT = formatNumber(
+					Number(p.drawdownWarning),
+					0,
+				);
 			}
-			if (p.drawdownNoNew !== undefined && Number.isFinite(Number(p.drawdownNoNew))) {
-				base.ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT = formatNumber(Number(p.drawdownNoNew), 0);
+			if (
+				p.drawdownNoNew !== undefined &&
+				Number.isFinite(Number(p.drawdownNoNew))
+			) {
+				base.ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT = formatNumber(
+					Number(p.drawdownNoNew),
+					0,
+				);
 			}
-			if (p.drawdownForceClose !== undefined && Number.isFinite(Number(p.drawdownForceClose))) {
-				base.ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT = formatNumber(Number(p.drawdownForceClose), 0);
+			if (
+				p.drawdownForceClose !== undefined &&
+				Number.isFinite(Number(p.drawdownForceClose))
+			) {
+				base.ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT = formatNumber(
+					Number(p.drawdownForceClose),
+					0,
+				);
 			}
 
 			// 额外映射：杠杆等常用字段
@@ -285,21 +397,39 @@ function buildSectionsFromPrompts(
 	prompts: { entryPrompt: string; exitPrompt: string; varPrompt: string },
 	baseVariables: PromptVariables,
 ): PromptSections {
-	const entry = applyTemplateVariables(normalizeTemplateInput(prompts.entryPrompt), baseVariables);
-	const exit = applyTemplateVariables(normalizeTemplateInput(prompts.exitPrompt), baseVariables);
-	const variables = applyTemplateVariables(normalizeTemplateInput(prompts.varPrompt), baseVariables);
+	const entry = applyTemplateVariables(
+		normalizeTemplateInput(prompts.entryPrompt),
+		baseVariables,
+	);
+	const exit = applyTemplateVariables(
+		normalizeTemplateInput(prompts.exitPrompt),
+		baseVariables,
+	);
+	const variables = applyTemplateVariables(
+		normalizeTemplateInput(prompts.varPrompt),
+		baseVariables,
+	);
 	return { entry, exit, variables };
 }
 
 function readUserPromptSections(): PromptSections {
 	return {
-		entry: normalizeTemplateInput(getConfigStringValue("PROMPT_SECTION_ENTRY", "")),
-		exit: normalizeTemplateInput(getConfigStringValue("PROMPT_SECTION_EXIT", "")),
-		variables: normalizeTemplateInput(getConfigStringValue("PROMPT_SECTION_VARIABLES", "")),
+		entry: normalizeTemplateInput(
+			getConfigStringValue("PROMPT_SECTION_ENTRY", ""),
+		),
+		exit: normalizeTemplateInput(
+			getConfigStringValue("PROMPT_SECTION_EXIT", ""),
+		),
+		variables: normalizeTemplateInput(
+			getConfigStringValue("PROMPT_SECTION_VARIABLES", ""),
+		),
 	};
 }
 
-function mergeUserPromptSections(baseVariables: PromptVariables, defaultSections: PromptSections): PromptSections {
+function mergeUserPromptSections(
+	baseVariables: PromptVariables,
+	defaultSections: PromptSections,
+): PromptSections {
 	const raw = readUserPromptSections();
 	const variables: PromptVariables = {
 		...baseVariables,
@@ -308,9 +438,15 @@ function mergeUserPromptSections(baseVariables: PromptVariables, defaultSections
 		VAR_PROMPT: defaultSections.variables,
 	};
 
-	const entry = raw.entry ? applyTemplateVariables(raw.entry, variables) : defaultSections.entry;
-	const exit = raw.exit ? applyTemplateVariables(raw.exit, variables) : defaultSections.exit;
-	const vars = raw.variables ? applyTemplateVariables(raw.variables, variables) : defaultSections.variables;
+	const entry = raw.entry
+		? applyTemplateVariables(raw.entry, variables)
+		: defaultSections.entry;
+	const exit = raw.exit
+		? applyTemplateVariables(raw.exit, variables)
+		: defaultSections.exit;
+	const vars = raw.variables
+		? applyTemplateVariables(raw.variables, variables)
+		: defaultSections.variables;
 
 	return {
 		entry,
@@ -319,7 +455,9 @@ function mergeUserPromptSections(baseVariables: PromptVariables, defaultSections
 	};
 }
 
-function getFallbackPromptSections(baseVariables: PromptVariables): PromptSections {
+function getFallbackPromptSections(
+	baseVariables: PromptVariables,
+): PromptSections {
 	return buildSectionsFromPrompts(
 		{
 			entryPrompt: DEFAULT_PROMPT_ENTRY,
@@ -330,12 +468,17 @@ function getFallbackPromptSections(baseVariables: PromptVariables): PromptSectio
 	);
 }
 
-function buildConfiguredSections(baseVariables: PromptVariables): PromptSections {
+function buildConfiguredSections(
+	baseVariables: PromptVariables,
+): PromptSections {
 	const fallback = getFallbackPromptSections(baseVariables);
 	return mergeUserPromptSections(baseVariables, fallback);
 }
 
-function withSectionVariables(baseVariables: PromptVariables, sections: PromptSections): PromptVariables {
+function withSectionVariables(
+	baseVariables: PromptVariables,
+	sections: PromptSections,
+): PromptVariables {
 	return {
 		...baseVariables,
 		ENTRY_PROMPT: sections.entry,
@@ -349,10 +492,15 @@ export async function getStrategyPromptDefaultSections(
 	intervalMinutes: number,
 	language?: StrategyLanguage,
 ): Promise<PromptSections> {
-	const actualLanguage = language || await getPromptLanguage();
+	const actualLanguage = language || (await getPromptLanguage());
 	const profile = getStrategyProfile(strategy, actualLanguage);
 	const riskConfig = await getAccountRiskConfig();
-	const baseVariables = buildBasePromptVariables(strategy, intervalMinutes, riskConfig, actualLanguage);
+	const baseVariables = buildBasePromptVariables(
+		strategy,
+		intervalMinutes,
+		riskConfig,
+		actualLanguage,
+	);
 	return buildSectionsFromPrompts(profile.prompts, baseVariables);
 }
 
@@ -372,7 +520,10 @@ function safeNumber(value: any, fallback = 0): number {
 	return Number.isFinite(num) ? num : fallback;
 }
 
-function formatMarketDataSection(marketData: Record<string, any>, language: StrategyLanguage): string {
+function formatMarketDataSection(
+	marketData: Record<string, any>,
+	language: StrategyLanguage,
+): string {
 	const symbols = Object.keys(marketData || {});
 	if (symbols.length === 0) {
 		return language === "zh" ? "暂无市场数据" : "No market data available";
@@ -425,8 +576,15 @@ function formatMarketDataSection(marketData: Record<string, any>, language: Stra
 			}
 
 			const series = data.intradaySeries;
-			if (series && Array.isArray(series.midPrices) && series.midPrices.length > 0) {
-				const last10 = series.midPrices.slice(-10).map((v: number) => safeNumber(v).toFixed(1)).join(", ");
+			if (
+				series &&
+				Array.isArray(series.midPrices) &&
+				series.midPrices.length > 0
+			) {
+				const last10 = series.midPrices
+					.slice(-10)
+					.map((v: number) => safeNumber(v).toFixed(1))
+					.join(", ");
 				lines.push(`Intraday mid price (last 10 bars, 3m): [${last10}]`);
 			}
 
@@ -482,8 +640,15 @@ function formatMarketDataSection(marketData: Record<string, any>, language: Stra
 		}
 
 		const series = data.intradaySeries;
-		if (series && Array.isArray(series.midPrices) && series.midPrices.length > 0) {
-			const last10 = series.midPrices.slice(-10).map((v: number) => safeNumber(v).toFixed(1)).join(", ");
+		if (
+			series &&
+			Array.isArray(series.midPrices) &&
+			series.midPrices.length > 0
+		) {
+			const last10 = series.midPrices
+				.slice(-10)
+				.map((v: number) => safeNumber(v).toFixed(1))
+				.join(", ");
 			lines.push(`日内中间价（最近10个 3 分钟点）：[${last10}]`);
 		}
 
@@ -500,26 +665,46 @@ function formatAccountSection(
 	language: StrategyLanguage,
 ): string {
 	if (!accountInfo) {
-		return language === "zh" ? "账户信息缺失" : "Account information unavailable";
+		return language === "zh"
+			? "账户信息缺失"
+			: "Account information unavailable";
 	}
 
 	if (language === "en") {
 		const lines: string[] = [SECTION_SEPARATOR, "[Account Overview]"];
 		if (Number.isFinite(accountInfo.totalBalance)) {
-			lines.push(`Net asset value: ${accountInfo.totalBalance.toFixed(2)} USDT`);
+			lines.push(
+				`Net asset value: ${accountInfo.totalBalance.toFixed(2)} USDT`,
+			);
 		}
 		if (Number.isFinite(accountInfo.availableBalance)) {
-			lines.push(`Available balance: ${accountInfo.availableBalance.toFixed(2)} USDT`);
+			lines.push(
+				`Available balance: ${accountInfo.availableBalance.toFixed(2)} USDT`,
+			);
 		}
 		if (Number.isFinite(accountInfo.returnPercent)) {
 			lines.push(`Total return: ${accountInfo.returnPercent.toFixed(2)}%`);
 		}
-		if (Number.isFinite(accountInfo.initialBalance) && Number.isFinite(accountInfo.totalBalance)) {
-			const drawdownFromInitial = ((accountInfo.initialBalance - accountInfo.totalBalance) / accountInfo.initialBalance) * 100;
-			lines.push(`Drawdown from initial balance: ${drawdownFromInitial.toFixed(2)}%`);
+		if (
+			Number.isFinite(accountInfo.initialBalance) &&
+			Number.isFinite(accountInfo.totalBalance)
+		) {
+			const drawdownFromInitial =
+				((accountInfo.initialBalance - accountInfo.totalBalance) /
+					accountInfo.initialBalance) *
+				100;
+			lines.push(
+				`Drawdown from initial balance: ${drawdownFromInitial.toFixed(2)}%`,
+			);
 		}
-		if (Number.isFinite(accountInfo.peakBalance) && Number.isFinite(accountInfo.totalBalance)) {
-			const drawdownFromPeak = ((accountInfo.peakBalance - accountInfo.totalBalance) / accountInfo.peakBalance) * 100;
+		if (
+			Number.isFinite(accountInfo.peakBalance) &&
+			Number.isFinite(accountInfo.totalBalance)
+		) {
+			const drawdownFromPeak =
+				((accountInfo.peakBalance - accountInfo.totalBalance) /
+					accountInfo.peakBalance) *
+				100;
 			lines.push(`Drawdown from peak equity: ${drawdownFromPeak.toFixed(2)}%`);
 		}
 		if (Number.isFinite(accountInfo.sharpeRatio)) {
@@ -527,10 +712,13 @@ function formatAccountSection(
 		}
 
 		const totalUnrealized = positions.reduce(
-			(sum, pos) => sum + (Number.isFinite(pos.unrealized_pnl) ? pos.unrealized_pnl : 0),
+			(sum, pos) =>
+				sum + (Number.isFinite(pos.unrealized_pnl) ? pos.unrealized_pnl : 0),
 			0,
 		);
-		lines.push(`Unrealized PnL: ${totalUnrealized >= 0 ? "+" : ""}${totalUnrealized.toFixed(2)} USDT`);
+		lines.push(
+			`Unrealized PnL: ${totalUnrealized >= 0 ? "+" : ""}${totalUnrealized.toFixed(2)} USDT`,
+		);
 
 		if (positions.length === 0) {
 			lines.push("");
@@ -546,25 +734,54 @@ function formatAccountSection(
 			const pnl = safeNumber(pos.unrealized_pnl);
 			const priceChangePercent =
 				entryPrice > 0
-					? ((currentPrice - entryPrice) / entryPrice) * 100 * (pos.side === "long" ? 1 : -1)
+					? ((currentPrice - entryPrice) / entryPrice) *
+						100 *
+						(pos.side === "long" ? 1 : -1)
 					: 0;
-			const pnlPercent = leverage > 0 ? priceChangePercent * leverage : priceChangePercent;
-			const openedAt = pos.opened_at ? formatChinaTime(pos.opened_at) : "Unknown";
-			const holdingMinutes = pos.opened_at ? Math.max(0, Math.floor((Date.now() - new Date(pos.opened_at).getTime()) / 60000)) : 0;
+			const pnlPercent =
+				leverage > 0 ? priceChangePercent * leverage : priceChangePercent;
+			const openedAt = pos.opened_at
+				? formatChinaTime(pos.opened_at)
+				: "Unknown";
+			const holdingMinutes = pos.opened_at
+				? Math.max(
+						0,
+						Math.floor(
+							(Date.now() - new Date(pos.opened_at).getTime()) / 60000,
+						),
+					)
+				: 0;
 			const holdingHours = holdingMinutes / 60;
-			const holdingCycles = intervalMinutes > 0 ? Math.floor(holdingMinutes / intervalMinutes) : holdingMinutes;
-			const maxCycles = intervalMinutes > 0 ? Math.floor((RISK_PARAMS.MAX_HOLDING_HOURS * 60) / intervalMinutes) : 0;
+			const holdingCycles =
+				intervalMinutes > 0
+					? Math.floor(holdingMinutes / intervalMinutes)
+					: holdingMinutes;
+			const maxCycles =
+				intervalMinutes > 0
+					? Math.floor((RISK_PARAMS.MAX_HOLDING_HOURS * 60) / intervalMinutes)
+					: 0;
 			const remainingCycles = Math.max(0, maxCycles - holdingCycles);
 			const peakPnlPercent = safeNumber(pos.peak_pnl_percent);
-			const drawdownFromPeak = peakPnlPercent > 0 ? peakPnlPercent - pnlPercent : 0;
+			const drawdownFromPeak =
+				peakPnlPercent > 0 ? peakPnlPercent - pnlPercent : 0;
 
-			lines.push(`- ${pos.symbol} ${pos.side === "long" ? "Long" : "Short"} ${leverage}x`);
-			lines.push(`  PnL: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} USDT (${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%)`);
-			lines.push(`  Entry ${entryPrice.toFixed(2)} → Mark ${currentPrice.toFixed(2)}`);
+			lines.push(
+				`- ${pos.symbol} ${pos.side === "long" ? "Long" : "Short"} ${leverage}x`,
+			);
+			lines.push(
+				`  PnL: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} USDT (${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%)`,
+			);
+			lines.push(
+				`  Entry ${entryPrice.toFixed(2)} → Mark ${currentPrice.toFixed(2)}`,
+			);
 			lines.push(`  Opened: ${openedAt}, holding ${holdingHours.toFixed(1)} h`);
-			lines.push(`  Cycle stats: completed ${holdingCycles} / ${maxCycles}, remaining ${remainingCycles}`);
+			lines.push(
+				`  Cycle stats: completed ${holdingCycles} / ${maxCycles}, remaining ${remainingCycles}`,
+			);
 			if (peakPnlPercent > 0) {
-				lines.push(`  Peak profit: +${peakPnlPercent.toFixed(2)}% | Drawdown ${drawdownFromPeak.toFixed(2)}%`);
+				lines.push(
+					`  Peak profit: +${peakPnlPercent.toFixed(2)}% | Drawdown ${drawdownFromPeak.toFixed(2)}%`,
+				);
 			}
 			lines.push("");
 		}
@@ -583,12 +800,24 @@ function formatAccountSection(
 	if (Number.isFinite(accountInfo.returnPercent)) {
 		lines.push(`总体收益率: ${accountInfo.returnPercent.toFixed(2)}%`);
 	}
-	if (Number.isFinite(accountInfo.initialBalance) && Number.isFinite(accountInfo.totalBalance)) {
-		const drawdownFromInitial = ((accountInfo.initialBalance - accountInfo.totalBalance) / accountInfo.initialBalance) * 100;
+	if (
+		Number.isFinite(accountInfo.initialBalance) &&
+		Number.isFinite(accountInfo.totalBalance)
+	) {
+		const drawdownFromInitial =
+			((accountInfo.initialBalance - accountInfo.totalBalance) /
+				accountInfo.initialBalance) *
+			100;
 		lines.push(`相对初始回撤: ${drawdownFromInitial.toFixed(2)}%`);
 	}
-	if (Number.isFinite(accountInfo.peakBalance) && Number.isFinite(accountInfo.totalBalance)) {
-		const drawdownFromPeak = ((accountInfo.peakBalance - accountInfo.totalBalance) / accountInfo.peakBalance) * 100;
+	if (
+		Number.isFinite(accountInfo.peakBalance) &&
+		Number.isFinite(accountInfo.totalBalance)
+	) {
+		const drawdownFromPeak =
+			((accountInfo.peakBalance - accountInfo.totalBalance) /
+				accountInfo.peakBalance) *
+			100;
 		lines.push(`相对峰值回撤: ${drawdownFromPeak.toFixed(2)}%`);
 	}
 	if (Number.isFinite(accountInfo.sharpeRatio)) {
@@ -596,10 +825,13 @@ function formatAccountSection(
 	}
 
 	const totalUnrealized = positions.reduce(
-		(sum, pos) => sum + (Number.isFinite(pos.unrealized_pnl) ? pos.unrealized_pnl : 0),
+		(sum, pos) =>
+			sum + (Number.isFinite(pos.unrealized_pnl) ? pos.unrealized_pnl : 0),
 		0,
 	);
-	lines.push(`未实现盈亏: ${totalUnrealized >= 0 ? "+" : ""}${totalUnrealized.toFixed(2)} USDT`);
+	lines.push(
+		`未实现盈亏: ${totalUnrealized >= 0 ? "+" : ""}${totalUnrealized.toFixed(2)} USDT`,
+	);
 
 	if (positions.length === 0) {
 		lines.push("");
@@ -615,25 +847,52 @@ function formatAccountSection(
 		const pnl = safeNumber(pos.unrealized_pnl);
 		const priceChangePercent =
 			entryPrice > 0
-				? ((currentPrice - entryPrice) / entryPrice) * 100 * (pos.side === "long" ? 1 : -1)
+				? ((currentPrice - entryPrice) / entryPrice) *
+					100 *
+					(pos.side === "long" ? 1 : -1)
 				: 0;
-		const pnlPercent = leverage > 0 ? priceChangePercent * leverage : priceChangePercent;
+		const pnlPercent =
+			leverage > 0 ? priceChangePercent * leverage : priceChangePercent;
 		const openedAt = pos.opened_at ? formatChinaTime(pos.opened_at) : "未知";
-		const holdingMinutes = pos.opened_at ? Math.max(0, Math.floor((Date.now() - new Date(pos.opened_at).getTime()) / 60000)) : 0;
+		const holdingMinutes = pos.opened_at
+			? Math.max(
+					0,
+					Math.floor((Date.now() - new Date(pos.opened_at).getTime()) / 60000),
+				)
+			: 0;
 		const holdingHours = holdingMinutes / 60;
-		const holdingCycles = intervalMinutes > 0 ? Math.floor(holdingMinutes / intervalMinutes) : holdingMinutes;
-		const maxCycles = intervalMinutes > 0 ? Math.floor((RISK_PARAMS.MAX_HOLDING_HOURS * 60) / intervalMinutes) : 0;
+		const holdingCycles =
+			intervalMinutes > 0
+				? Math.floor(holdingMinutes / intervalMinutes)
+				: holdingMinutes;
+		const maxCycles =
+			intervalMinutes > 0
+				? Math.floor((RISK_PARAMS.MAX_HOLDING_HOURS * 60) / intervalMinutes)
+				: 0;
 		const remainingCycles = Math.max(0, maxCycles - holdingCycles);
 		const peakPnlPercent = safeNumber(pos.peak_pnl_percent);
-		const drawdownFromPeak = peakPnlPercent > 0 ? peakPnlPercent - pnlPercent : 0;
+		const drawdownFromPeak =
+			peakPnlPercent > 0 ? peakPnlPercent - pnlPercent : 0;
 
-		lines.push(`- ${pos.symbol} ${pos.side === "long" ? "做多" : "做空"} ${leverage}x`);
-		lines.push(`  盈亏: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} USDT (${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%)`);
-		lines.push(`  开仓价 ${entryPrice.toFixed(2)} → 现价 ${currentPrice.toFixed(2)}`);
-		lines.push(`  开仓时间: ${openedAt}，已持仓 ${holdingHours.toFixed(1)} 小时`);
-		lines.push(`  周期统计: 已完成 ${holdingCycles} / ${maxCycles} 个周期，剩余 ${remainingCycles}`);
+		lines.push(
+			`- ${pos.symbol} ${pos.side === "long" ? "做多" : "做空"} ${leverage}x`,
+		);
+		lines.push(
+			`  盈亏: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} USDT (${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%)`,
+		);
+		lines.push(
+			`  开仓价 ${entryPrice.toFixed(2)} → 现价 ${currentPrice.toFixed(2)}`,
+		);
+		lines.push(
+			`  开仓时间: ${openedAt}，已持仓 ${holdingHours.toFixed(1)} 小时`,
+		);
+		lines.push(
+			`  周期统计: 已完成 ${holdingCycles} / ${maxCycles} 个周期，剩余 ${remainingCycles}`,
+		);
 		if (peakPnlPercent > 0) {
-			lines.push(`  峰值盈利: +${peakPnlPercent.toFixed(2)}%，回撤 ${drawdownFromPeak.toFixed(2)}%`);
+			lines.push(
+				`  峰值盈利: +${peakPnlPercent.toFixed(2)}%，回撤 ${drawdownFromPeak.toFixed(2)}%`,
+			);
 		}
 		lines.push("");
 	}
@@ -641,7 +900,10 @@ function formatAccountSection(
 	return lines.join("\n").trimEnd();
 }
 
-function formatTradeHistorySection(tradeHistory: any[] | undefined, language: StrategyLanguage): string {
+function formatTradeHistorySection(
+	tradeHistory: any[] | undefined,
+	language: StrategyLanguage,
+): string {
 	if (!tradeHistory || tradeHistory.length === 0) {
 		return "";
 	}
@@ -654,18 +916,24 @@ function formatTradeHistorySection(tradeHistory: any[] | undefined, language: St
 	if (language === "en") {
 		const lines: string[] = [SECTION_SEPARATOR, "[Recent 10 Trades]"];
 		for (const trade of recentTrades) {
-			const timeText = trade.timestamp ? formatChinaTime(trade.timestamp) : "Unknown time";
+			const timeText = trade.timestamp
+				? formatChinaTime(trade.timestamp)
+				: "Unknown time";
 			const pnl = Number.isFinite(trade.pnl) ? trade.pnl : null;
 			if (typeof pnl === "number") {
 				totalProfit += pnl;
 				if (pnl > 0) profitCount += 1;
 				if (pnl < 0) lossCount += 1;
 			}
-			lines.push(`- ${trade.symbol} ${trade.side?.toUpperCase()} ${trade.type === "open" ? "Open" : "Close"}`);
+			lines.push(
+				`- ${trade.symbol} ${trade.side?.toUpperCase()} ${trade.type === "open" ? "Open" : "Close"}`,
+			);
 			lines.push(
 				`  Time: ${timeText}  Price: ${Number.isFinite(trade.price) ? trade.price.toFixed(2) : "-"}  Leverage: ${trade.leverage ?? "-"}x`,
 			);
-			lines.push(`  Fee: ${Number.isFinite(trade.fee) ? trade.fee.toFixed(4) : "-"} USDT`);
+			lines.push(
+				`  Fee: ${Number.isFinite(trade.fee) ? trade.fee.toFixed(4) : "-"} USDT`,
+			);
 			if (pnl !== null) {
 				lines.push(`  PnL: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} USDT`);
 			}
@@ -675,7 +943,9 @@ function formatTradeHistorySection(tradeHistory: any[] | undefined, language: St
 		const totalTrades = profitCount + lossCount;
 		if (totalTrades > 0) {
 			const winRate = (profitCount / totalTrades) * 100;
-			lines.push(`Win rate: ${winRate.toFixed(1)}% | Total PnL: ${totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(2)} USDT`);
+			lines.push(
+				`Win rate: ${winRate.toFixed(1)}% | Total PnL: ${totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(2)} USDT`,
+			);
 		}
 
 		return lines.join("\n").trimEnd();
@@ -683,18 +953,24 @@ function formatTradeHistorySection(tradeHistory: any[] | undefined, language: St
 
 	const lines: string[] = [SECTION_SEPARATOR, "【最近 10 笔交易】"];
 	for (const trade of recentTrades) {
-		const timeText = trade.timestamp ? formatChinaTime(trade.timestamp) : "未知时间";
+		const timeText = trade.timestamp
+			? formatChinaTime(trade.timestamp)
+			: "未知时间";
 		const pnl = Number.isFinite(trade.pnl) ? trade.pnl : null;
 		if (typeof pnl === "number") {
 			totalProfit += pnl;
 			if (pnl > 0) profitCount += 1;
 			if (pnl < 0) lossCount += 1;
 		}
-		lines.push(`- ${trade.symbol} ${trade.side?.toUpperCase()} ${trade.type === "open" ? "开仓" : "平仓"}`);
+		lines.push(
+			`- ${trade.symbol} ${trade.side?.toUpperCase()} ${trade.type === "open" ? "开仓" : "平仓"}`,
+		);
 		lines.push(
 			`  时间: ${timeText}  价格: ${Number.isFinite(trade.price) ? trade.price.toFixed(2) : "-"}  杠杆: ${trade.leverage ?? "-"}x`,
 		);
-		lines.push(`  手续费: ${Number.isFinite(trade.fee) ? trade.fee.toFixed(4) : "-"} USDT`);
+		lines.push(
+			`  手续费: ${Number.isFinite(trade.fee) ? trade.fee.toFixed(4) : "-"} USDT`,
+		);
 		if (pnl !== null) {
 			lines.push(`  盈亏: ${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} USDT`);
 		}
@@ -704,21 +980,32 @@ function formatTradeHistorySection(tradeHistory: any[] | undefined, language: St
 	const totalTrades = profitCount + lossCount;
 	if (totalTrades > 0) {
 		const winRate = (profitCount / totalTrades) * 100;
-		lines.push(`胜率: ${winRate.toFixed(1)}% | 总盈亏: ${totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(2)} USDT`);
+		lines.push(
+			`胜率: ${winRate.toFixed(1)}% | 总盈亏: ${totalProfit >= 0 ? "+" : ""}${totalProfit.toFixed(2)} USDT`,
+		);
 	}
 
 	return lines.join("\n").trimEnd();
 }
 
-function formatRecentDecisionsSection(recentDecisions: any[] | undefined, language: StrategyLanguage): string {
+function formatRecentDecisionsSection(
+	recentDecisions: any[] | undefined,
+	language: StrategyLanguage,
+): string {
 	if (!recentDecisions || recentDecisions.length === 0) {
 		return "";
 	}
 
 	if (language === "en") {
-		const lines: string[] = [SECTION_SEPARATOR, "[Recent AI Decisions]", "Reference only; follow live market updates."];
+		const lines: string[] = [
+			SECTION_SEPARATOR,
+			"[Recent AI Decisions]",
+			"Reference only; follow live market updates.",
+		];
 		for (const decision of recentDecisions) {
-			const timeText = decision.timestamp ? formatChinaTime(decision.timestamp) : "Unknown time";
+			const timeText = decision.timestamp
+				? formatChinaTime(decision.timestamp)
+				: "Unknown time";
 			lines.push(`- Decision #${decision.iteration ?? "?"} @ ${timeText}`);
 			if (Number.isFinite(decision.account_value)) {
 				lines.push(`  Equity then: ${decision.account_value.toFixed(2)} USDT`);
@@ -734,9 +1021,15 @@ function formatRecentDecisionsSection(recentDecisions: any[] | undefined, langua
 		return lines.join("\n").trimEnd();
 	}
 
-	const lines: string[] = [SECTION_SEPARATOR, "【最近 AI 决策回顾】", "仅供参考，后续决策以最新行情为准"];
+	const lines: string[] = [
+		SECTION_SEPARATOR,
+		"【最近 AI 决策回顾】",
+		"仅供参考，后续决策以最新行情为准",
+	];
 	for (const decision of recentDecisions) {
-		const timeText = decision.timestamp ? formatChinaTime(decision.timestamp) : "未知时间";
+		const timeText = decision.timestamp
+			? formatChinaTime(decision.timestamp)
+			: "未知时间";
 		lines.push(`- 决策 #${decision.iteration ?? "?"} @ ${timeText}`);
 		if (Number.isFinite(decision.account_value)) {
 			lines.push(`  当时账户净值: ${decision.account_value.toFixed(2)} USDT`);
@@ -752,7 +1045,9 @@ function formatRecentDecisionsSection(recentDecisions: any[] | undefined, langua
 	return lines.join("\n").trimEnd();
 }
 
-export async function generateTradingPrompt(input: TradingPromptInput): Promise<string> {
+export async function generateTradingPrompt(
+	input: TradingPromptInput,
+): Promise<string> {
 	const {
 		minutesElapsed,
 		iteration,
@@ -767,7 +1062,7 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 	const language = await getPromptLanguage();
 	const strategyName = getActiveStrategyName();
 	const riskConfig = getRiskConfigSnapshot();
-	
+
 	// 加载策略文件（用于 params 替换与交易币种配置）
 	let tradingSymbols: string[] | undefined;
 	let strategyObj: any = null;
@@ -781,7 +1076,13 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 		}
 	}
 
-	const baseVariables = buildBasePromptVariables(strategyObj ?? strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
+	const baseVariables = buildBasePromptVariables(
+		strategyObj ?? strategyName,
+		intervalMinutes,
+		riskConfig,
+		language,
+		tradingSymbols,
+	);
 	const sections = buildConfiguredSections(baseVariables);
 
 	const templateVariables: PromptVariables = {
@@ -796,12 +1097,17 @@ export async function generateTradingPrompt(input: TradingPromptInput): Promise<
 
 	const sectionsOutput: string[] = [promptHeader];
 	sectionsOutput.push(formatMarketDataSection(marketData, language));
-	sectionsOutput.push(formatAccountSection(accountInfo, positions, intervalMinutes, language));
+	sectionsOutput.push(
+		formatAccountSection(accountInfo, positions, intervalMinutes, language),
+	);
 	const tradeSection = formatTradeHistorySection(tradeHistory, language);
 	if (tradeSection) {
 		sectionsOutput.push(tradeSection);
 	}
-	const decisionsSection = formatRecentDecisionsSection(recentDecisions, language);
+	const decisionsSection = formatRecentDecisionsSection(
+		recentDecisions,
+		language,
+	);
 	if (decisionsSection) {
 		sectionsOutput.push(decisionsSection);
 	}
@@ -813,7 +1119,7 @@ async function generateInstructions(intervalMinutes: number): Promise<string> {
 	const language = await getPromptLanguage();
 	const strategyName = getActiveStrategyName();
 	const riskConfig = await getAccountRiskConfig();
-	
+
 	// 加载策略文件（用于 params 替换与交易币种配置）
 	let tradingSymbols: string[] | undefined;
 	let strategyObj: any = null;
@@ -827,7 +1133,13 @@ async function generateInstructions(intervalMinutes: number): Promise<string> {
 		}
 	}
 
-	const baseVariables = buildBasePromptVariables(strategyObj ?? strategyName, intervalMinutes, riskConfig, language, tradingSymbols);
+	const baseVariables = buildBasePromptVariables(
+		strategyObj ?? strategyName,
+		intervalMinutes,
+		riskConfig,
+		language,
+		tradingSymbols,
+	);
 	const sections = buildConfiguredSections(baseVariables);
 
 	const template = await loadInstructionsTemplate(language);
@@ -841,7 +1153,9 @@ export interface TradingAgentHandle {
 	modelName: string;
 }
 
-export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAgentHandle> {
+export async function createTradingAgent(
+	intervalMinutes = 5,
+): Promise<TradingAgentHandle> {
 	const { getAllConfig } = await import("../database/init-config");
 	const config = await getAllConfig();
 
@@ -858,12 +1172,20 @@ export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAg
 		apiKey = activeModel.api_key;
 		baseURL = activeModel.base_url;
 		modelName = activeModel.model_name;
-		logger.info(`使用数据库 AI 模型配置: ${activeModel.name} (ID: ${activeModel.id})`);
+		logger.info(
+			`使用数据库 AI 模型配置: ${activeModel.name} (ID: ${activeModel.id})`,
+		);
 	} else {
 		// 回退到 system_config 或 .env
 		apiKey = config.OPENAI_API_KEY || process.env.OPENAI_API_KEY || "";
-		baseURL = config.OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1";
-		modelName = config.AI_MODEL_NAME || process.env.AI_MODEL_NAME || "deepseek/deepseek-v3.2-exp";
+		baseURL =
+			config.OPENAI_BASE_URL ||
+			process.env.OPENAI_BASE_URL ||
+			"https://openrouter.ai/api/v1";
+		modelName =
+			config.AI_MODEL_NAME ||
+			process.env.AI_MODEL_NAME ||
+			"deepseek/deepseek-v3.2-exp";
 		logger.warn("未找到激活的 AI 模型配置，使用默认配置");
 	}
 
@@ -873,7 +1195,9 @@ export async function createTradingAgent(intervalMinutes = 5): Promise<TradingAg
 
 	// 清理 Base URL
 	let cleanBaseUrl = String(baseURL).trim();
-	cleanBaseUrl = cleanBaseUrl.replace(/\/chat\/completions\/?$/, "").replace(/\/$/, "");
+	cleanBaseUrl = cleanBaseUrl
+		.replace(/\/chat\/completions\/?$/, "")
+		.replace(/\/$/, "");
 
 	const openai = createOpenAI({
 		apiKey,

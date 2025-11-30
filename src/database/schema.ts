@@ -1,17 +1,17 @@
 /**
  * open-nof1.ai - AI 加密货币自动交易系统
  * Copyright (C) 2025 195440
- * 
+ *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU Affero General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU Affero General Public License
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
@@ -21,171 +21,171 @@
  */
 
 export interface Trade {
-  id: number;
-  account_id?: number;
-  order_id: string;
-  symbol: string;
-  side: 'long' | 'short';
-  type: 'open' | 'close';
-  price: number;
-  quantity: number;
-  leverage: number;
-  pnl?: number;
-  fee?: number;
-  timestamp: string;
-  status: 'pending' | 'filled' | 'cancelled';
+	id: number;
+	account_id?: number;
+	order_id: string;
+	symbol: string;
+	side: "long" | "short";
+	type: "open" | "close";
+	price: number;
+	quantity: number;
+	leverage: number;
+	pnl?: number;
+	fee?: number;
+	timestamp: string;
+	status: "pending" | "filled" | "cancelled";
 }
 
 export interface TradeLog {
-  id: number;
-  account_id?: number;
-  action: "open" | "close" | "cancel" | "adjust";
-  symbol?: string;
-  side?: "long" | "short";
-  leverage?: number;
-  amount_usdt?: number;
-  size?: number;
-  status: "success" | "failed" | "warning";
-  message: string;
-  order_id?: string;
-  raw_request?: string;
-  raw_response?: string;
-  created_at: string;
+	id: number;
+	account_id?: number;
+	action: "open" | "close" | "cancel" | "adjust";
+	symbol?: string;
+	side?: "long" | "short";
+	leverage?: number;
+	amount_usdt?: number;
+	size?: number;
+	status: "success" | "failed" | "warning";
+	message: string;
+	order_id?: string;
+	raw_request?: string;
+	raw_response?: string;
+	created_at: string;
 }
 
 export interface Position {
-  id: number;
-  account_id?: number;
-  symbol: string;
-  quantity: number;
-  entry_price: number;
-  current_price: number;
-  liquidation_price: number;
-  unrealized_pnl: number;
-  leverage: number;
-  side: 'long' | 'short';
-  profit_target?: number;
-  stop_loss?: number;
-  tp_order_id?: string;
-  sl_order_id?: string;
-  entry_order_id: string;
-  opened_at: string;
-  confidence?: number;
-  risk_usd?: number;
-  peak_pnl_percent?: number; // 历史最高盈亏百分比（考虑杠杆）
-  partial_close_percentage?: number; // 已通过分批止盈平掉的百分比 (0-100)
+	id: number;
+	account_id?: number;
+	symbol: string;
+	quantity: number;
+	entry_price: number;
+	current_price: number;
+	liquidation_price: number;
+	unrealized_pnl: number;
+	leverage: number;
+	side: "long" | "short";
+	profit_target?: number;
+	stop_loss?: number;
+	tp_order_id?: string;
+	sl_order_id?: string;
+	entry_order_id: string;
+	opened_at: string;
+	confidence?: number;
+	risk_usd?: number;
+	peak_pnl_percent?: number; // 历史最高盈亏百分比（考虑杠杆）
+	partial_close_percentage?: number; // 已通过分批止盈平掉的百分比 (0-100)
 }
 
 export interface AccountHistory {
-  id: number;
-  account_id?: number;
-  timestamp: string;
-  total_value: number;
-  available_cash: number;
-  unrealized_pnl: number;
-  realized_pnl: number;
-  return_percent: number;
-  sharpe_ratio?: number;
+	id: number;
+	account_id?: number;
+	timestamp: string;
+	total_value: number;
+	available_cash: number;
+	unrealized_pnl: number;
+	realized_pnl: number;
+	return_percent: number;
+	sharpe_ratio?: number;
 }
 
 export interface TradingSignal {
-  id: number;
-  symbol: string;
-  timestamp: string;
-  price: number;
-  ema_20: number;
-  ema_50?: number;
-  macd: number;
-  rsi_7: number;
-  rsi_14: number;
-  volume: number;
-  open_interest?: number;
-  funding_rate?: number;
-  atr_3?: number;
-  atr_14?: number;
+	id: number;
+	symbol: string;
+	timestamp: string;
+	price: number;
+	ema_20: number;
+	ema_50?: number;
+	macd: number;
+	rsi_7: number;
+	rsi_14: number;
+	volume: number;
+	open_interest?: number;
+	funding_rate?: number;
+	atr_3?: number;
+	atr_14?: number;
 }
 
 export interface AgentDecision {
-  id: number;
-  timestamp: string;
-  iteration: number;
-  market_analysis: string;
-  decision: string;
-  actions_taken: string;
-  account_value: number;
-  positions_count: number;
-  account_id?: number;
+	id: number;
+	timestamp: string;
+	iteration: number;
+	market_analysis: string;
+	decision: string;
+	actions_taken: string;
+	account_value: number;
+	positions_count: number;
+	account_id?: number;
 }
 
 export interface AgentRequestLog {
-  id: number;
-  created_at: string;
-  iteration?: number;
-  model_name: string;
-  instructions: string;
-  prompt: string;
-  response?: string;
-  response_summary?: string;
-  status: "success" | "error";
-  error_message?: string;
-  output_duration_ms?: number;
-  account_id?: number;
+	id: number;
+	created_at: string;
+	iteration?: number;
+	model_name: string;
+	instructions: string;
+	prompt: string;
+	response?: string;
+	response_summary?: string;
+	status: "success" | "error";
+	error_message?: string;
+	output_duration_ms?: number;
+	account_id?: number;
 }
 
 export interface SystemConfig {
-  id: number;
-  key: string;
-  value: string;
-  updated_at: string;
+	id: number;
+	key: string;
+	value: string;
+	updated_at: string;
 }
 
 export interface ContractMultiplier {
-  id: number;
-  symbol: string;
-  multiplier: number;
-  contract_value: string;
-  updated_at: string;
+	id: number;
+	symbol: string;
+	multiplier: number;
+	contract_value: string;
+	updated_at: string;
 }
 
 export interface AccountConfig {
-  id: number;
-  name: string;
-  provider: 'okx' | 'binance' | 'bitget';
-  api_key: string;
-  api_secret: string;
-  api_passphrase?: string;
-  use_paper: boolean;
-  proxy_url?: string;
-  is_active: boolean;
-  stop_loss_usdt?: number;
-  take_profit_usdt?: number;
-  created_at: string;
-  updated_at: string;
+	id: number;
+	name: string;
+	provider: "okx" | "binance" | "bitget" | "gate";
+	api_key: string;
+	api_secret: string;
+	api_passphrase?: string;
+	use_paper: boolean;
+	proxy_url?: string;
+	is_active: boolean;
+	stop_loss_usdt?: number;
+	take_profit_usdt?: number;
+	created_at: string;
+	updated_at: string;
 }
 
 export interface BinanceContractPrecision {
-  id: number;
-  contract: string;
-  symbol: string;
-  step_size: string;
-  min_qty: string;
-  max_qty: string;
-  tick_size?: string;
-  min_notional?: string;
-  precision: number;
-  updated_at: string;
+	id: number;
+	contract: string;
+	symbol: string;
+	step_size: string;
+	min_qty: string;
+	max_qty: string;
+	tick_size?: string;
+	min_notional?: string;
+	precision: number;
+	updated_at: string;
 }
 
 /**
  * 管理员凭证
  */
 export interface AdminCredentials {
-  id: number;
-  admin_path: string;
-  username: string;
-  password_hash: string;
-  created_at: string;
-  updated_at: string;
+	id: number;
+	admin_path: string;
+	username: string;
+	password_hash: string;
+	created_at: string;
+	updated_at: string;
 }
 
 /**
@@ -198,17 +198,17 @@ export type TradingInstanceStatus = "running" | "paused" | "stopped";
  * 每个实例绑定一个账户、一个AI模型和一个策略
  */
 export interface TradingInstance {
-  id: number;
-  name: string;
-  account_id: number;
-  ai_model_id: number;
-  strategy_name: string;
-  status: TradingInstanceStatus;
-  interval_minutes: number;
-  last_executed_at: string | null;
-  last_execution_status: "success" | "error" | "skipped" | null;
-  created_at: string;
-  updated_at: string;
+	id: number;
+	name: string;
+	account_id: number;
+	ai_model_id: number;
+	strategy_name: string;
+	status: TradingInstanceStatus;
+	interval_minutes: number;
+	last_executed_at: string | null;
+	last_execution_status: "success" | "error" | "skipped" | null;
+	created_at: string;
+	updated_at: string;
 }
 
 /**
@@ -449,4 +449,3 @@ CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_trading_instances_status ON trading_instances(status);
 CREATE INDEX IF NOT EXISTS idx_trading_instances_account_id ON trading_instances(account_id);
 `;
-

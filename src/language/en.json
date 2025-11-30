@@ -150,7 +150,8 @@
 		"providers": {
 			"okx": "OKX",
 			"binance": "Binance",
-			"bitget": "Bitget"
+			"bitget": "Bitget",
+			"gate": "Gate.io"
 		},
 		"form": {
 			"name": "Account Name <span class=\"required\">*</span>",
@@ -174,6 +175,11 @@
 			"bitgetApiSecretPlaceholder": "Enter Bitget API Secret",
 			"bitgetPassphrase": "Passphrase <span class=\"required\">*</span>",
 			"bitgetPassphrasePlaceholder": "Enter Bitget Passphrase",
+			"gateApiKey": "API Key <span class=\"required\">*</span>",
+			"gateApiKeyPlaceholder": "Enter Gate.io API Key",
+			"gateApiSecret": "API Secret <span class=\"required\">*</span>",
+			"gateApiSecretPlaceholder": "Enter Gate.io API Secret",
+			"gateUseTestnet": "Use Testnet",
 			"proxyUrl": "Proxy URL (Optional)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
 			"testConnection": "Test Connection",
@@ -221,7 +227,8 @@
 				"missingName": "Please enter account name",
 				"missingOkx": "Please fill in all OKX credentials",
 				"missingBinance": "Please fill in all Binance credentials",
-				"missingBitget": "Please fill in all Bitget credentials"
+				"missingBitget": "Please fill in all Bitget credentials",
+				"missingGate": "Please fill in all Gate.io credentials"
 			}
 		}
 	},

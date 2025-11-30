@@ -431,6 +431,8 @@ class TradingMonitor {
     this.priceChanges = new Map();
     this.availableSymbols = new Set();
     this.symbolOrder = [];
+    this.exchangeSymbols = null;
+    this.exchangeProvider = null;
     this.allExchangeSymbols = []; // 交易所所有合约列表（按成交量排序）
     this.currentSymbolFilter = "all"; // 当前选中的币种筛选：'all' 或任务实例ID
     this.currentFilterInstanceId = null; // 当前筛选的任务实例ID
@@ -2273,22 +2275,50 @@ class TradingMonitor {
     return Math.max(1, Math.ceil(total / pageSize));
   }
 
-  addAvailableSymbol(symbol) {
+  normalizeSymbol(symbol) {
     if (typeof symbol !== "string") {
+      return "";
+    }
+    return symbol.trim().toUpperCase();
+  }
+
+  shouldRestrictToExchangeSymbols() {
+    return (
+      (this.currentSymbolFilter === "all" || !this.currentFilterInstanceId) &&
+      this.exchangeProvider === "gate" &&
+      this.exchangeSymbols instanceof Set &&
+      this.exchangeSymbols.size > 0
+    );
+  }
+
+  isSymbolAllowed(normalized) {
+    if (!normalized) {
       return false;
     }
-    const normalized = symbol.trim().toUpperCase();
-    if (!normalized) {
+    if (this.shouldRestrictToExchangeSymbols()) {
+      return this.exchangeSymbols?.has(normalized) ?? false;
+    }
+    return true;
+  }
+
+  addAvailableSymbol(symbol) {
+    const normalized = this.normalizeSymbol(symbol);
+    if (!this.isSymbolAllowed(normalized)) {
       return false;
     }
     if (this.availableSymbols.has(normalized)) {
       return false;
     }
+
     this.availableSymbols.add(normalized);
-    if (!Array.isArray(this.symbolOrder)) {
-      this.symbolOrder = [];
+
+    if (!this.shouldRestrictToExchangeSymbols()) {
+      if (!Array.isArray(this.symbolOrder)) {
+        this.symbolOrder = [];
+      }
+      this.symbolOrder.push(normalized);
     }
-    this.symbolOrder.push(normalized);
+
     return true;
   }
 
@@ -2544,6 +2574,8 @@ class TradingMonitor {
   async loadExchangeAllSymbols() {
     try {
       console.log("[symbolFilter] 加载交易所所有合约...");
+      this.exchangeProvider = null;
+      this.exchangeSymbols = null;
       const data = await this.fetchJson("/api/exchange/symbols");
       
       // 检查是否有错误
@@ -2557,11 +2589,13 @@ class TradingMonitor {
       
       if (data?.symbols && Array.isArray(data.symbols) && data.symbols.length > 0) {
         this.allExchangeSymbols = data.symbols;
+        this.exchangeProvider = data?.provider || null;
         
         // 更新可用币种列表
         const symbols = data.symbols.map(s => s.symbol.toUpperCase());
         this.symbolOrder = symbols;
         this.availableSymbols = new Set(symbols);
+        this.exchangeSymbols = new Set(symbols);
         
         // 更新价格显示
         for (const item of data.symbols) {
@@ -2604,6 +2638,8 @@ class TradingMonitor {
    * @param {string[]} symbols - 币种列表
    */
   applyInstanceSymbols(symbols) {
+    this.exchangeSymbols = null;
+    this.exchangeProvider = null;
     this.symbolOrder = symbols;
     this.availableSymbols = new Set(symbols);
 
@@ -4953,8 +4989,8 @@ class TradingMonitor {
         return;
       }
 
-      const symbol = rawSymbol.trim().toUpperCase();
-      if (!symbol) {
+      const symbol = this.normalizeSymbol(rawSymbol);
+      if (!this.isSymbolAllowed(symbol)) {
         return;
       }
 
@@ -5126,10 +5162,11 @@ class TradingMonitor {
 
     // 构建 API 请求 URL
     // 如果选择了特定任务实例，添加 accountId 参数以筛选该账户的交易
+    const targetAccountId = this.normalizeNumericId(this.currentFilterAccountId ?? this.activeAccountId);
     let tradesUrl = `/api/trades?symbol=${encodeURIComponent(symbol)}&limit=500`;
-    if (this.currentFilterInstanceId && this.currentFilterAccountId) {
-      // 选择了特定任务实例，筛选该账户的交易记录
-      tradesUrl += `&accountId=${this.currentFilterAccountId}`;
+    if (targetAccountId) {
+      // 强制按当前账户筛选，避免混杂其他账户的标记
+      tradesUrl += `&accountId=${targetAccountId}`;
     }
 
     // 获取该币种的交易记录（根据筛选条件）
@@ -7258,6 +7295,11 @@ class TradingMonitor {
       return;
     }
 
+    if (this.shouldRestrictToExchangeSymbols()) {
+      console.log("[applyConfigSymbols] 当前处于交易所列表模式，跳过 TRADING_SYMBOLS 覆盖");
+      return;
+    }
+
     const raw = typeof config.TRADING_SYMBOLS === "string" ? config.TRADING_SYMBOLS : "";
     if (!raw) {
       return;
@@ -7285,6 +7327,8 @@ class TradingMonitor {
 
     const nextSet = new Set(uniqueSymbols);
     this.availableSymbols = nextSet;
+  this.exchangeSymbols = null;
+  this.exchangeProvider = null;
 
     const previousActive = this.activeSymbol;
     let symbolChanged = false;
@@ -8522,6 +8566,9 @@ class TradingMonitor {
     } else if (account.provider === "bitget") {
       providerLabel = this.translate("accounts.providers.bitget", "Bitget");
       providerBadgeClass = "badge-bitget";
+    } else if (account.provider === "gate") {
+      providerLabel = this.translate("accounts.providers.gate", "Gate.io");
+      providerBadgeClass = "badge-gate";
     }
 
     const providerBadge = `<span class="account-badge ${providerBadgeClass}">${this.escapeHtml(providerLabel)}</span>`;
@@ -8652,6 +8699,10 @@ class TradingMonitor {
         document.getElementById("account-edit-bitget-key").value = account.api_key || "";
         document.getElementById("account-edit-bitget-secret").value = account.api_secret || "";
         document.getElementById("account-edit-bitget-passphrase").value = account.api_passphrase || "";
+      } else if (account.provider === "gate") {
+        document.getElementById("account-edit-gate-key").value = account.api_key || "";
+        document.getElementById("account-edit-gate-secret").value = account.api_secret || "";
+        document.getElementById("account-edit-gate-testnet").checked = Boolean(account.use_paper);
       } else {
         document.getElementById("account-edit-binance-key").value = account.api_key || "";
         document.getElementById("account-edit-binance-secret").value = account.api_secret || "";
@@ -8821,6 +8872,19 @@ class TradingMonitor {
       data.api_secret = apiSecret;
       data.api_passphrase = passphrase;
       data.use_paper = false; // Bitget V2 API doesn't support paper trading flag in the same way, or we default to false
+    } else if (provider === "gate") {
+      const apiKey = document.getElementById("account-edit-gate-key")?.value?.trim();
+      const apiSecret = document.getElementById("account-edit-gate-secret")?.value?.trim();
+      const useTestnet = document.getElementById("account-edit-gate-testnet")?.checked || false;
+      
+      if (!apiKey || !apiSecret) {
+        this.showToast("error", this.translate("common.error", "Error"), this.translate("accounts.messages.validation.missingGate", "Please fill in all Gate.io credentials"));
+        return null;
+      }
+      
+      data.api_key = apiKey;
+      data.api_secret = apiSecret;
+      data.use_paper = useTestnet;
     } else {
       const apiKey = document.getElementById("account-edit-binance-key")?.value?.trim();
       const apiSecret = document.getElementById("account-edit-binance-secret")?.value?.trim();

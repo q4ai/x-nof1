@@ -154,7 +154,8 @@
 		"providers": {
 			"okx": "OKX",
 			"binance": "Binance",
-			"bitget": "Bitget"
+			"bitget": "Bitget",
+			"gate": "Gate.io"
 		},
 		"form": {
 			"name": "アカウント名 <span class=\"required\">*</span>",
@@ -178,6 +179,11 @@
 			"bitgetApiSecretPlaceholder": "Bitget API Secret を入力",
 			"bitgetPassphrase": "Passphrase <span class=\"required\">*</span>",
 			"bitgetPassphrasePlaceholder": "Bitget Passphrase を入力",
+			"gateApiKey": "API Key <span class=\"required\">*</span>",
+			"gateApiKeyPlaceholder": "Gate.io API Key を入力",
+			"gateApiSecret": "API Secret <span class=\"required\">*</span>",
+			"gateApiSecretPlaceholder": "Gate.io API Secret を入力",
+			"gateUseTestnet": "テストネットを使用",
 			"proxyUrl": "プロキシURL (任意)",
 			"proxyUrlPlaceholder": "http://proxy.example.com:8080",
 			"testConnection": "接続テスト",
@@ -225,7 +231,8 @@
 				"missingName": "アカウント名を入力してください",
 				"missingOkx": "OKX の認証情報をすべて入力してください",
 				"missingBinance": "Binance の認証情報をすべて入力してください",
-				"missingBitget": "Bitget の認証情報をすべて入力してください"
+				"missingBitget": "Bitget の認証情報をすべて入力してください",
+				"missingGate": "Gate.io の認証情報をすべて入力してください"
 			}
 		}
 	},

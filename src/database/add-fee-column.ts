@@ -21,82 +21,81 @@ import { createLogger } from "../utils/loggerUtils";
 import "dotenv/config";
 
 const logger = createLogger({
-  name: "db-migration-fee",
-  level: "info",
+	name: "db-migration-fee",
+	level: "info",
 });
 
 /**
  * 给trades表添加fee字段
  */
 type TableInfoRow = {
-  name?: string | null;
-  type?: string | null;
+	name?: string | null;
+	type?: string | null;
 };
 
 function isTableInfoRow(row: unknown): row is TableInfoRow {
-  return Boolean(row && typeof row === "object");
+	return Boolean(row && typeof row === "object");
 }
 
 async function addFeeColumn() {
-  const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
-  const client = createClient({
-    url: dbUrl,
-  });
+	const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
+	const client = createClient({
+		url: dbUrl,
+	});
 
-  try {
-    logger.info(`📦 连接数据库: ${dbUrl}`);
-    logger.info("🔧 检查trades表结构...");
+	try {
+		logger.info(`📦 连接数据库: ${dbUrl}`);
+		logger.info("🔧 检查trades表结构...");
 
-    // 检查fee列是否已存在
-    const tableInfo = await client.execute({
-      sql: "PRAGMA table_info(trades)",
-      args: [],
-    });
+		// 检查fee列是否已存在
+		const tableInfo = await client.execute({
+			sql: "PRAGMA table_info(trades)",
+			args: [],
+		});
 
-    const hasFeeColumn = tableInfo.rows.some(
-      (row) => isTableInfoRow(row) && row.name === "fee",
-    );
+		const hasFeeColumn = tableInfo.rows.some(
+			(row) => isTableInfoRow(row) && row.name === "fee",
+		);
 
-    if (hasFeeColumn) {
-      logger.info("✅ fee字段已存在，无需添加");
-      return;
-    }
+		if (hasFeeColumn) {
+			logger.info("✅ fee字段已存在，无需添加");
+			return;
+		}
 
-    // 添加fee列
-    logger.info("➕ 添加fee字段到trades表...");
-    await client.execute({
-      sql: "ALTER TABLE trades ADD COLUMN fee REAL",
-      args: [],
-    });
+		// 添加fee列
+		logger.info("➕ 添加fee字段到trades表...");
+		await client.execute({
+			sql: "ALTER TABLE trades ADD COLUMN fee REAL",
+			args: [],
+		});
 
-    logger.info("✅ fee字段添加成功");
+		logger.info("✅ fee字段添加成功");
 
-    // 验证
-    const newTableInfo = await client.execute({
-      sql: "PRAGMA table_info(trades)",
-      args: [],
-    });
+		// 验证
+		const newTableInfo = await client.execute({
+			sql: "PRAGMA table_info(trades)",
+			args: [],
+		});
 
-    logger.info("\n当前trades表结构:");
-    for (const row of newTableInfo.rows) {
-      if (!isTableInfoRow(row)) continue;
-      logger.info(`  - ${row.name ?? "未知字段"}: ${row.type ?? "未知类型"}`);
-    }
+		logger.info("\n当前trades表结构:");
+		for (const row of newTableInfo.rows) {
+			if (!isTableInfoRow(row)) continue;
+			logger.info(`  - ${row.name ?? "未知字段"}: ${row.type ?? "未知类型"}`);
+		}
 
-    logger.info("\n✅ 数据库迁移完成！");
+		logger.info("\n✅ 数据库迁移完成！");
 
-    process.exit(0);
-  } catch (error: unknown) {
-    if (error instanceof Error) {
-      logger.error(`❌ 迁移失败: ${error.message}`);
-    } else {
-      logger.error("❌ 迁移失败: 未知错误", error as Record<string, unknown>);
-    }
-    process.exit(1);
-  } finally {
-    client.close();
-  }
+		process.exit(0);
+	} catch (error: unknown) {
+		if (error instanceof Error) {
+			logger.error(`❌ 迁移失败: ${error.message}`);
+		} else {
+			logger.error("❌ 迁移失败: 未知错误", error as Record<string, unknown>);
+		}
+		process.exit(1);
+	} finally {
+		client.close();
+	}
 }
 
 addFeeColumn();
-
