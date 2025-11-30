@@ -7419,6 +7419,44 @@ class TradingMonitor {
     this.updateAiOverlayVisibility(visibleKeys.length > 0);
   }
 
+  handleActiveAccountChanged(previousId, nextId) {
+    const prev = this.normalizeNumericId(previousId);
+    const next = this.normalizeNumericId(nextId);
+    if (prev === next) {
+      return;
+    }
+    console.log(`[ai-overlay] 活跃账户已切换: ${prev ?? "none"} -> ${next ?? "none"}`);
+    this.resetAiOverlayEntries();
+    this.updateAiOverlay(this.latestConfig);
+    // 重新同步最新的交易状态，避免等待下一轮 WebSocket 推送
+    void this.prefetchLatestTradingStatuses();
+  }
+
+  resetAiOverlayEntries() {
+    if (!this.aiOverlayEntries || this.aiOverlayEntries.size === 0) {
+      return;
+    }
+
+    this.visibleAiOverlayKeys = new Set();
+    this.aiOverlayEntries.forEach((entry, key) => {
+      if (entry.resetTimer) {
+        clearTimeout(entry.resetTimer);
+        entry.resetTimer = null;
+      }
+      this.setOverlayEntryExecuting(entry, false);
+      if (entry.defaultText) {
+        entry.textEl.textContent = entry.defaultText;
+      }
+      if (key !== this.aiOverlayDefaultKey) {
+        entry.element.style.display = "none";
+      }
+    });
+
+    if (this.aiOverlayContainer) {
+      this.aiOverlayContainer.style.display = "none";
+    }
+  }
+
   /**
    * 格式化模型名称用于显示
    * 例如: "x-ai/grok-4.1-fast:free" -> "grok-4.1-fast:free"
@@ -8466,11 +8504,14 @@ class TradingMonitor {
       
       const data = await response.json();
       const accounts = data.accounts || [];
+      const previousActiveId = this.activeAccountId;
       this.accountsCache = accounts;
 
       // 更新当前活跃账户ID
       const activeAccount = accounts.find(acc => acc.is_active);
-      this.activeAccountId = activeAccount ? activeAccount.id : null;
+      const nextActiveId = activeAccount ? activeAccount.id : null;
+      this.activeAccountId = nextActiveId;
+      this.handleActiveAccountChanged(previousActiveId, nextActiveId);
 
       this.updateAccountSwitcherDisplay();
       
@@ -9031,6 +9072,13 @@ class TradingMonitor {
       const successMessage = payload.message || this.translate("accounts.messages.activateSuccess", "Account activated");
       this.showToast("success", this.translate("common.success", "Success"), successMessage);
       await this.loadAccountsList();
+      
+      // 刷新任务实例缓存（用于 AI Overlay 显示正确的模型状态）
+      try {
+        await this.refreshRunningTasksPanel(true);
+      } catch (instanceError) {
+        console.warn("刷新任务实例失败:", instanceError);
+      }
       
       // 刷新币种筛选器（加载新账户的任务实例）
       try {
