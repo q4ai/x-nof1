@@ -132,6 +132,7 @@ const MODEL_ICON_MATCHERS = [
   { pattern: /doubao/i, icon: "/static/icons/doubao-color.png" },
   { pattern: /minimax/i, icon: "/static/icons/minimax-color.png" },
   { pattern: /mistral/i, icon: "/static/icons/mistral-color.png" },
+  { pattern: /kimi/i, icon: "/static/icons/kimi-color.png" },
   { pattern: /gpt|openai/i, icon: "/static/icons/openai.png" },
 ];
 
