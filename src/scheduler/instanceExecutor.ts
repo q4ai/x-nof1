@@ -57,6 +57,13 @@ interface TradeActionRecord {
 	orderId: string | null;
 }
 
+interface RecentDecisionRecord {
+	timestamp: string;
+	decision: string;
+	accountValue: number | null;
+	positionsCount: number | null;
+}
+
 /**
  * 安全转换为字符串
  */
@@ -135,6 +142,39 @@ async function getTradeActionsBetween(
 		return actions;
 	} catch (error) {
 		logger.error("获取交易动作失败:", error as any);
+		return [];
+	}
+}
+
+async function getRecentAgentDecisions(
+	accountId: number,
+	limit = 5,
+): Promise<RecentDecisionRecord[]> {
+	try {
+		const result = await dbClient.execute({
+			sql: `SELECT timestamp, decision, account_value, positions_count
+			      FROM agent_decisions
+			      WHERE account_id = ?
+			      ORDER BY timestamp DESC
+			      LIMIT ?`,
+			args: [accountId.toString(), limit],
+		});
+
+		const records: RecentDecisionRecord[] = [];
+		for (const row of result.rows as any[]) {
+			const timestamp = toSafeString(row.timestamp);
+			const decision = toSafeString(row.decision);
+			records.push({
+				timestamp: timestamp || "",
+				decision,
+				accountValue: toSafeNumber(row.account_value),
+				positionsCount: toSafeNumber(row.positions_count),
+			});
+		}
+
+		return records.reverse();
+	} catch (error) {
+		logger.error(`获取账户 ${accountId} 历史决策失败:`, error as any);
 		return [];
 	}
 }
@@ -529,52 +569,180 @@ async function collectMarketDataForInstance(
 	accountId: number,
 ): Promise<Record<string, any>> {
 	const marketData: Record<string, any> = {};
+	const timeframeConfigs = [
+		{ key: "1m", interval: "1m", limit: 120 },
+		{ key: "3m", interval: "3m", limit: 120 },
+		{ key: "5m", interval: "5m", limit: 120 },
+		{ key: "15m", interval: "15m", limit: 192 },
+		{ key: "30m", interval: "30m", limit: 192 },
+		{ key: "1h", interval: "1h", limit: 240 },
+	];
 
 	for (const symbol of symbols) {
 		try {
 			const contract = `${symbol}_USDT`;
+			const [ticker, fundingRate] = await Promise.all([
+				exchangeClient.getFuturesTicker(contract),
+				exchangeClient.getFundingRate(contract).catch((error: unknown) => {
+					logger.warn(`获取 ${symbol} 资金费率失败: ${String(error)}`);
+					return null;
+				}),
+			]);
 
-			// 获取价格
-			const ticker = await exchangeClient.getFuturesTicker(contract);
-			const price = Number.parseFloat(ticker.last || "0");
-
+			const price = Number.parseFloat(ticker.last || ticker.price || "0");
 			if (price === 0 || !Number.isFinite(price)) {
 				logger.warn(`${symbol} 价格无效，跳过`);
 				continue;
 			}
 
-			// 获取 K 线
-			const candles5m = await exchangeClient.getFuturesCandles(
-				contract,
-				"5m",
-				100,
-			);
-			const candles1h = await exchangeClient.getFuturesCandles(
-				contract,
-				"1h",
-				168,
+			const candleResults: Record<string, any[]> = {};
+			await Promise.all(
+				timeframeConfigs.map(async (cfg) => {
+					try {
+						const candles = await exchangeClient.getFuturesCandles(
+							contract,
+							cfg.interval,
+							cfg.limit,
+						);
+						if (candles && candles.length > 0) {
+							candleResults[cfg.key] = candles;
+							logger.debug(
+								`${symbol} 获取 ${cfg.interval} K 线成功，共 ${candles.length} 条`,
+							);
+						} else {
+							logger.warn(
+								`${symbol} ${cfg.interval} K 线数据为空`,
+							);
+						}
+					} catch (error) {
+						logger.warn(
+							`${symbol} 获取 ${cfg.interval} K 线失败: ${String(error)}`,
+						);
+					}
+				}),
 			);
 
-			// 计算基本指标
-			const closes5m = candles5m
-				.map((c: any) => Number.parseFloat(c.c || "0"))
-				.filter((n: number) => Number.isFinite(n));
-			const closes1h = candles1h
-				.map((c: any) => Number.parseFloat(c.c || "0"))
-				.filter((n: number) => Number.isFinite(n));
+			// 诊断日志：检查 K 线数据获取情况
+			const availableTimeframes = Object.keys(candleResults);
+			if (availableTimeframes.length === 0) {
+				logger.error(
+					`${symbol} 所有时间框架的 K 线数据都获取失败！这会导致所有指标为默认值。`,
+				);
+			} else {
+				logger.info(
+					`${symbol} 成功获取 K 线数据的时间框架: ${availableTimeframes.join(", ")}`,
+				);
+			}
+
+			const timeframes: Record<string, TimeframeSummary> = {};
+			for (const cfg of timeframeConfigs) {
+				const candles = candleResults[cfg.key];
+				if (!candles || candles.length === 0) {
+					logger.warn(`${symbol} ${cfg.key} K 线数据不可用，跳过`);
+					continue;
+				}
+				const summary = summarizeTimeframe(cfg.key, candles);
+				if (summary) {
+					timeframes[cfg.key] = summary;
+					logger.debug(
+						`${symbol} ${cfg.key} 指标计算成功: EMA20=${summary.ema20.toFixed(2)}, MACD=${summary.macd.toFixed(3)}`,
+					);
+				} else {
+					logger.warn(`${symbol} ${cfg.key} 指标计算失败`);
+				}
+			}
+
+			const baseTimeframe =
+				timeframes["5m"] ||
+				timeframes["3m"] ||
+				timeframes["1m"] ||
+				Object.values(timeframes)[0];
+
+			// 诊断日志：检查 baseTimeframe 是否有效
+			if (!baseTimeframe) {
+				logger.error(
+					`${symbol} 没有任何有效的时间框架数据，所有指标将使用默认值！`,
+				);
+			} else {
+				const baseInterval = baseTimeframe.interval;
+				logger.info(
+					`${symbol} 使用 ${baseInterval} 作为基础时间框架，EMA20=${baseTimeframe.ema20.toFixed(2)}`,
+				);
+			}
+
+			const intradaySourceCandles =
+				candleResults["3m"] || candleResults["5m"] || candleResults["1m"];
+			const intradaySeries = intradaySourceCandles
+				? buildIntradaySeriesFromCandles(intradaySourceCandles)
+				: null;
+
+			// 诊断日志：检查日内序列数据
+			if (!intradaySeries) {
+				logger.warn(`${symbol} 日内序列数据为空`);
+			} else {
+				logger.info(
+					`${symbol} 日内序列数据长度: ${intradaySeries.midPrices.length}`,
+				);
+			}
+
+			const fundingRateValue = (() => {
+				if (!fundingRate) {
+					return 0;
+				}
+				// 支持多种字段名：OKX (r), Binance (rate), Gate.io (fundingRate), 通用 (value)
+				const valueCandidates = [
+					fundingRate.r,
+					fundingRate.rate,
+					fundingRate.fundingRate, // Gate.io 使用此字段
+					fundingRate.value,
+				];
+				for (const candidate of valueCandidates) {
+					if (candidate !== undefined && candidate !== null) {
+						const parsed = Number.parseFloat(String(candidate));
+						if (Number.isFinite(parsed)) {
+							logger.debug(`${symbol} 资金费率: ${parsed}`);
+							return parsed;
+						}
+					}
+				}
+				logger.warn(`${symbol} 无法解析资金费率，fundingRate 对象:`, fundingRate);
+				return 0;
+			})();
+
+			const ema20 = baseTimeframe?.ema20 ?? 0;
+			const ema50 = baseTimeframe?.ema50 ?? 0;
+			const macd = baseTimeframe?.macd ?? 0;
+			const rsi7 = baseTimeframe?.rsi7 ?? 50;
+			const rsi14 = baseTimeframe?.rsi14 ?? 50;
+
+			// 解析 24h 成交量（支持多种字段名）
+			const volume24hRaw =
+				ticker.volume_24h || // Gate.io
+				ticker.volume24h || // Binance
+				ticker.volume || // 通用
+				"0";
+			const volume24h = Number.parseFloat(String(volume24hRaw));
+			if (!Number.isFinite(volume24h) || volume24h === 0) {
+				logger.warn(
+					`${symbol} 24h 成交量解析异常: ${volume24hRaw}，ticker 对象:`,
+					ticker,
+				);
+			}
 
 			marketData[symbol] = {
 				price,
-				change24h: Number.parseFloat(ticker.change_percentage || "0"),
-				volume24h: Number.parseFloat(ticker.volume_24h || "0"),
-				ema20: calcEMA(closes5m, 20),
-				ema50: calcEMA(closes5m, 50),
-				rsi14: calcRSI(closes5m, 14),
-				macd: calcMACD(closes5m),
-				timeframes: {
-					"5m": { closes: closes5m.slice(-10) },
-					"1h": { closes: closes1h.slice(-10) },
-				},
+				change24h: Number.parseFloat(
+					ticker.change_percentage || ticker.changePercentage || "0",
+				),
+				volume24h,
+				ema20,
+				ema50,
+				macd,
+				rsi7,
+				rsi14,
+				fundingRate: fundingRateValue,
+				timeframes,
+				intradaySeries,
 			};
 		} catch (error) {
 			logger.error(`收集 ${symbol} 市场数据失败:`, error);
@@ -583,7 +751,6 @@ async function collectMarketDataForInstance(
 
 	return marketData;
 }
-
 // EMA 计算
 function calcEMA(prices: number[], period: number): number {
 	if (prices.length === 0) return 0;
@@ -616,6 +783,231 @@ function calcRSI(prices: number[], period: number): number {
 function calcMACD(prices: number[]): number {
 	if (prices.length < 26) return 0;
 	return calcEMA(prices, 12) - calcEMA(prices, 26);
+}
+
+const INDICATOR_HISTORY_LENGTH = 10;
+
+interface IndicatorHistorySnapshot {
+	prices: number[];
+	ema20: number[];
+	ema50: number[];
+	macd: number[];
+	rsi7: number[];
+	rsi14: number[];
+	volumes: number[];
+}
+
+interface TimeframeSummary {
+	interval: string;
+	currentPrice: number;
+	ema20: number;
+	ema50: number;
+	macd: number;
+	rsi7: number;
+	rsi14: number;
+	volume: number;
+	avgVolume: number;
+	atr3: number;
+	atr14: number;
+	history: IndicatorHistorySnapshot | null;
+}
+
+interface IntradaySeriesSnapshot {
+	interval: string;
+	midPrices: number[];
+	ema20Series: number[];
+	macdSeries: number[];
+	rsi7Series: number[];
+	rsi14Series: number[];
+}
+
+function toFiniteNumber(value: unknown, fallback = 0): number {
+	if (typeof value === "number" && Number.isFinite(value)) {
+		return value;
+	}
+	if (typeof value === "bigint") {
+		return Number(value);
+	}
+	if (typeof value === "string" && value.trim().length > 0) {
+		const parsed = Number.parseFloat(value);
+		return Number.isFinite(parsed) ? parsed : fallback;
+	}
+	return fallback;
+}
+
+function readCandleNumber(
+	candle: any,
+	objectKeys: string[],
+	arrayIndex?: number,
+	fallback = Number.NaN,
+): number {
+	if (candle && typeof candle === "object") {
+		for (const key of objectKeys) {
+			if (key in candle) {
+				return toFiniteNumber((candle as Record<string, unknown>)[key], fallback);
+			}
+		}
+	}
+	if (Array.isArray(candle) && arrayIndex !== undefined) {
+		const exists = arrayIndex >= 0 && arrayIndex < candle.length;
+		if (exists) {
+			return toFiniteNumber(candle[arrayIndex], fallback);
+		}
+	}
+	return fallback;
+}
+
+function extractClosesFromCandles(candles: any[]): number[] {
+	return candles
+		.map((c: any) => {
+			return readCandleNumber(c, ["c", "close", "Close"], 4, Number.NaN);
+		})
+		.filter((value: number) => Number.isFinite(value));
+}
+
+function extractVolumesFromCandles(candles: any[]): number[] {
+	return candles
+		.map((c: any) => {
+			const vol = readCandleNumber(c, ["v", "volume", "Volume"], 5, 0);
+			return vol >= 0 ? vol : 0;
+		})
+		.filter((value: number) => value >= 0);
+}
+
+function calcATRFromCandles(candles: any[], period: number): number {
+	if (!candles || candles.length < 2) {
+		return 0;
+	}
+	const trueRanges: number[] = [];
+	for (let i = 1; i < candles.length; i++) {
+		const current = candles[i];
+		const prev = candles[i - 1];
+		const high = readCandleNumber(current, ["h", "high", "High"], 2, Number.NaN);
+		const low = readCandleNumber(current, ["l", "low", "Low"], 3, Number.NaN);
+		const prevClose = readCandleNumber(prev, ["c", "close", "Close"], 4, Number.NaN);
+		if (
+			Number.isFinite(high) &&
+			Number.isFinite(low) &&
+			Number.isFinite(prevClose)
+		) {
+			const tr = Math.max(
+				high - low,
+				Math.abs(high - prevClose),
+				Math.abs(low - prevClose),
+			);
+			trueRanges.push(tr);
+		}
+	}
+	if (trueRanges.length === 0) {
+		return 0;
+	}
+	const slice = trueRanges.slice(-period);
+	const divisor = slice.length || 1;
+	return slice.reduce((acc, val) => acc + val, 0) / divisor;
+}
+
+
+function buildIndicatorHistoryFromCloses(
+	closes: number[],
+	volumes: number[],
+	length: number,
+): IndicatorHistorySnapshot | null {
+	if (closes.length === 0) {
+		return null;
+	}
+	const historyLength = Math.min(length, closes.length);
+	const startIndex = closes.length - historyLength;
+	const ema20Series: number[] = [];
+	const ema50Series: number[] = [];
+	const macdSeries: number[] = [];
+	const rsi7Series: number[] = [];
+	const rsi14Series: number[] = [];
+	for (let idx = startIndex; idx < closes.length; idx++) {
+		const slice = closes.slice(0, idx + 1);
+		ema20Series.push(calcEMA(slice, 20));
+		ema50Series.push(calcEMA(slice, 50));
+		macdSeries.push(calcMACD(slice));
+		rsi7Series.push(calcRSI(slice, 7));
+		rsi14Series.push(calcRSI(slice, 14));
+	}
+	return {
+		prices: closes.slice(-historyLength),
+		ema20: ema20Series.slice(-historyLength),
+		ema50: ema50Series.slice(-historyLength),
+		macd: macdSeries.slice(-historyLength),
+		rsi7: rsi7Series.slice(-historyLength),
+		rsi14: rsi14Series.slice(-historyLength),
+		volumes: volumes.slice(-historyLength),
+	};
+}
+
+function summarizeTimeframe(
+	interval: string,
+	candles: any[],
+): TimeframeSummary | null {
+	const closes = extractClosesFromCandles(candles);
+	if (closes.length === 0) {
+		return null;
+	}
+	const volumes = extractVolumesFromCandles(candles);
+	const currentPrice = closes.at(-1) ?? 0;
+	const ema20 = calcEMA(closes, 20);
+	const ema50 = calcEMA(closes, 50);
+	const macd = calcMACD(closes);
+	const rsi7 = calcRSI(closes, 7);
+	const rsi14 = calcRSI(closes, 14);
+	const currentVolume = volumes.at(-1) ?? 0;
+	const avgVolume =
+		volumes.length > 0
+			? volumes.reduce((sum, value) => sum + value, 0) / volumes.length
+			: 0;
+	const atr3 = calcATRFromCandles(candles, 3);
+	const atr14 = calcATRFromCandles(candles, 14);
+	const history = buildIndicatorHistoryFromCloses(
+		closes,
+		volumes,
+		INDICATOR_HISTORY_LENGTH,
+	);
+	return {
+		interval,
+		currentPrice,
+		ema20,
+		ema50,
+		macd,
+		rsi7,
+		rsi14,
+		volume: currentVolume,
+		avgVolume,
+		atr3,
+		atr14,
+		history,
+	};
+}
+
+function buildIntradaySeriesFromCandles(
+	candles: any[],
+): IntradaySeriesSnapshot | null {
+	const closes = extractClosesFromCandles(candles);
+	if (closes.length === 0) {
+		return null;
+	}
+	const volumes = extractVolumesFromCandles(candles);
+	const history = buildIndicatorHistoryFromCloses(
+		closes,
+		volumes,
+		INDICATOR_HISTORY_LENGTH,
+	);
+	if (!history) {
+		return null;
+	}
+	return {
+		interval: "3m",
+		midPrices: history.prices,
+		ema20Series: history.ema20,
+		macdSeries: history.macd,
+		rsi7Series: history.rsi7,
+		rsi14Series: history.rsi14,
+	};
 }
 
 /**
@@ -782,6 +1174,7 @@ async function executeWithContext(
 		config,
 		intervalMinutes,
 	);
+	const recentDecisions = await getRecentAgentDecisions(accountId);
 
 	// 6. 生成提示词（使用多语言模板）
 	const prompt = await generateInstancePrompt({
@@ -793,6 +1186,7 @@ async function executeWithContext(
 		positions: activePositions,
 		strategyName,
 		intervalMinutes,
+		recentDecisions,
 	});
 
 	logger.info(`[实例 ${instanceName}] 调用 AI 模型: ${modelName}`);
@@ -959,6 +1353,7 @@ async function generateInstancePrompt(params: {
 	iteration?: number;
 	minutesElapsed?: number;
 	intervalMinutes?: number;
+	recentDecisions?: RecentDecisionRecord[];
 }): Promise<string> {
 	const {
 		instanceName,
@@ -971,6 +1366,7 @@ async function generateInstancePrompt(params: {
 		iteration = 0,
 		minutesElapsed = 0,
 		intervalMinutes = 5,
+		recentDecisions = [],
 	} = params;
 
 	// 获取语言配置
@@ -1024,8 +1420,12 @@ async function generateInstancePrompt(params: {
 		language,
 		intervalMinutes,
 	});
+	const recentDecisionSection = formatRecentDecisionsForPrompt(
+		recentDecisions,
+		language,
+	);
 
-	return [promptHeader, marketSection, accountSection]
+	return [promptHeader, marketSection, accountSection, recentDecisionSection]
 		.filter(Boolean)
 		.join("\n\n");
 }
@@ -1033,6 +1433,13 @@ async function generateInstancePrompt(params: {
 /**
  * 格式化市场数据用于提示词
  */
+function formatNumberSeries(series: number[], decimals = 2): string {
+	if (!series || series.length === 0) {
+		return "[]";
+	}
+	return `[${series.map((value) => value.toFixed(decimals)).join(", ")}]`;
+}
+
 function formatMarketDataForPrompt(
 	marketData: Record<string, any>,
 	language: StrategyLanguage,
@@ -1044,36 +1451,171 @@ function formatMarketDataForPrompt(
 
 	const separator = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
 	const lines: string[] = [separator];
+	const header = language === "zh" ? "【市场行情快照】" : "[Market Snapshot]";
+	lines.push(header);
+	lines.push("");
+	lines.push(language === "zh" ? "所有币种的当前市场状态" : "All symbols current market status");
+	lines.push("");
 
-	if (language === "zh") {
-		lines.push("【市场行情快照】");
-		for (const [symbol, data] of Object.entries(marketData)) {
-			const price = Number(data.price || 0);
-			const change24h = Number(data.change24h || 0);
-			const rsi14 = Number(data.rsi14 || 50);
-			const ema20 = Number(data.ema20 || 0);
-			const macd = Number(data.macd || 0);
+	const timeframeLabels = [
+		{ key: "1m", zh: "1分钟", en: "1m" },
+		{ key: "3m", zh: "3分钟", en: "3m" },
+		{ key: "5m", zh: "5分钟", en: "5m" },
+		{ key: "15m", zh: "15分钟", en: "15m" },
+		{ key: "30m", zh: "30分钟", en: "30m" },
+		{ key: "1h", zh: "1小时", en: "1h" },
+	];
 
+	const formatPercent = (value: number) => {
+		if (!Number.isFinite(value)) return language === "zh" ? "0%" : "0%";
+		return `${value >= 0 ? "+" : ""}${value.toFixed(2)}%`;
+	};
+
+	for (const symbol of symbols) {
+		const data = marketData[symbol] ?? {};
+		const price = Number(data.price || 0);
+		const change24h = Number(data.change24h || 0);
+		const ema20 = Number(data.ema20 || 0);
+		const ema50 = Number(data.ema50 || 0);
+		const macd = Number(data.macd || 0);
+		const rsi7 = Number(data.rsi7 || 0);
+		const rsi14 = Number(data.rsi14 || 0);
+		const fundingRate = Number(data.fundingRate || 0);
+		const volume24h = Number(data.volume24h || 0);
+		const timeframes: Record<string, TimeframeSummary> = data.timeframes || {};
+		const intradaySeries: IntradaySeriesSnapshot | null = data.intradaySeries || null;
+
+		const sectionTitle =
+			language === "zh" ? `所有 ${symbol} 数据` : `All ${symbol} data`;
+		lines.push(sectionTitle);
+		lines.push(
+			language === "zh"
+				? `当前价格 = ${price.toFixed(2)}, 当前EMA20 = ${ema20.toFixed(3)}, 当前MACD = ${macd.toFixed(3)}, 当前RSI（7周期） = ${rsi7.toFixed(3)}`
+				: `Current price = ${price.toFixed(2)}, Current EMA20 = ${ema20.toFixed(3)}, Current MACD = ${macd.toFixed(3)}, Current RSI(7-period) = ${rsi7.toFixed(3)}`,
+		);
+		lines.push("");
+
+		lines.push(
+			language === "zh"
+				? `此外，这是 ${symbol} 永续合约的最新资金费率（您交易的合约类型）：`
+				: `Additionally, here is the latest funding rate for the ${symbol} perpetual contract (the contract type you trade):`,
+		);
+		lines.push("");
+		lines.push(
+			language === "zh"
+				? `资金费率: ${fundingRate.toExponential(2)}`
+				: `Funding rate: ${fundingRate.toExponential(2)}`,
+		);
+		lines.push("");
+
+		if (intradaySeries && intradaySeries.midPrices.length > 0) {
 			lines.push(
-				`【${symbol}】价=${price.toFixed(2)} 涨跌=${change24h.toFixed(2)}% RSI14=${rsi14.toFixed(1)} EMA20=${ema20.toFixed(2)} MACD=${macd.toFixed(4)}`,
+				language === "zh"
+					? "日内序列（按分钟，最旧 → 最新）："
+					: "Intraday sequences (per minute, oldest → latest):",
 			);
-		}
-	} else {
-		lines.push("[Market Snapshot]");
-		for (const [symbol, data] of Object.entries(marketData)) {
-			const price = Number(data.price || 0);
-			const change24h = Number(data.change24h || 0);
-			const rsi14 = Number(data.rsi14 || 50);
-			const ema20 = Number(data.ema20 || 0);
-			const macd = Number(data.macd || 0);
-
+			lines.push("");
 			lines.push(
-				`[${symbol}] Price=${price.toFixed(2)} Change=${change24h.toFixed(2)}% RSI14=${rsi14.toFixed(1)} EMA20=${ema20.toFixed(2)} MACD=${macd.toFixed(4)}`,
+				(language === "zh" ? "中间价: " : "Mid prices: ") +
+					formatNumberSeries(intradaySeries.midPrices.slice(-10), 1),
 			);
+			lines.push("");
+			
+			if (intradaySeries.ema20Series && intradaySeries.ema20Series.length > 0) {
+				lines.push(
+					(language === "zh" ? "EMA指标（20周期）: " : "EMA indicator (20-period): ") +
+						formatNumberSeries(intradaySeries.ema20Series.slice(-10), 3),
+				);
+				lines.push("");
+			}
+			if (intradaySeries.macdSeries && intradaySeries.macdSeries.length > 0) {
+				lines.push(
+					(language === "zh" ? "MACD指标: " : "MACD indicator: ") +
+						formatNumberSeries(intradaySeries.macdSeries.slice(-10), 3),
+				);
+				lines.push("");
+			}
+			if (intradaySeries.rsi7Series && intradaySeries.rsi7Series.length > 0) {
+				lines.push(
+					(language === "zh" ? "RSI指标（7周期）: " : "RSI indicator (7-period): ") +
+						formatNumberSeries(intradaySeries.rsi7Series.slice(-10), 3),
+				);
+				lines.push("");
+			}
+			if (intradaySeries.rsi14Series && intradaySeries.rsi14Series.length > 0) {
+				lines.push(
+					(language === "zh" ? "RSI指标（14周期）: " : "RSI indicator (14-period): ") +
+						formatNumberSeries(intradaySeries.rsi14Series.slice(-10), 3),
+				);
+				lines.push("");
+			}
 		}
+
+		const oneHour = timeframes["1h"];
+		if (oneHour) {
+			lines.push(
+				language === "zh"
+					? "更长期上下文（1小时时间框架）："
+					: "Longer-term context (1-hour timeframe):",
+			);
+			lines.push("");
+			lines.push(
+				language === "zh"
+					? `20周期EMA: ${oneHour.ema20.toFixed(2)} vs. 50周期EMA: ${oneHour.ema50.toFixed(2)}`
+					: `20-period EMA: ${oneHour.ema20.toFixed(2)} vs. 50-period EMA: ${oneHour.ema50.toFixed(2)}`,
+			);
+			lines.push("");
+			lines.push(
+				language === "zh"
+					? `3周期ATR: ${oneHour.atr3.toFixed(2)} vs. 14周期ATR: ${oneHour.atr14.toFixed(3)}`
+					: `3-period ATR: ${oneHour.atr3.toFixed(2)} vs. 14-period ATR: ${oneHour.atr14.toFixed(3)}`,
+			);
+			lines.push("");
+			lines.push(
+				language === "zh"
+					? `当前成交量: ${oneHour.volume.toFixed(2)} vs. 平均成交量: ${oneHour.avgVolume.toFixed(3)}`
+					: `Current volume: ${oneHour.volume.toFixed(2)} vs. average volume: ${oneHour.avgVolume.toFixed(3)}`,
+			);
+			lines.push("");
+			
+			if (oneHour.history) {
+				if (oneHour.history.macd && oneHour.history.macd.length > 0) {
+					lines.push(
+						(language === "zh" ? "MACD指标: " : "MACD indicator: ") +
+							formatNumberSeries(oneHour.history.macd.slice(-10), 3),
+					);
+					lines.push("");
+				}
+				if (oneHour.history.rsi14 && oneHour.history.rsi14.length > 0) {
+					lines.push(
+						(language === "zh" ? "RSI指标（14周期）: " : "RSI indicator (14-period): ") +
+							formatNumberSeries(oneHour.history.rsi14.slice(-10), 3),
+					);
+					lines.push("");
+				}
+			}
+		}
+
+		lines.push(
+			language === "zh" ? "多时间框架指标：" : "Multi-timeframe indicators:",
+		);
+		lines.push("");
+		for (const tf of timeframeLabels) {
+			const tfData = timeframes[tf.key];
+			if (!tfData) continue;
+			const label = language === "zh" ? tf.zh : tf.en;
+			const baseLine =
+				language === "zh"
+					? `${label}: 价格=${tfData.currentPrice.toFixed(2)}, EMA20=${tfData.ema20.toFixed(2)}, EMA50=${tfData.ema50.toFixed(2)}, MACD=${tfData.macd.toFixed(3)}, RSI7=${tfData.rsi7.toFixed(1)}, RSI14=${tfData.rsi14.toFixed(1)}, 成交量=${tfData.volume.toFixed(2)}`
+					: `${label}: Price=${tfData.currentPrice.toFixed(2)}, EMA20=${tfData.ema20.toFixed(2)}, EMA50=${tfData.ema50.toFixed(2)}, MACD=${tfData.macd.toFixed(3)}, RSI7=${tfData.rsi7.toFixed(1)}, RSI14=${tfData.rsi14.toFixed(1)}, Volume=${tfData.volume.toFixed(2)}`;
+			lines.push(baseLine);
+		}
+
+		lines.push("");
+		lines.push("");
 	}
 
-	return lines.join("\n");
+	return lines.join("\n").trimEnd();
 }
 
 /**
@@ -1158,6 +1700,93 @@ function formatAccountInfoForPrompt(params: {
 			}
 		}
 	}
+
+	return lines.join("\n");
+}
+
+function formatRecentDecisionsForPrompt(
+	records: RecentDecisionRecord[],
+	language: StrategyLanguage,
+): string {
+	if (!records || records.length === 0) {
+		return "";
+	}
+
+	const separator = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━";
+	const lines: string[] = [separator];
+	
+	if (language === "zh") {
+		lines.push("【历史决策记录开始】");
+		lines.push(separator);
+		lines.push("");
+		lines.push("重要提醒：以下是历史决策记录，仅作为参考，不代表当前状态！");
+		lines.push("当前市场数据和持仓信息请参考上方实时数据。");
+		lines.push("");
+	} else {
+		lines.push("[Historical Decision Records Begin]");
+		lines.push(separator);
+		lines.push("");
+		lines.push("Important Reminder: The following are historical decision records for reference only, not current status!");
+		lines.push("For current market data and position information, please refer to the real-time data above.");
+		lines.push("");
+	}
+
+	records.forEach((record, index) => {
+		const timeLabel = record.timestamp || (language === "zh" ? "未知时间" : "Unknown time");
+		const timeAgo = record.timestamp
+			? Math.round((Date.now() - new Date(record.timestamp).getTime()) / 60000)
+			: null;
+		const navLabel =
+			record.accountValue !== null && record.accountValue !== undefined
+				? record.accountValue.toFixed(2)
+				: language === "zh" ? "未知" : "Unknown";
+		const positionLabel =
+			record.positionsCount !== null && record.positionsCount !== undefined
+				? record.positionsCount.toString()
+				: "-";
+		const normalizedDecision = record.decision
+			.replace(/\s+/g, " ")
+			.trim();
+		const maxLength = 500;
+		const decisionSummary =
+			normalizedDecision.length > maxLength
+				? `${normalizedDecision.slice(0, maxLength)}...`
+				: normalizedDecision;
+
+		if (language === "zh") {
+			lines.push(
+				`【历史】决策 #${index} (${timeLabel}${timeAgo ? `，${timeAgo}分钟前` : ""}):`,
+			);
+			lines.push(`  当时账户价值: ${navLabel} USDT`);
+			lines.push(`  当时持仓数量: ${positionLabel}`);
+			lines.push(`  当时决策内容: ${decisionSummary || "(空)"}`);
+		} else {
+			lines.push(
+				`[Historical] Decision #${index} (${timeLabel}${timeAgo ? `, ${timeAgo} minutes ago` : ""}):`,
+			);
+			lines.push(`  Account value then: ${navLabel} USDT`);
+			lines.push(`  Position count then: ${positionLabel}`);
+			lines.push(`  Decision content then: ${decisionSummary || "(empty)"}`);
+		}
+		lines.push("");
+	});
+	
+	if (language === "zh") {
+		lines.push("【历史决策记录结束】");
+		lines.push("");
+		lines.push("使用建议：");
+		lines.push("- 仅作为决策连续性参考，不要被历史决策束缚");
+		lines.push("- 市场已经变化，请基于当前最新数据独立判断");
+		lines.push("- 如果市场条件改变，应该果断调整策略");
+	} else {
+		lines.push("[Historical Decision Records End]");
+		lines.push("");
+		lines.push("Usage suggestions:");
+		lines.push("- Use only as reference for decision continuity, don't be constrained by historical decisions");
+		lines.push("- Market has changed, make independent judgment based on current latest data");
+		lines.push("- If market conditions change, adjust strategy decisively");
+	}
+	lines.push("");
 
 	return lines.join("\n");
 }

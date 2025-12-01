@@ -529,8 +529,16 @@ function formatMarketDataSection(
 		return language === "zh" ? "暂无市场数据" : "No market data available";
 	}
 
+	// 辅助函数：格式化数字序列
+	const formatSeries = (arr: number[], decimals = 2): string => {
+		if (!arr || arr.length === 0) return "[]";
+		return `[${arr.map(v => safeNumber(v).toFixed(decimals)).join(", ")}]`;
+	};
+
 	if (language === "en") {
 		const lines: string[] = [SECTION_SEPARATOR, "[Market Snapshot]"];
+		lines.push("\nAll symbols current market status\n");
+		
 		for (const symbol of symbols) {
 			const data = marketData[symbol] ?? {};
 			const price = safeNumber(data.price);
@@ -540,15 +548,64 @@ function formatMarketDataSection(
 			const rsi14 = safeNumber(data.rsi14);
 			const funding = safeNumber(data.fundingRate);
 
+			lines.push(`All ${symbol} data`);
 			lines.push(
-				`[${symbol}] Price=${price.toFixed(2)} EMA20=${ema20.toFixed(3)} MACD=${macd.toFixed(3)} RSI7=${rsi7.toFixed(2)} RSI14=${rsi14.toFixed(2)}`,
+				`Current price = ${price.toFixed(2)}, Current EMA20 = ${ema20.toFixed(3)}, Current MACD = ${macd.toFixed(3)}, Current RSI(7-period) = ${rsi7.toFixed(3)}`,
 			);
-			if (funding !== 0) {
-				lines.push(`Funding rate=${funding.toExponential(2)}`);
+			lines.push("");
+			lines.push(
+				`Additionally, here is the latest funding rate for the ${symbol} perpetual contract (the contract type you trade):`,
+			);
+			lines.push(`\nFunding rate: ${funding.toExponential(2)}\n`);
+
+			// 日内序列数据 (Intraday series)
+			const series = data.intradaySeries;
+			if (series && Array.isArray(series.midPrices) && series.midPrices.length > 0) {
+				lines.push("Intraday sequences (per minute, oldest → latest):\n");
+				lines.push(`Mid prices: ${formatSeries(series.midPrices.slice(-10), 1)}\n`);
+				
+				if (series.ema20Series && series.ema20Series.length > 0) {
+					lines.push(`EMA indicator (20-period): ${formatSeries(series.ema20Series.slice(-10), 3)}\n`);
+				}
+				if (series.macdSeries && series.macdSeries.length > 0) {
+					lines.push(`MACD indicator: ${formatSeries(series.macdSeries.slice(-10), 3)}\n`);
+				}
+				if (series.rsi7Series && series.rsi7Series.length > 0) {
+					lines.push(`RSI indicator (7-period): ${formatSeries(series.rsi7Series.slice(-10), 3)}\n`);
+				}
+				if (series.rsi14Series && series.rsi14Series.length > 0) {
+					lines.push(`RSI indicator (14-period): ${formatSeries(series.rsi14Series.slice(-10), 3)}\n`);
+				}
 			}
 
+			// 更长期上下文 (1小时时间框架)
 			const timeframes = data.timeframes || {};
-			const tfSummary: string[] = [];
+			const oneHour = timeframes["1h"];
+			if (oneHour) {
+				lines.push("Longer-term context (1-hour timeframe):\n");
+				lines.push(
+					`20-period EMA: ${oneHour.ema20.toFixed(2)} vs. 50-period EMA: ${oneHour.ema50.toFixed(2)}\n`,
+				);
+				lines.push(
+					`3-period ATR: ${safeNumber(oneHour.atr3).toFixed(2)} vs. 14-period ATR: ${safeNumber(oneHour.atr14).toFixed(3)}\n`,
+				);
+				lines.push(
+					`Current volume: ${safeNumber(oneHour.volume).toFixed(2)} vs. Average volume: ${safeNumber(oneHour.avgVolume).toFixed(3)}\n`,
+				);
+				
+				// 1小时MACD和RSI序列
+				if (oneHour.history) {
+					if (oneHour.history.macd && oneHour.history.macd.length > 0) {
+						lines.push(`MACD indicator: ${formatSeries(oneHour.history.macd.slice(-10), 3)}\n`);
+					}
+					if (oneHour.history.rsi14 && oneHour.history.rsi14.length > 0) {
+						lines.push(`RSI indicator (14-period): ${formatSeries(oneHour.history.rsi14.slice(-10), 3)}\n`);
+					}
+				}
+			}
+
+			// 多时间框架指标汇总
+			lines.push("Multi-timeframe indicators:\n");
 			const tfOrder: Array<[string, string]> = [
 				["1m", "1m"],
 				["3m", "3m"],
@@ -566,34 +623,20 @@ function formatMarketDataSection(
 					const macdText = safeNumber(tfData.macd).toFixed(3);
 					const rsi7Text = safeNumber(tfData.rsi7).toFixed(1);
 					const rsi14Text = safeNumber(tfData.rsi14).toFixed(1);
-					tfSummary.push(
-						`${label}: Price=${priceText} EMA20=${ema20Text} EMA50=${ema50Text} MACD=${macdText} RSI7=${rsi7Text} RSI14=${rsi14Text}`,
+					const volumeText = safeNumber(tfData.volume).toFixed(2);
+					lines.push(
+						`${label}: Price=${priceText}, EMA20=${ema20Text}, EMA50=${ema50Text}, MACD=${macdText}, RSI7=${rsi7Text}, RSI14=${rsi14Text}, Volume=${volumeText}`,
 					);
 				}
 			}
-			if (tfSummary.length > 0) {
-				lines.push(tfSummary.join(" | "));
-			}
 
-			const series = data.intradaySeries;
-			if (
-				series &&
-				Array.isArray(series.midPrices) &&
-				series.midPrices.length > 0
-			) {
-				const last10 = series.midPrices
-					.slice(-10)
-					.map((v: number) => safeNumber(v).toFixed(1))
-					.join(", ");
-				lines.push(`Intraday mid price (last 10 bars, 3m): [${last10}]`);
-			}
-
-			lines.push("");
+			lines.push("\n");
 		}
 		return lines.join("\n").trimEnd();
 	}
 
 	const lines: string[] = [SECTION_SEPARATOR, "【市场行情快照】"];
+	lines.push("\n所有币种的当前市场状态\n");
 
 	for (const symbol of symbols) {
 		const data = marketData[symbol] ?? {};
@@ -604,21 +647,70 @@ function formatMarketDataSection(
 		const rsi14 = safeNumber(data.rsi14);
 		const funding = safeNumber(data.fundingRate);
 
+		lines.push(`所有 ${symbol} 数据`);
 		lines.push(
-			`【${symbol}】价=${price.toFixed(2)} EMA20=${ema20.toFixed(3)} MACD=${macd.toFixed(3)} RSI7=${rsi7.toFixed(2)} RSI14=${rsi14.toFixed(2)}`,
+			`当前价格 = ${price.toFixed(2)}, 当前EMA20 = ${ema20.toFixed(3)}, 当前MACD = ${macd.toFixed(3)}, 当前RSI（7周期） = ${rsi7.toFixed(3)}`,
 		);
-		if (funding !== 0) {
-			lines.push(`资金费率=${funding.toExponential(2)}`);
+		lines.push("");
+		lines.push(
+			`此外，这是 ${symbol} 永续合约的最新资金费率（您交易的合约类型）：`,
+		);
+		lines.push(`\n资金费率: ${funding.toExponential(2)}\n`);
+
+		// 日内序列数据
+		const series = data.intradaySeries;
+		if (series && Array.isArray(series.midPrices) && series.midPrices.length > 0) {
+			lines.push("日内序列（按分钟，最旧 → 最新）：\n");
+			lines.push(`中间价: ${formatSeries(series.midPrices.slice(-10), 1)}\n`);
+			
+			if (series.ema20Series && series.ema20Series.length > 0) {
+				lines.push(`EMA指标（20周期）: ${formatSeries(series.ema20Series.slice(-10), 3)}\n`);
+			}
+			if (series.macdSeries && series.macdSeries.length > 0) {
+				lines.push(`MACD指标: ${formatSeries(series.macdSeries.slice(-10), 3)}\n`);
+			}
+			if (series.rsi7Series && series.rsi7Series.length > 0) {
+				lines.push(`RSI指标（7周期）: ${formatSeries(series.rsi7Series.slice(-10), 3)}\n`);
+			}
+			if (series.rsi14Series && series.rsi14Series.length > 0) {
+				lines.push(`RSI指标（14周期）: ${formatSeries(series.rsi14Series.slice(-10), 3)}\n`);
+			}
 		}
 
+		// 更长期上下文（1小时时间框架）
 		const timeframes = data.timeframes || {};
-		const tfSummary: string[] = [];
+		const oneHour = timeframes["1h"];
+		if (oneHour) {
+			lines.push("更长期上下文（1小时时间框架）：\n");
+			lines.push(
+				`20周期EMA: ${oneHour.ema20.toFixed(2)} vs. 50周期EMA: ${oneHour.ema50.toFixed(2)}\n`,
+			);
+			lines.push(
+				`3周期ATR: ${safeNumber(oneHour.atr3).toFixed(2)} vs. 14周期ATR: ${safeNumber(oneHour.atr14).toFixed(3)}\n`,
+			);
+			lines.push(
+				`当前成交量: ${safeNumber(oneHour.volume).toFixed(2)} vs. 平均成交量: ${safeNumber(oneHour.avgVolume).toFixed(3)}\n`,
+			);
+			
+			// 1小时MACD和RSI序列
+			if (oneHour.history) {
+				if (oneHour.history.macd && oneHour.history.macd.length > 0) {
+					lines.push(`MACD指标: ${formatSeries(oneHour.history.macd.slice(-10), 3)}\n`);
+				}
+				if (oneHour.history.rsi14 && oneHour.history.rsi14.length > 0) {
+					lines.push(`RSI指标（14周期）: ${formatSeries(oneHour.history.rsi14.slice(-10), 3)}\n`);
+				}
+			}
+		}
+
+		// 多时间框架指标汇总
+		lines.push("多时间框架指标：\n");
 		const tfOrder: Array<[string, string]> = [
-			["1m", "1分"],
-			["3m", "3分"],
-			["5m", "5分"],
-			["15m", "15分"],
-			["30m", "30分"],
+			["1m", "1分钟"],
+			["3m", "3分钟"],
+			["5m", "5分钟"],
+			["15m", "15分钟"],
+			["30m", "30分钟"],
 			["1h", "1小时"],
 		];
 		for (const [key, label] of tfOrder) {
@@ -630,29 +722,14 @@ function formatMarketDataSection(
 				const macdText = safeNumber(tfData.macd).toFixed(3);
 				const rsi7Text = safeNumber(tfData.rsi7).toFixed(1);
 				const rsi14Text = safeNumber(tfData.rsi14).toFixed(1);
-				tfSummary.push(
-					`${label}: 价=${priceText} EMA20=${ema20Text} EMA50=${ema50Text} MACD=${macdText} RSI7=${rsi7Text} RSI14=${rsi14Text}`,
+				const volumeText = safeNumber(tfData.volume).toFixed(2);
+				lines.push(
+					`${label}: 价格=${priceText}, EMA20=${ema20Text}, EMA50=${ema50Text}, MACD=${macdText}, RSI7=${rsi7Text}, RSI14=${rsi14Text}, 成交量=${volumeText}`,
 				);
 			}
 		}
-		if (tfSummary.length > 0) {
-			lines.push(tfSummary.join(" | "));
-		}
 
-		const series = data.intradaySeries;
-		if (
-			series &&
-			Array.isArray(series.midPrices) &&
-			series.midPrices.length > 0
-		) {
-			const last10 = series.midPrices
-				.slice(-10)
-				.map((v: number) => safeNumber(v).toFixed(1))
-				.join(", ");
-			lines.push(`日内中间价（最近10个 3 分钟点）：[${last10}]`);
-		}
-
-		lines.push("");
+		lines.push("\n");
 	}
 
 	return lines.join("\n").trimEnd();
@@ -999,49 +1076,93 @@ function formatRecentDecisionsSection(
 	if (language === "en") {
 		const lines: string[] = [
 			SECTION_SEPARATOR,
-			"[Recent AI Decisions]",
-			"Reference only; follow live market updates.",
+			"[Historical Decision Records Begin]",
+			SECTION_SEPARATOR,
+			"",
+			"Important Reminder: The following are historical decision records for reference only, not current status!",
+			"For current market data and position information, please refer to the real-time data above.",
+			"",
 		];
-		for (const decision of recentDecisions) {
+		for (let i = 0; i < recentDecisions.length; i++) {
+			const decision = recentDecisions[i];
 			const timeText = decision.timestamp
 				? formatChinaTime(decision.timestamp)
 				: "Unknown time";
-			lines.push(`- Decision #${decision.iteration ?? "?"} @ ${timeText}`);
+			const timeAgo = decision.timestamp
+				? Math.round((Date.now() - new Date(decision.timestamp).getTime()) / 60000)
+				: null;
+			
+			lines.push(`[Historical] Decision #${decision.iteration ?? i} (${timeText}${timeAgo ? `, ${timeAgo} minutes ago` : ""}):`);;
 			if (Number.isFinite(decision.account_value)) {
-				lines.push(`  Equity then: ${decision.account_value.toFixed(2)} USDT`);
+				lines.push(`  Account value then: ${decision.account_value.toFixed(2)} USDT`);
 			}
 			if (Number.isFinite(decision.positions_count)) {
-				lines.push(`  Positions held: ${decision.positions_count}`);
+				lines.push(`  Position count then: ${decision.positions_count}`);
 			}
 			if (decision.decision) {
-				lines.push(`  Summary: ${decision.decision}`);
+				// 决策内容可能很长，适当截断
+				const decisionText = decision.decision.length > 500
+					? decision.decision.substring(0, 500) + "..."
+					: decision.decision;
+				lines.push(`  Decision content then: ${decisionText}`);
 			}
 			lines.push("");
 		}
+		
+		lines.push("[Historical Decision Records End]");
+		lines.push("");
+		lines.push("Usage suggestions:");
+		lines.push("- Use only as reference for decision continuity, don't be constrained by historical decisions");
+		lines.push("- Market has changed, make independent judgment based on current latest data");
+		lines.push("- If market conditions change, adjust strategy decisively");
+		lines.push("");
+		
 		return lines.join("\n").trimEnd();
 	}
 
 	const lines: string[] = [
 		SECTION_SEPARATOR,
-		"【最近 AI 决策回顾】",
-		"仅供参考，后续决策以最新行情为准",
+		"【历史决策记录开始】",
+		SECTION_SEPARATOR,
+		"",
+		"重要提醒：以下是历史决策记录，仅作为参考，不代表当前状态！",
+		"当前市场数据和持仓信息请参考上方实时数据。",
+		"",
 	];
-	for (const decision of recentDecisions) {
+	for (let i = 0; i < recentDecisions.length; i++) {
+		const decision = recentDecisions[i];
 		const timeText = decision.timestamp
 			? formatChinaTime(decision.timestamp)
 			: "未知时间";
-		lines.push(`- 决策 #${decision.iteration ?? "?"} @ ${timeText}`);
+		const timeAgo = decision.timestamp
+			? Math.round((Date.now() - new Date(decision.timestamp).getTime()) / 60000)
+			: null;
+		
+		lines.push(`【历史】决策 #${decision.iteration ?? i} (${timeText}${timeAgo ? `，${timeAgo}分钟前` : ""}):`);;
 		if (Number.isFinite(decision.account_value)) {
-			lines.push(`  当时账户净值: ${decision.account_value.toFixed(2)} USDT`);
+			lines.push(`  当时账户价值: ${decision.account_value.toFixed(2)} USDT`);
 		}
 		if (Number.isFinite(decision.positions_count)) {
-			lines.push(`  当时持仓数: ${decision.positions_count}`);
+			lines.push(`  当时持仓数量: ${decision.positions_count}`);
 		}
 		if (decision.decision) {
-			lines.push(`  决策摘要: ${decision.decision}`);
+			// 决策内容可能很长，适当截断
+			const decisionText = decision.decision.length > 500
+				? decision.decision.substring(0, 500) + "..."
+				: decision.decision;
+			lines.push(`  当时决策内容: ${decisionText}`);
 		}
 		lines.push("");
 	}
+	
+	lines.push("【历史决策记录结束】");
+	lines.push("");
+	lines.push("使用建议：");
+	lines.push("- 仅作为决策连续性参考，不要被历史决策束缚");
+	lines.push("- 市场已经变化，请基于当前最新数据独立判断");
+	lines.push("- 如果市场条件改变，应该果断调整策略");
+	lines.push("");
+	
 	return lines.join("\n").trimEnd();
 }
 

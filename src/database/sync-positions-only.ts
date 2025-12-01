@@ -113,6 +113,21 @@ export async function syncPositionsFromOkx() {
 				const quantity = Math.abs(size);
 				const pnl = Number.parseFloat(pos.unrealisedPnl || "0");
 				const liqPrice = Number.parseFloat(pos.liqPrice || "0");
+				const openedAtRaw =
+					typeof pos.createTime === "string" && pos.createTime
+						? pos.createTime
+						: typeof pos.updateTime === "string" && pos.updateTime
+							? pos.updateTime
+							: undefined;
+				const openedAt = (() => {
+					if (openedAtRaw && openedAtRaw.trim()) {
+						const parsed = Date.parse(openedAtRaw);
+						if (Number.isFinite(parsed)) {
+							return new Date(parsed).toISOString();
+						}
+					}
+					return new Date().toISOString();
+				})();
 
 				batchStmts.push({
 					sql: `INSERT INTO positions 
@@ -130,7 +145,7 @@ export async function syncPositionsFromOkx() {
 						leverage,
 						side,
 						`synced-${symbol}-${side}-${Date.now()}`,
-						new Date().toISOString(),
+						openedAt,
 					],
 				});
 

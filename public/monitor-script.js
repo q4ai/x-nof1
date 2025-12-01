@@ -7357,18 +7357,34 @@ class TradingMonitor {
     const cfg = config || this.latestConfig || {};
     const rawName = typeof cfg.AI_MODEL_NAME === "string" ? cfg.AI_MODEL_NAME.trim() : "";
     const modelDisplayName = this.formatModelDisplayName(rawName);
-    const iconSrc = this.resolveAiModelIcon(rawName);
+    const fallbackIconSrc = this.resolveAiModelIcon(rawName);
 
     const runningInstances = this.getOverlayTargetInstances();
     const visibleKeys = [];
+
+    const resolveInstanceOverlay = (instance) => {
+      const instanceModelName =
+        (instance && typeof instance.ai_model_name === "string" && instance.ai_model_name.trim()) ||
+        (instance && typeof instance.model_name === "string" && instance.model_name.trim()) ||
+        rawName;
+      const icon = this.resolveAiModelIcon(instanceModelName);
+      const label =
+        (instance && typeof instance.name === "string" && instance.name.trim()) ||
+        this.formatModelDisplayName(instanceModelName) ||
+        modelDisplayName;
+      return {
+        iconSrc: icon,
+        defaultText: label,
+      };
+    };
 
     // 如果实例缓存未加载，不要贸然隐藏所有 overlay，以免覆盖 prefetch 的状态
     if (!this.instancesCacheLoaded) {
       // 仅更新默认 entry 的图标和名称（如果存在）
       const defaultEntry = this.aiOverlayEntries.get(this.aiOverlayDefaultKey);
       if (defaultEntry) {
-        if (iconSrc) {
-          this.setOverlayEntryIcon(defaultEntry, iconSrc);
+        if (fallbackIconSrc) {
+          this.setOverlayEntryIcon(defaultEntry, fallbackIconSrc);
         }
         if (!defaultEntry.isStatusLocked) {
           defaultEntry.defaultText = modelDisplayName;
@@ -7385,11 +7401,12 @@ class TradingMonitor {
 
     if (runningInstances.length === 1) {
       const instance = runningInstances[0];
+      const overlayData = resolveInstanceOverlay(instance);
       const entry = this.ensureAiOverlayEntry(this.aiOverlayDefaultKey, {
-        iconSrc,
+        iconSrc: overlayData.iconSrc,
         instanceId: instance.id,
         instanceName: instance.name,
-        defaultText: instance.name || modelDisplayName,
+        defaultText: overlayData.defaultText,
       });
       if (entry && !entry.isStatusLocked) {
         entry.textEl.textContent = entry.defaultText;
@@ -7400,11 +7417,12 @@ class TradingMonitor {
     } else {
       runningInstances.forEach((instance) => {
         const key = this.getOverlayEntryKey(instance.id);
+        const overlayData = resolveInstanceOverlay(instance);
         const entry = this.ensureAiOverlayEntry(key, {
-          iconSrc,
+          iconSrc: overlayData.iconSrc,
           instanceId: instance.id,
           instanceName: instance.name,
-          defaultText: instance.name || modelDisplayName,
+          defaultText: overlayData.defaultText,
         });
         if (entry && !entry.isStatusLocked) {
           entry.textEl.textContent = entry.defaultText;

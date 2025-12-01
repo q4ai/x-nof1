@@ -72,6 +72,7 @@
 		"dashboard": "Dashboard",
 		"manualTrade": "Manual Trade",
 		"positions": "Positions",
+		"openOrders": "Open Orders",
 		"trades": "Trade History",
 		"logs": "Trade Logs",
 		"decisionLogs": "Decision Logs"

@@ -127,6 +127,7 @@ export class GateClient {
 		const headers: Record<string, string> = {
 			"Content-Type": "application/json",
 			Accept: "application/json",
+            "X-Gate-Channel-Id": "tvcbot",
 		};
 
 		const bodyString = body ? JSON.stringify(body) : "";
@@ -250,10 +251,15 @@ export class GateClient {
 	 * 获取 K 线数据
 	 * @param interval 周期: 10s, 1m, 5m, 15m, 30m, 1h, 4h, 8h, 1d, 7d
 	 */
+	/**
+	 * 获取 K 线数据
+	 * @param interval 周期: 10s, 1m, 5m, 15m, 30m, 1h, 4h, 8h, 1d, 7d
+	 * @param limitOrOptions 兼容两种调用方式：数字（limit）或对象（{ limit, from, to }）
+	 */
 	async getFuturesCandles(
 		contract: string,
 		interval: string,
-		options?: { limit?: number; from?: number; to?: number },
+		limitOrOptions?: number | { limit?: number; from?: number; to?: number },
 	) {
 		const symbol = this.contractToSymbol(contract);
 		const params: RequestParams = {
@@ -261,9 +267,14 @@ export class GateClient {
 			interval,
 		};
 
-		if (options?.from) params.from = options.from;
-		if (options?.to) params.to = options.to;
-		if (options?.limit) params.limit = options.limit;
+		// 兼容两种参数格式：直接传 limit 数字 或 传 options 对象
+		if (typeof limitOrOptions === "number") {
+			params.limit = limitOrOptions;
+		} else if (limitOrOptions && typeof limitOrOptions === "object") {
+			if (limitOrOptions.from) params.from = limitOrOptions.from;
+			if (limitOrOptions.to) params.to = limitOrOptions.to;
+			if (limitOrOptions.limit) params.limit = limitOrOptions.limit;
+		}
 
 		const data = await this.request<any[]>(
 			"GET",
@@ -349,6 +360,40 @@ export class GateClient {
 			return Number.isFinite(parsed) ? parsed.toString() : "0";
 		}
 		return "0";
+	}
+
+	private toIsoTimestamp(value: unknown): string | undefined {
+		if (value === undefined || value === null) {
+			return undefined;
+		}
+		let numeric: number | null = null;
+		if (typeof value === "number") {
+			numeric = Number.isFinite(value) ? value : null;
+		} else if (typeof value === "string") {
+			const trimmed = value.trim();
+			if (trimmed) {
+				const parsed = Number.parseFloat(trimmed);
+				if (Number.isFinite(parsed)) {
+					numeric = parsed;
+				} else {
+					const dateValue = Date.parse(trimmed);
+					if (Number.isFinite(dateValue)) {
+						numeric = dateValue;
+					}
+				}
+			}
+		}
+
+		if (numeric === null) {
+			return undefined;
+		}
+
+		const milliseconds = numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+		if (!Number.isFinite(milliseconds) || milliseconds <= 0) {
+			return undefined;
+		}
+
+		return new Date(milliseconds).toISOString();
 	}
 
 	private parseFuturesAccount(data: any): AccountSnapshot | null {
@@ -452,19 +497,62 @@ export class GateClient {
 		);
 
 		return data
-			.filter((pos) => Number(pos.size) !== 0) // 过滤掉size为0的持仓
-			.map((pos) => ({
-				contract: this.symbolToContract(pos.contract),
-				size: Number(pos.size),
-				side: Number(pos.size) > 0 ? ("long" as const) : ("short" as const),
-				entryPrice: Number.parseFloat(pos.entry_price),
-				markPrice: Number.parseFloat(pos.mark_price),
-				liquidationPrice: Number.parseFloat(pos.liq_price),
-				leverage: Number.parseFloat(pos.leverage),
-				unrealizedPnl: Number.parseFloat(pos.unrealised_pnl),
-				realizedPnl: Number.parseFloat(pos.realised_pnl),
-				margin: Number.parseFloat(pos.margin),
-			}));
+			.filter((pos) => Number(pos?.size ?? 0) !== 0)
+			.map((pos) => {
+				const normalizedSize = this.normalizeAmount(pos.size);
+				const sizeValue = Number.parseFloat(normalizedSize || "0");
+				const createTime =
+					this.toIsoTimestamp(
+						pos.create_time_ms ??
+							pos.create_time ??
+							pos.enter_time_ms ??
+							pos.enter_time,
+					);
+				const updateTime =
+					this.toIsoTimestamp(
+						pos.update_time_ms ??
+							pos.update_time ??
+							pos.close_time_ms ??
+							pos.close_time ??
+							pos.create_time_ms ??
+							pos.create_time,
+					);
+				const rawMode = typeof pos.mode === "string" ? pos.mode.toLowerCase() : "";
+				const marginMode =
+					rawMode === "isolated"
+						? "isolated"
+						: rawMode === "cross"
+							? "cross"
+							: undefined;
+
+				return {
+					contract: this.symbolToContract(pos.contract),
+					size: normalizedSize,
+					entryPrice: this.normalizeAmount(pos.entry_price),
+					markPrice: this.normalizeAmount(
+						pos.mark_price ?? pos.last_mark_price ?? pos.last,
+					),
+					leverage: this.normalizeAmount(pos.leverage),
+					unrealisedPnl: this.normalizeAmount(
+						pos.unrealised_pnl ?? pos.unrealized_pnl ?? pos.upl,
+					),
+					realisedPnl: this.normalizeAmount(
+						pos.realised_pnl ?? pos.realized_pnl ?? "0",
+					),
+					margin: this.normalizeAmount(pos.margin ?? pos.position_margin ?? pos.imr),
+					liqPrice: this.normalizeAmount(
+						pos.liq_price ??
+							pos.liquidation_price ??
+							pos.liquidate_price ??
+							pos.liq ??
+							pos.liq_px,
+					),
+					posSide: sizeValue >= 0 ? "long" : "short",
+					marginMode,
+					createTime: createTime ?? updateTime,
+					updateTime,
+				};
+			});
 	}
 
 	/**

@@ -72,6 +72,7 @@
 		"dashboard": "ダッシュボード",
 		"manualTrade": "手動取引",
 		"positions": "ポジション",
+		"openOrders": "未約定注文",
 		"trades": "取引履歴",
 		"logs": "取引ログ",
 		"decisionLogs": "意思決定ログ"

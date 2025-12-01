@@ -40,6 +40,7 @@ import {
 	createExchangeClientFromActiveAccount,
 	createOkxClient,
 } from "../../services/okxClient";
+import { StrategyFileManager } from "../../services/strategyFileManager";
 import { getQuantoMultiplier } from "../../utils/contractUtils";
 import { createLogger } from "../../utils/loggerUtils";
 import { getChinaTimeISO } from "../../utils/timeUtils";
@@ -103,6 +104,59 @@ async function getCurrentProvider(): Promise<ExchangeProvider> {
 
 	// 回退到全局配置
 	return await getExchangeProvider();
+}
+
+const CONTRACT_UNIT_PROVIDERS = new Set<ExchangeProvider>(["okx", "gate"]);
+
+function providerUsesContractUnits(provider: ExchangeProvider): boolean {
+	return CONTRACT_UNIT_PROVIDERS.has(provider);
+}
+
+function toTimestampMillis(value: unknown): number | null {
+	if (value === undefined || value === null) {
+		return null;
+	}
+	if (typeof value === "number") {
+		if (!Number.isFinite(value)) {
+			return null;
+		}
+		return value > 1_000_000_000_000 ? value : value * 1000;
+	}
+	if (typeof value === "string") {
+		const trimmed = value.trim();
+		if (!trimmed) {
+			return null;
+		}
+		const numeric = Number.parseFloat(trimmed);
+		if (Number.isFinite(numeric)) {
+			return numeric > 1_000_000_000_000 ? numeric : numeric * 1000;
+		}
+		const parsed = Date.parse(trimmed);
+		return Number.isFinite(parsed) ? parsed : null;
+	}
+	return null;
+}
+
+async function resolveMinHoldingMinutes(): Promise<number> {
+	const context = getCurrentInstanceContext();
+	if (!context?.strategyName) {
+		throw new Error("实例缺少策略名称，无法读取最小持仓时间参数");
+	}
+
+	const strategy = await StrategyFileManager.loadStrategy(context.strategyName);
+	if (!strategy) {
+		throw new Error(`无法加载策略 ${context.strategyName}，无法获取最小持仓时间`);
+	}
+
+	const configured = strategy.params?.minHoldingMinutes;
+	const parsed = Number(configured);
+	if (!Number.isFinite(parsed) || parsed <= 0) {
+		throw new Error(
+			`策略 ${context.strategyName} 未配置有效的最小持仓时间（当前值: ${configured}）`,
+		);
+	}
+
+	return parsed;
 }
 
 type LotSizingInfo = {
@@ -297,7 +351,8 @@ export async function executeOpenPosition({
 
 	// 获取交易所提供商
 	const exchangeProvider = await getCurrentProvider();
-	const unitLabel = exchangeProvider === "okx" ? "张" : "个";
+	const useContractUnits = providerUsesContractUnits(exchangeProvider);
+	const unitLabel = useContractUnits ? "张" : "个";
 	const normalizedSymbol = symbol.toUpperCase();
 	const contract = `${normalizedSymbol}_USDT`;
 	const toolInput = {
@@ -402,17 +457,14 @@ export async function executeOpenPosition({
 		let notionalUsdt = 0;
 		let quantity = 0;
 
+		const quantityDivider = useContractUnits ? quantoMultiplier : 1;
 		if (amountUnit === "coin") {
 			// Input is Coin Quantity
-			if (exchangeProvider === "okx") {
-				quantity = effectiveAmount / quantoMultiplier; // Contracts
-			} else {
-				quantity = effectiveAmount; // Bitget/Binance: 1 coin = 1 unit
-			}
+			quantity = effectiveAmount / quantityDivider;
 			notionalUsdt = effectiveAmount * executionPrice;
 			marginUsdt = notionalUsdt / leverage;
 			logger.info(
-				`💡 数量计算 (币本位): 数量=${effectiveAmount} ${symbol} ÷ 乘数=${exchangeProvider === "okx" ? quantoMultiplier : 1} = ${quantity.toFixed(4)} ${unitLabel}`,
+				`💡 数量计算 (币本位): 数量=${effectiveAmount} ${symbol} ÷ 乘数=${quantityDivider} = ${quantity.toFixed(4)} ${unitLabel}`,
 			);
 		} else {
 			// Input is USDT
@@ -420,25 +472,17 @@ export async function executeOpenPosition({
 				// Notional Value
 				notionalUsdt = effectiveAmount;
 				marginUsdt = notionalUsdt / leverage;
-				if (exchangeProvider === "okx") {
-					quantity = notionalUsdt / (quantoMultiplier * executionPrice);
-				} else {
-					quantity = notionalUsdt / executionPrice;
-				}
+				quantity = notionalUsdt / (quantityDivider * executionPrice);
 				logger.info(
-					`💡 数量计算 (USDT面值): 面值=${effectiveAmount} USDT ÷ (乘数=${exchangeProvider === "okx" ? quantoMultiplier : 1} × 价格=${executionPrice.toFixed(2)}) = ${quantity.toFixed(4)} ${unitLabel}`,
+					`💡 数量计算 (USDT面值): 面值=${effectiveAmount} USDT ÷ (乘数=${quantityDivider} × 价格=${executionPrice.toFixed(2)}) = ${quantity.toFixed(4)} ${unitLabel}`,
 				);
 			} else {
 				// Margin (Old behavior)
 				marginUsdt = effectiveAmount;
 				notionalUsdt = marginUsdt * leverage;
-				if (exchangeProvider === "okx") {
-					quantity = notionalUsdt / (quantoMultiplier * executionPrice);
-				} else {
-					quantity = notionalUsdt / executionPrice;
-				}
+				quantity = notionalUsdt / (quantityDivider * executionPrice);
 				logger.info(
-					`💡 数量计算 (USDT保证金): 保证金=${effectiveAmount} USDT × 杠杆=${leverage}x ÷ (乘数=${exchangeProvider === "okx" ? quantoMultiplier : 1} × 价格=${executionPrice.toFixed(2)}) = ${quantity.toFixed(4)} ${unitLabel}`,
+					`💡 数量计算 (USDT保证金): 保证金=${effectiveAmount} USDT × 杠杆=${leverage}x ÷ (乘数=${quantityDivider} × 价格=${executionPrice.toFixed(2)}) = ${quantity.toFixed(4)} ${unitLabel}`,
 				);
 			}
 		}
@@ -496,10 +540,9 @@ export async function executeOpenPosition({
 			const posSize = Math.abs(Number.parseFloat(pos.size || "0"));
 			const entryPrice = Number.parseFloat(pos.entryPrice || "0");
 			// 获取合约乘数
-			const posQuantoMultiplier =
-				exchangeProvider === "okx"
-					? await getQuantoMultiplier(pos.contract)
-					: 1;
+			const posQuantoMultiplier = useContractUnits
+				? await getQuantoMultiplier(pos.contract)
+				: 1;
 			const posValue = posSize * entryPrice * posQuantoMultiplier;
 			currentTotalExposure += posValue;
 		}
@@ -607,10 +650,7 @@ export async function executeOpenPosition({
 
 		if (quantity < minSize) {
 			const requiredMargin =
-				(minSize *
-					(exchangeProvider === "okx" ? quantoMultiplier : 1) *
-					currentPrice) /
-				leverage;
+				(minSize * quantityDivider * currentPrice) / leverage;
 			return fail(
 				`计算的数量 ${quantity.toFixed(4)}${unitLabel} 低于最小下单单位 ${minSize.toFixed(4)}，至少需要 ${requiredMargin.toFixed(2)} USDT 保证金（当前${marginUsdt.toFixed(2)} USDT，杠杆${leverage}x）。`,
 			);
@@ -790,10 +830,7 @@ export async function executeOpenPosition({
 		const finalQuantity = actualFillSize > 0 ? actualFillSize : Math.abs(size);
 
 		// 计算手续费
-		const positionValue =
-			finalQuantity *
-			(exchangeProvider === "okx" ? quantoMultiplier : 1) *
-			actualFillPrice;
+		const positionValue = finalQuantity * quantityDivider * actualFillPrice;
 		const fee = positionValue * 0.0005; // 0.05%
 
 		const dbStatus = finalOrderStatus === "finished" ? "filled" : "pending";
@@ -931,7 +968,8 @@ export async function executeClosePosition({
 
 	// 获取交易所提供商
 	const exchangeProvider = await getCurrentProvider();
-	const unitLabel = exchangeProvider === "okx" ? "张" : "个";
+	const useContractUnits = providerUsesContractUnits(exchangeProvider);
+	const unitLabel = useContractUnits ? "张" : "个";
 	const contract = `${normalizedSymbol}_USDT`;
 	let logSide: "long" | "short" | undefined;
 	let logLeverage: number | undefined;
@@ -989,6 +1027,17 @@ export async function executeClosePosition({
 			return fail(`没有找到 ${normalizedSymbol} 的持仓`);
 		}
 
+		const contractMultiplierForProvider = useContractUnits
+			? await getQuantoMultiplier(contract)
+			: 1;
+		let minHoldingMinutes = 0;
+		try {
+			minHoldingMinutes = await resolveMinHoldingMinutes();
+		} catch (error) {
+			const reason = error instanceof Error ? error.message : String(error);
+			return fail(`无法获取策略最小持仓时间: ${reason}`);
+		}
+
 		const okxPosSideRaw =
 			typeof okxPosition.posSide === "string"
 				? okxPosition.posSide.toLowerCase()
@@ -1004,26 +1053,38 @@ export async function executeClosePosition({
 		const marginModeForOrder =
 			marginModeRaw === "isolated" ? "isolated" : "cross";
 
-		// 🔒 防止同周期内平仓保护：检查持仓开仓时间，防止刚开仓就立即平仓
-		// 从数据库获取持仓信息以检查开仓时间
-		if (!skipGuards) {
-			const dbClient = createClient({
-				url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
-			});
+		// 🔒 按策略参数执行最小持仓时间检查，防止刚开仓就立即平仓
+		if (!skipGuards && minHoldingMinutes > 0) {
+			let openedTimestamp =
+				toTimestampMillis(
+					okxPosition.createTime ??
+						okxPosition.cTime ??
+						okxPosition.opened_at ??
+						okxPosition.updateTime,
+				);
 
-			const dbPositionResult = await dbClient.execute({
-				sql: `SELECT opened_at FROM positions WHERE symbol = ? LIMIT 1`,
-				args: [normalizedSymbol],
-			});
+			if (!openedTimestamp) {
+				const dbPositionResult = await dbClient.execute({
+					sql: `SELECT opened_at FROM positions
+			       WHERE symbol = ? AND (account_id IS NULL OR account_id = ?)
+			       ORDER BY CASE WHEN account_id = ? THEN 0 ELSE 1 END
+			       LIMIT 1`,
+					args: [
+						normalizedSymbol,
+						accountId.toString(),
+						accountId.toString(),
+					],
+				});
+				if (dbPositionResult.rows.length > 0) {
+					openedTimestamp = toTimestampMillis(
+						dbPositionResult.rows[0].opened_at,
+					);
+				}
+			}
 
-			if (dbPositionResult.rows.length > 0) {
-				const openedAt = dbPositionResult.rows[0].opened_at as string;
-				const openedTime = new Date(openedAt).getTime();
-				const now = Date.now();
-				const holdingMinutes = (now - openedTime) / (1000 * 60);
-
-				const minHoldingMinutes = RISK_PARAMS.MIN_HOLDING_MINUTES;
-
+			if (openedTimestamp) {
+				const holdingMinutes =
+					(Date.now() - openedTimestamp) / (1000 * 60);
 				if (holdingMinutes < minHoldingMinutes) {
 					return fail(
 						`拒绝平仓 ${normalizedSymbol}：持仓时间仅 ${holdingMinutes.toFixed(1)} 分钟，少于最小持仓时间 ${minHoldingMinutes.toFixed(1)} 分钟。请等待至少半个交易周期后再评估平仓。这是为了防止在同一周期内刚开仓就立即平仓，造成不必要的手续费损失。`,
@@ -1032,6 +1093,10 @@ export async function executeClosePosition({
 
 				logger.info(
 					`${normalizedSymbol} 持仓时间: ${holdingMinutes.toFixed(1)} 分钟，通过最小持仓时间检查`,
+				);
+			} else {
+				logger.warn(
+					`无法获取 ${normalizedSymbol} 的持仓时间戳，已跳过最小持仓时间检查（account=${accountId})`,
 				);
 			}
 		}
@@ -1140,9 +1205,6 @@ export async function executeClosePosition({
 		const positionSideForOrder = normalizedPosSide === "net" ? "net" : side;
 
 		//  获取合约乘数用于计算盈亏和手续费
-		const quantoMultiplier =
-			exchangeProvider === "okx" ? await getQuantoMultiplier(contract) : 1;
-
 		// 🔥 不再依赖 OKX 返回的 unrealisedPnl，始终手动计算毛盈亏
 		// 手动计算盈亏公式：
 		// 对于做多：(currentPrice - entryPrice) * quantity * quantoMultiplier
@@ -1150,15 +1212,17 @@ export async function executeClosePosition({
 		const priceChange =
 			side === "long" ? currentPrice - entryPrice : entryPrice - currentPrice;
 
-		const grossPnl = priceChange * closeSize * quantoMultiplier;
+		const grossPnl = priceChange * closeSize * contractMultiplierForProvider;
 
 		logger.info(
 			`预估盈亏: ${grossPnl >= 0 ? "+" : ""}${grossPnl.toFixed(2)} USDT (价格变动: ${priceChange.toFixed(4)})`,
 		);
 
 		//  计算手续费（开仓 + 平仓）
-		const openFee = entryPrice * closeSize * quantoMultiplier * 0.0005;
-		const closeFee = currentPrice * closeSize * quantoMultiplier * 0.0005;
+		const openFee =
+			entryPrice * closeSize * contractMultiplierForProvider * 0.0005;
+		const closeFee =
+			currentPrice * closeSize * contractMultiplierForProvider * 0.0005;
 		const totalFees = openFee + closeFee;
 
 		// 净盈亏 = 毛盈亏 - 总手续费（此值为预估，平仓后会基于实际成交价重新计算）
@@ -1171,7 +1235,9 @@ export async function executeClosePosition({
 		//  市价单平仓
 		// 注意：币安双向持仓模式下，通过 positionSide + 反向 side 来平仓，不需要 reduceOnly 参数
 		// 单向持仓模式（net）需要 reduceOnly
-		const isReduceOnly = positionSideForOrder === "net";
+		// Gate 交易所若未标记 reduce_only，会把反向单当成新开仓并冻结额外保证金
+		const forceReduceOnly = exchangeProvider === "gate";
+		const isReduceOnly = forceReduceOnly || positionSideForOrder === "net";
 
 		const order = await client.placeOrder({
 			contract,
@@ -1242,26 +1308,22 @@ export async function executeClosePosition({
 
 					//  重新计算实际盈亏（基于真实成交价格）
 					// 获取合约乘数
-					const quantoMultiplier =
-						exchangeProvider === "okx"
-							? await getQuantoMultiplier(contract)
-							: 1;
-
 					const priceChange =
 						side === "long"
 							? actualExitPrice - entryPrice
 							: entryPrice - actualExitPrice;
 
 					// 盈亏 = 价格变化 * 张数 * 合约乘数
-					const grossPnl = priceChange * actualCloseSize * quantoMultiplier;
+					const grossPnl =
+						priceChange * actualCloseSize * contractMultiplierForProvider;
 
 					//  扣除手续费（开仓 + 平仓）
 					// 开仓手续费 = 开仓名义价值 * 0.05%
 					const openFee =
-						entryPrice * actualCloseSize * quantoMultiplier * 0.0005;
+						entryPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 					// 平仓手续费 = 平仓名义价值 * 0.05%
 					const closeFee =
-						actualExitPrice * actualCloseSize * quantoMultiplier * 0.0005;
+						actualExitPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 					// 总手续费
 					const totalFees = openFee + closeFee;
 
@@ -1285,20 +1347,17 @@ export async function executeClosePosition({
 						actualCloseSize = closeSize;
 						actualExitPrice = currentPrice;
 						// 重新计算盈亏（Bitget/Binance 的数量已是币数量，乘数应为1）
-						const quantoMultiplier =
-							exchangeProvider === "okx"
-								? await getQuantoMultiplier(contract)
-								: 1;
 						const priceChange =
 							side === "long"
 								? actualExitPrice - entryPrice
 								: entryPrice - actualExitPrice;
-						const grossPnl = priceChange * actualCloseSize * quantoMultiplier;
+						const grossPnl =
+							priceChange * actualCloseSize * contractMultiplierForProvider;
 						// 扣除手续费
 						const openFee =
-							entryPrice * actualCloseSize * quantoMultiplier * 0.0005;
+							entryPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 						const closeFee =
-							actualExitPrice * actualCloseSize * quantoMultiplier * 0.0005;
+							actualExitPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 						pnl = grossPnl - openFee - closeFee;
 					} else {
 						logger.warn(
@@ -1331,9 +1390,6 @@ export async function executeClosePosition({
 
 		//  计算总手续费（开仓 + 平仓）用于数据库记录
 		// 需要获取合约乘数（Bitget/Binance 的数量已是币数量，乘数应为1）
-		const dbQuantoMultiplier =
-			exchangeProvider === "okx" ? await getQuantoMultiplier(contract) : 1;
-
 		// 🚨 最终安全检查：如果平仓价格仍为0，尝试再次获取行情
 		if (actualExitPrice === 0) {
 			try {
@@ -1353,12 +1409,12 @@ export async function executeClosePosition({
 
 					// 估算手续费
 					const fixOpenFee =
-						entryPrice * actualCloseSize * dbQuantoMultiplier * 0.0005;
+						entryPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 					const fixCloseFee =
-						actualExitPrice * actualCloseSize * dbQuantoMultiplier * 0.0005;
+						actualExitPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 
 					pnl =
-						priceChangeFix * actualCloseSize * dbQuantoMultiplier -
+						priceChangeFix * actualCloseSize * contractMultiplierForProvider -
 						fixOpenFee -
 						fixCloseFee;
 					usedExchangeRealizedPnl = false; // 标记为非交易所真实盈亏
@@ -1370,22 +1426,23 @@ export async function executeClosePosition({
 
 		// 开仓手续费 = 开仓名义价值 * 0.05%
 		const dbOpenFee =
-			entryPrice * actualCloseSize * dbQuantoMultiplier * 0.0005;
+			entryPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 		// 平仓手续费 = 平仓名义价值 * 0.05%
 		const dbCloseFee =
-			actualExitPrice * actualCloseSize * dbQuantoMultiplier * 0.0005;
+			actualExitPrice * actualCloseSize * contractMultiplierForProvider * 0.0005;
 		// 总手续费
 		const totalFee = dbOpenFee + dbCloseFee;
 
 		// 🔥 关键验证：检查盈亏计算是否正确
 		const notionalValue =
-			actualExitPrice * actualCloseSize * dbQuantoMultiplier;
+			actualExitPrice * actualCloseSize * contractMultiplierForProvider;
 		const priceChangeCheck =
 			side === "long"
 				? actualExitPrice - entryPrice
 				: entryPrice - actualExitPrice;
 		const expectedPnl =
-			priceChangeCheck * actualCloseSize * dbQuantoMultiplier - totalFee;
+			priceChangeCheck * actualCloseSize * contractMultiplierForProvider -
+			totalFee;
 
 		// 检测盈亏是否被错误地设置为名义价值
 		if (
@@ -1398,7 +1455,7 @@ export async function executeClosePosition({
 			);
 			logger.error(`  预期pnl: ${expectedPnl.toFixed(2)} USDT`);
 			logger.error(
-				`  开仓价: ${entryPrice}, 平仓价: ${actualExitPrice}, 数量: ${actualCloseSize}, 合约乘数: ${dbQuantoMultiplier}`,
+				`  开仓价: ${entryPrice}, 平仓价: ${actualExitPrice}, 数量: ${actualCloseSize}, 合约乘数: ${contractMultiplierForProvider}`,
 			);
 			logger.error(
 				`  价格变动: ${priceChangeCheck.toFixed(4)}, 手续费: ${totalFee.toFixed(4)}`,
@@ -1415,10 +1472,10 @@ export async function executeClosePosition({
 			`  开仓价: ${entryPrice.toFixed(4)}, 平仓价: ${actualExitPrice.toFixed(4)}, 数量: ${actualCloseSize}${unitLabel}`,
 		);
 		logger.info(
-			`  价格变动: ${priceChangeCheck.toFixed(4)}, 合约乘数: ${dbQuantoMultiplier}`,
+			`  价格变动: ${priceChangeCheck.toFixed(4)}, 合约乘数: ${contractMultiplierForProvider}`,
 		);
 		logger.info(
-			`  毛盈亏: ${(priceChangeCheck * actualCloseSize * dbQuantoMultiplier).toFixed(2)} USDT`,
+			`  毛盈亏: ${(priceChangeCheck * actualCloseSize * contractMultiplierForProvider).toFixed(2)} USDT`,
 		);
 		logger.info(
 			`  开仓手续费: ${dbOpenFee.toFixed(4)} USDT, 平仓手续费: ${dbCloseFee.toFixed(4)} USDT`,
