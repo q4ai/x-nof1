@@ -46,6 +46,8 @@ import { createLogger } from "../../utils/loggerUtils";
 import { getChinaTimeISO } from "../../utils/timeUtils";
 import { recordTradeLog } from "../../utils/tradeLogUtils";
 
+type BinancePrecisionEntity = Awaited<ReturnType<typeof getBinancePrecision>>;
+
 const logger = createLogger({
 	name: "trade-execution",
 	level: "info",
@@ -93,16 +95,27 @@ async function getCurrentAccountId(): Promise<number> {
 /**
  * 获取当前交易所提供商
  * 优先使用实例上下文中的提供商
- * 回退到全局配置
+ * 其次尝试从活跃账户获取
+ * 最后回退到全局配置
  */
 async function getCurrentProvider(): Promise<ExchangeProvider> {
-	// 检查是否在实例上下文中
+	// 1. 检查是否在实例上下文中
 	const instanceProvider = getInstanceProvider();
 	if (instanceProvider !== null) {
 		return instanceProvider;
 	}
 
-	// 回退到全局配置
+	// 2. 尝试从活跃账户获取 (确保与 getExchangeClient 一致)
+	try {
+		const activeAccount = await getActiveAccount();
+		if (activeAccount?.provider) {
+			return activeAccount.provider as ExchangeProvider;
+		}
+	} catch (error) {
+		logger.warn(`获取活跃账户失败，将使用全局配置: ${error}`);
+	}
+
+	// 3. 回退到全局配置
 	return await getExchangeProvider();
 }
 
@@ -159,6 +172,64 @@ async function resolveMinHoldingMinutes(): Promise<number> {
 	return parsed;
 }
 
+function normalizeSymbolList(value: unknown): string[] {
+	if (Array.isArray(value)) {
+		return value
+			.map((item) => (typeof item === "string" ? item : ""))
+			.map((item) => item.trim().toUpperCase())
+			.filter((item) => item.length > 0);
+	}
+
+	if (typeof value === "string") {
+		return value
+			.split(",")
+			.map((item) => item.trim().toUpperCase())
+			.filter((item) => item.length > 0);
+	}
+
+	return [];
+}
+
+async function resolveStrategySymbolSet(): Promise<Set<string> | null> {
+	const context = getCurrentInstanceContext();
+	if (!context?.strategyName) {
+		return null;
+	}
+
+	try {
+		const strategy = await StrategyFileManager.loadStrategy(
+			context.strategyName,
+		);
+		if (!strategy) {
+			return null;
+		}
+
+		const symbols = normalizeSymbolList(strategy.params?.tradingSymbols);
+		if (!symbols.length) {
+			return null;
+		}
+
+		return new Set(symbols);
+	} catch (error) {
+		logger.warn(
+			`读取策略 ${context.strategyName} 的交易币种失败: ${error instanceof Error ? error.message : String(error)}`,
+		);
+		return null;
+	}
+}
+
+async function resolveAllowedTradingSymbols(): Promise<Set<string>> {
+	const strategySymbols = await resolveStrategySymbolSet();
+	if (strategySymbols && strategySymbols.size > 0) {
+		return strategySymbols;
+	}
+
+	const fallback = (RISK_PARAMS.TRADING_SYMBOLS || []).map((item) =>
+		item.toUpperCase(),
+	);
+	return new Set(fallback);
+}
+
 type LotSizingInfo = {
 	lotSize: number;
 	lotSizePrecision: number;
@@ -180,53 +251,90 @@ async function buildLotSizingInfo(
 	contractInfo: any,
 	provider: ExchangeProvider,
 ): Promise<LotSizingInfo> {
-	const lotSizeSource = contractInfo?.lotSize ?? "1";
-	let lotSizeString =
-		typeof lotSizeSource === "string"
-			? lotSizeSource
-			: String(lotSizeSource ?? "1");
-	let lotSizeRaw = Number.parseFloat(lotSizeString);
-	let lotSize = Number.isFinite(lotSizeRaw) && lotSizeRaw > 0 ? lotSizeRaw : 1;
-	let lotSizePrecision = computeLotSizePrecision(lotSizeString);
-	let minSizeRaw = Number.parseFloat(
-		contractInfo?.orderSizeMin ?? contractInfo?.minSize ?? String(lotSize),
-	);
-	let maxSizeRaw = Number.parseFloat(
-		contractInfo?.orderSizeMax ?? contractInfo?.maxSize ?? "1000000",
-	);
+	const toPositiveNumber = (value: unknown): number | null => {
+		if (typeof value === "number") {
+			return Number.isFinite(value) && value > 0 ? value : null;
+		}
+		if (typeof value === "string") {
+			const parsed = Number.parseFloat(value);
+			return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+		}
+		return null;
+	};
 
+	const lotSizeCandidates: number[] = [];
+	const minSizeCandidates: number[] = [];
+	const maxSizeCandidates: number[] = [];
+
+	const exchangeLotSize = toPositiveNumber(contractInfo?.lotSize);
+	if (exchangeLotSize !== null) {
+		lotSizeCandidates.push(exchangeLotSize);
+	}
+
+	const exchangeMin = toPositiveNumber(
+		contractInfo?.orderSizeMin ?? contractInfo?.minSize ?? exchangeLotSize,
+	);
+	if (exchangeMin !== null) {
+		minSizeCandidates.push(exchangeMin);
+	}
+
+	const exchangeMax = toPositiveNumber(
+		contractInfo?.orderSizeMax ?? contractInfo?.maxSize,
+	);
+	if (exchangeMax !== null) {
+		maxSizeCandidates.push(exchangeMax);
+	}
+
+	let precisionRecord: BinancePrecisionEntity | null = null;
 	if (provider === "binance") {
-		const precisionRecord = await getBinancePrecision(contract);
+		precisionRecord = await getBinancePrecision(contract);
 		if (precisionRecord) {
-			if (precisionRecord.step_size) {
-				lotSizeString = precisionRecord.step_size;
-				lotSizeRaw = Number.parseFloat(lotSizeString);
-				if (Number.isFinite(lotSizeRaw) && lotSizeRaw > 0) {
-					lotSize = lotSizeRaw;
-				}
-
-				// 优先使用 step_size 计算精度，因为 DB 中的 precision 可能来自 quantityPrecision (资产精度)
-				// 而非交易对的 stepSize 精度
-				const computedPrecision = computeLotSizePrecision(lotSizeString);
-				if (computedPrecision > 0) {
-					lotSizePrecision = computedPrecision;
-				} else if (Number.isFinite(precisionRecord.precision)) {
-					lotSizePrecision = Math.max(precisionRecord.precision, 0);
-				} else {
-					lotSizePrecision = computeLotSizePrecision(lotSizeString);
-				}
+			const dbStep = toPositiveNumber(precisionRecord.step_size);
+			if (dbStep !== null) {
+				lotSizeCandidates.push(dbStep);
 			}
 
-			const minCandidate = Number.parseFloat(precisionRecord.min_qty);
-			if (Number.isFinite(minCandidate) && minCandidate > 0) {
-				minSizeRaw = minCandidate;
+			const dbMin = toPositiveNumber(precisionRecord.min_qty);
+			if (dbMin !== null) {
+				minSizeCandidates.push(dbMin);
 			}
 
-			const maxCandidate = Number.parseFloat(precisionRecord.max_qty);
-			if (Number.isFinite(maxCandidate) && maxCandidate > 0) {
-				maxSizeRaw = maxCandidate;
+			const dbMax = toPositiveNumber(precisionRecord.max_qty);
+			if (dbMax !== null) {
+				maxSizeCandidates.push(dbMax);
 			}
 		}
+	}
+
+	let lotSize = lotSizeCandidates.length
+		? Math.max(...lotSizeCandidates)
+		: 1;
+	if (!Number.isFinite(lotSize) || lotSize <= 0) {
+		lotSize = 1;
+	}
+	let lotSizePrecision = computeLotSizePrecision(lotSize.toString());
+	if (
+		precisionRecord?.precision !== undefined &&
+		Number.isFinite(precisionRecord.precision)
+	) {
+		lotSizePrecision = Math.max(
+			lotSizePrecision,
+			Math.max(precisionRecord.precision, 0),
+		);
+	}
+
+	let minSizeRaw = minSizeCandidates.length
+		? Math.max(...minSizeCandidates)
+		: lotSize;
+	if (!Number.isFinite(minSizeRaw) || minSizeRaw <= 0) {
+		minSizeRaw = lotSize;
+	}
+
+	let maxSizeRaw = maxSizeCandidates.length
+		? Math.min(...maxSizeCandidates)
+		: 1000000;
+	if (!Number.isFinite(maxSizeRaw) || maxSizeRaw <= 0) {
+		maxSizeRaw = 1000000;
 	}
 
 	const normalizeToStep = (value: number, direction: "up" | "down") => {
@@ -402,13 +510,11 @@ export async function executeOpenPosition({
 		finalize({ success: false, message, ...extra });
 
 	try {
-		// 0. 检查白名单
+		// 0. 检查白名单（优先使用策略级配置）
 		if (!skipWhitelistCheck) {
-			const allowedSymbols = new Set(
-				(RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()),
-			);
+			const allowedSymbols = await resolveAllowedTradingSymbols();
 			if (!allowedSymbols.has(normalizedSymbol)) {
-				return fail(`该币种 ${normalizedSymbol} 不在当前交易白名单中`);
+				return fail(`该币种 ${normalizedSymbol} 不在当前策略允许的交易币种中`);
 			}
 		}
 
@@ -587,36 +693,36 @@ export async function executeOpenPosition({
 		}
 
 		// 2. 检查订单簿深度（确保有足够流动性）
-		try {
-			const orderBook = await client.getOrderBook(contract, 5); // 获取前5档订单
+		// try {
+		// 	const orderBook = await client.getOrderBook(contract, 5); // 获取前5档订单
 
-			if (orderBook && orderBook.bids && orderBook.bids.length > 0) {
-				// 计算买单深度（前5档）
-				const bidDepth = orderBook.bids
-					.slice(0, 5)
-					.reduce((sum: number, bid: any) => {
-						const price = Number.parseFloat(bid.p);
-						const size = Number.parseFloat(bid.s);
-						return sum + price * size;
-					}, 0);
+		// 	if (orderBook && orderBook.bids && orderBook.bids.length > 0) {
+		// 		// 计算买单深度（前5档）
+		// 		const bidDepth = orderBook.bids
+		// 			.slice(0, 5)
+		// 			.reduce((sum: number, bid: any) => {
+		// 				const price = Number.parseFloat(bid.p);
+		// 				const size = Number.parseFloat(bid.s);
+		// 				return sum + price * size;
+		// 			}, 0);
 
-				// 要求订单簿深度至少是开仓金额的5倍
-				const requiredDepth = notionalUsdt * 5;
+		// 		// 要求订单簿深度至少是开仓金额的5倍
+		// 		const requiredDepth = notionalUsdt * 1;
 
-				if (bidDepth < requiredDepth) {
-					return fail(
-						`流动性不足：订单簿深度 ${bidDepth.toFixed(2)} USDT < 所需 ${requiredDepth.toFixed(2)} USDT`,
-					);
-				}
+		// 		if (bidDepth < requiredDepth) {
+		// 			return fail(
+		// 				`流动性不足：订单簿深度 ${bidDepth.toFixed(2)} USDT < 所需 ${requiredDepth.toFixed(2)} USDT`,
+		// 			);
+		// 		}
 
-				logger.info(
-					`✅ 流动性检查通过：订单簿深度 ${bidDepth.toFixed(2)} USDT >= 所需 ${requiredDepth.toFixed(2)} USDT`,
-				);
-			}
-		} catch (error) {
-			logger.warn(`获取订单簿失败: ${error}`);
-			// 如果无法获取订单簿，发出警告但继续
-		}
+		// 		logger.info(
+		// 			`✅ 流动性检查通过：订单簿深度 ${bidDepth.toFixed(2)} USDT >= 所需 ${requiredDepth.toFixed(2)} USDT`,
+		// 		);
+		// 	}
+		// } catch (error) {
+		// 	logger.warn(`获取订单簿失败: ${error}`);
+		// 	// 如果无法获取订单簿，发出警告但继续
+		// }
 
 		// ====== 风控检查通过，继续开仓 ======
 
@@ -958,9 +1064,6 @@ export async function executeClosePosition({
 	enforceWhitelist = true,
 }: ClosePositionOptions) {
 	const normalizedSymbol = symbol.toUpperCase();
-	const allowedSymbols = new Set(
-		(RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()),
-	);
 
 	// 获取交易所客户端（优先实例上下文，回退全局）
 	const client = await getExchangeClient();
@@ -1010,8 +1113,13 @@ export async function executeClosePosition({
 		finalize({ success: false, message, ...extra });
 
 	try {
-		if (enforceWhitelist && !allowedSymbols.has(normalizedSymbol)) {
-			return fail(`该币种 ${normalizedSymbol} 不在当前交易白名单中`);
+		let strategyWhitelist: Set<string> | null = null;
+		if (enforceWhitelist) {
+			strategyWhitelist = await resolveAllowedTradingSymbols();
+		}
+
+		if (enforceWhitelist && strategyWhitelist && !strategyWhitelist.has(normalizedSymbol)) {
+			return fail(`该币种 ${normalizedSymbol} 不在当前策略允许的交易币种中`);
 		}
 
 		//  参数验证
@@ -1031,11 +1139,17 @@ export async function executeClosePosition({
 			? await getQuantoMultiplier(contract)
 			: 1;
 		let minHoldingMinutes = 0;
-		try {
-			minHoldingMinutes = await resolveMinHoldingMinutes();
-		} catch (error) {
-			const reason = error instanceof Error ? error.message : String(error);
-			return fail(`无法获取策略最小持仓时间: ${reason}`);
+		if (!skipGuards) {
+			try {
+				minHoldingMinutes = await resolveMinHoldingMinutes();
+			} catch (error) {
+				const reason = error instanceof Error ? error.message : String(error);
+				return fail(`无法获取策略最小持仓时间: ${reason}`);
+			}
+		} else {
+			logger.info(
+				`手动平仓 ${normalizedSymbol} 已跳过最小持仓时间校验（skipGuards=true）`,
+			);
 		}
 
 		const okxPosSideRaw =

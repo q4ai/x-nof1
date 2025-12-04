@@ -930,11 +930,20 @@ export class GateClient {
 			false,
 		);
 
+		const multiplierRaw = data?.quanto_multiplier;
+		const multiplier =
+			typeof multiplierRaw === "number"
+				? multiplierRaw.toString()
+				: typeof multiplierRaw === "string"
+					? multiplierRaw
+					: "1";
+
 		return {
 			symbol: this.symbolToContract(data.name),
 			baseCcy: data.name.split("_")[0],
 			quoteCcy: "USDT",
-			contractMultiplier: data.quanto_multiplier,
+			contractMultiplier: multiplier,
+			quantoMultiplier: multiplier,
 			minSize: data.order_size_min,
 			maxSize: data.order_size_max,
 			tickSize: data.order_price_round,

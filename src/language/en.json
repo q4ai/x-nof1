@@ -620,6 +620,7 @@
 			"empty": "No content yet"
 		},
 		"labels": {
+			"aiAutonomous": "AI Autonomous",
 			"ultraShort": "Ultra-Short",
 			"swingTrend": "Swing Trend",
 			"dca": "DCA",
@@ -879,6 +880,7 @@
 	"saveError": "Save failed",
 	"networkError": "Network error",
 	"strategyLabels": {
+		"ai-autonomous": "AI Autonomous",
 		"ultra-short": "Ultra-Short",
 		"swing-trend": "Swing Trend",
 		"dca": "DCA",

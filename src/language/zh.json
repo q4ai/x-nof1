@@ -627,6 +627,7 @@
 			"empty": "尚无内容"
 		},
 		"labels": {
+			"aiAutonomous": "AI自主策略",
 			"ultraShort": "超短线",
 			"swingTrend": "波段趋势",
 			"dca": "DCA定投",
@@ -636,6 +637,7 @@
 			"unknown": "未知策略"
 		},
 		"labelMap": {
+			"ai-autonomous": "AI自主策略",
 			"ultra-short": "超短线",
 			"swing-trend": "波段趋势",
 			"dca": "DCA定投",
@@ -894,6 +896,7 @@
 	"saveError": "保存失败",
 	"networkError": "网络错误",
 	"strategyLabels": {
+		"ai-autonomous": "AI自主策略",
 		"ultra-short": "超短线",
 		"swing-trend": "波段趋势",
 		"dca": "DCA定投",

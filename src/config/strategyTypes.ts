@@ -1,4 +1,5 @@
 export type TradingStrategy =
+	| "ai-autonomous"
 	| "conservative"
 	| "balanced"
 	| "aggressive"
@@ -13,6 +14,7 @@ export type StrategyLanguage = (typeof SUPPORTED_STRATEGY_LANGUAGES)[number];
 export const DEFAULT_STRATEGY_LANGUAGE: StrategyLanguage = "en";
 
 export const ALL_TRADING_STRATEGIES: TradingStrategy[] = [
+	"ai-autonomous",
 	"conservative",
 	"balanced",
 	"aggressive",
@@ -26,6 +28,7 @@ const STRATEGY_LABELS: Record<
 	Record<TradingStrategy, string>
 > = {
 	en: {
+		"ai-autonomous": "AI Autonomous",
 		conservative: "Capital Preservation",
 		balanced: "Balanced Expansion",
 		aggressive: "Breakout Momentum",
@@ -34,6 +37,7 @@ const STRATEGY_LABELS: Record<
 		dca: "DCA",
 	},
 	zh: {
+		"ai-autonomous": "AI自主策略",
 		conservative: "保守增值",
 		balanced: "均衡扩张",
 		aggressive: "进攻突破",
@@ -42,6 +46,7 @@ const STRATEGY_LABELS: Record<
 		dca: "DCA定投",
 	},
 	ja: {
+		"ai-autonomous": "AI自律トレード",
 		conservative: "資本保全",
 		balanced: "バランス拡張",
 		aggressive: "ブレイクアウトモメンタム",

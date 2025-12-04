@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title data-i18n="pageTitle">Q4AI - AI Crypto Trading Monitor</title>
-  <link rel="stylesheet" href="monitor-styles.css">
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <!-- 全局加载遮罩 -->
@@ -309,6 +309,7 @@
           <div class="strategy-quick-insert quick-insert-row" id="strategy-editor-quick-insert">
             <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
             <div class="quick-insert-buttons">
+              <button type="button" class="quick-insert-btn" data-editor-insert="ai-autonomous" data-i18n="strategy.labels.aiAutonomous">AI Autonomous</button>
               <button type="button" class="quick-insert-btn" data-editor-insert="ultra-short" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
               <button type="button" class="quick-insert-btn" data-editor-insert="swing-trend" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
               <button type="button" class="quick-insert-btn" data-editor-insert="dca" data-i18n="strategy.labels.dca">DCA</button>
@@ -1367,6 +1368,6 @@
   <div class="toast-container" id="toast-container"></div>
   
   <script src="csrf.js"></script>
-  <script src="monitor-script.js"></script>
+  <script src="scripts.js"></script>
 </body>
 </html>

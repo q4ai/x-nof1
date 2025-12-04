@@ -30,6 +30,7 @@ let CONTRACT_MULTIPLIERS = { ...DEFAULT_CONTRACT_MULTIPLIERS };
 let contractMultipliersLastUpdated = null;
 
 const DEFAULT_STRATEGY_LABELS = {
+  "ai-autonomous": "AI Autonomous",
   "ultra-short": "Ultra-Short",
   "swing-trend": "Swing Trend",
   "dca": "DCA",
@@ -602,6 +603,7 @@ class TradingMonitor {
   this.tradingLoopState = null;
     this.tradingLoopConfirmTimer = null;
     this.tradingLoopDisableConfirm = false;
+    this.tradingLoopDeprecationNotified = false;
   this.accountsCache = [];
   this.aiModelsCache = [];
   this.instancesCache = [];
@@ -5936,7 +5938,7 @@ class TradingMonitor {
 
   async fetchPublicTradingLoopStatus() {
     try {
-      const response = await fetch("/api/public/trading-loop-status", {
+      const response = await fetch("/api/public/instances-status", {
         cache: "no-store",
         credentials: "same-origin",
       });
@@ -5946,12 +5948,16 @@ class TradingMonitor {
       }
 
       const data = await response.json();
-      if (data && typeof data.enabled === "boolean") {
-        const isActive = Boolean(data.enabled && data.scheduled);
+      // 检查是否有运行中的实例
+      if (data && data.runningInstance) {
+        const isActive = data.runningInstance.status === "running";
         this.updateAiOverlayVisibility(isActive);
+      } else {
+        // 没有运行中的实例，隐藏 AI overlay
+        this.updateAiOverlayVisibility(false);
       }
     } catch (error) {
-      console.warn("[ai-overlay] 获取公开交易循环状态失败", error);
+      console.warn("[ai-overlay] 获取公开实例状态失败", error);
     }
   }
 
@@ -6386,121 +6392,37 @@ class TradingMonitor {
   }
 
   async fetchTradingLoopStatus() {
-    if (!this.isAuthenticated) {
-      return;
+    if (!this.tradingLoopDeprecationNotified) {
+      console.info(
+        "[trading-loop] 旧版交易循环接口已废弃，UI 将仅展示占位状态。",
+      );
+      this.tradingLoopDeprecationNotified = true;
     }
 
-    try {
-      const payload = await this.fetchJson("/api/trading-loop/status");
-      if (!payload || typeof payload !== "object") {
-        return;
-      }
-      if (payload.state) {
-        this.updateTradingLoopToggle(payload.state);
-      }
-    } catch (error) {
-      console.warn("[trading-loop] 获取状态失败", error);
-    }
+    // 交易循环开关已迁移到多实例任务管理，旧接口不再可用
+    this.updateTradingLoopToggle(null);
   }
 
   async handleTradingLoopToggle() {
     if (!this.isAuthenticated) {
-      this.showToast("warning", "需要登录", "请先登录后台才能控制定时任务");
+      this.showToast("warning", "需要登录", "请先登录后台才能查看策略任务状态");
       return;
     }
 
-    if (!this.tradingLoopToggle) {
-      return;
-    }
-
-    if (this.tradingLoopToggle.classList.contains("is-loading")) {
-      return;
-    }
-
-    if (!this.tradingLoopState) {
-      await this.fetchTradingLoopStatus();
-    }
-
-    if (!this.tradingLoopState) {
-      this.showToast("error", "状态未知", "暂时无法获取当前定时任务状态，请稍后重试");
-      return;
-    }
-
-    const targetEnabled = !this.tradingLoopState.enabled;
-
-    if (!targetEnabled) {
-      if (!this.tradingLoopDisableConfirm) {
-        this.tradingLoopDisableConfirm = true;
-        if (this.tradingLoopToggle) {
-          this.tradingLoopToggle.classList.add("confirm");
-        }
-        if (this.tradingLoopConfirmTimer) {
-          clearTimeout(this.tradingLoopConfirmTimer);
-        }
-        this.tradingLoopConfirmTimer = window.setTimeout(() => {
-          this.resetTradingLoopConfirmState();
-        }, 5000);
-        this.showToast("warning", "确认停止", "再次点击确认后，AI 自动交易将立即停止。");
-        return;
-      }
-      this.resetTradingLoopConfirmState();
-    } else {
-      this.resetTradingLoopConfirmState();
-    }
-
-    this.tradingLoopToggle.classList.add("is-loading");
-
-    try {
-      const csrfToken = window.csrfManager ? window.csrfManager.getToken() : "";
-      const response = await fetch("/api/trading-loop/state", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-csrf-token": csrfToken,
-        },
-        credentials: "same-origin",
-        body: JSON.stringify({ enabled: targetEnabled }),
-      });
-
-      if (!response.ok) {
-        const errorPayload = await response.json().catch(() => ({}));
-        const message = errorPayload && typeof errorPayload.error === "string" ? errorPayload.error : `HTTP ${response.status}`;
-        throw new Error(message);
-      }
-
-      const payload = await response.json().catch(() => ({}));
-      if (payload && payload.state) {
-        this.updateTradingLoopToggle(payload.state);
-      } else {
-        await this.fetchTradingLoopStatus();
-      }
-
-      this.showToast(
-        "success",
-        targetEnabled ? "已启动 AI 定时任务" : "已暂停 AI 定时任务",
-        targetEnabled ? "定时任务将在下一周期运行" : "系统将保持待机状态"
+    if (!this.tradingLoopDeprecationNotified) {
+      console.info(
+        "[trading-loop] 该开关已废弃，请在“策略任务”面板中启停具体实例。",
       );
-
-      if (targetEnabled) {
-        setTimeout(() => {
-          if (this.isAuthenticated) {
-            void this.fetchTradingLoopStatus();
-          }
-        }, 2500);
-      }
-    } catch (error) {
-      console.error("[trading-loop] 切换失败", error);
-      this.showToast(
-        "error",
-        "操作失败",
-        error instanceof Error ? error.message : "切换定时任务状态失败，请稍后重试"
-      );
-      await this.fetchTradingLoopStatus();
-    } finally {
-      if (this.tradingLoopToggle) {
-        this.tradingLoopToggle.classList.remove("is-loading");
-      }
+      this.tradingLoopDeprecationNotified = true;
     }
+
+    this.showToast(
+      "info",
+      "功能已升级",
+      "系统已改为多实例调度，请到“策略任务”面板管理各实例的启停。",
+    );
+
+    await this.fetchTradingLoopStatus();
   }
 
   /**

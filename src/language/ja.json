@@ -624,6 +624,7 @@
 			"empty": "コンテンツがありません"
 		},
 		"labels": {
+			"aiAutonomous": "AI自律トレード",
 			"ultraShort": "超短期",
 			"swingTrend": "スイングトレンド",
 			"dca": "DCA積立",
@@ -633,6 +634,7 @@
 			"unknown": "不明なストラテジー"
 		},
 		"labelMap": {
+			"ai-autonomous": "AI自律トレード",
 			"ultra-short": "超短期",
 			"swing-trend": "スイングトレンド",
 			"dca": "DCA積立",
@@ -853,6 +855,7 @@
 	"saveError": "保存に失敗しました",
 	"networkError": "ネットワークエラー",
 	"strategyLabels": {
+		"ai-autonomous": "AI自律トレード",
 		"ultra-short": "超短期",
 		"swing-trend": "スイングトレンド",
 		"dca": "DCA積立",

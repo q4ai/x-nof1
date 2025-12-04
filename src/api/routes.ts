@@ -3865,13 +3865,10 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 	app.get("/api/strategy/default-prompts", requireAuth, async (c) => {
 		try {
 			const requestedStrategy = c.req.query("strategy")?.trim().toLowerCase();
-			const validStrategies: TradingStrategy[] = [
-				"conservative",
-				"balanced",
-				"aggressive",
-				"ultra-short",
-				"swing-trend",
-			];
+			const { normalizeStrategyLanguage, ALL_TRADING_STRATEGIES } = await import(
+				"../config/strategyTypes"
+			);
+			const validStrategies: TradingStrategy[] = ALL_TRADING_STRATEGIES;
 			const fallbackStrategy: TradingStrategy = "balanced";
 			const strategy: TradingStrategy =
 				requestedStrategy &&
@@ -3880,9 +3877,6 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 					: fallbackStrategy;
 
 			// Get language parameter and validate
-			const { normalizeStrategyLanguage } = await import(
-				"../config/strategyTypes"
-			);
 			const rawLanguage = c.req.query("language")?.trim().toLowerCase();
 			const requestedLanguage = normalizeStrategyLanguage(rawLanguage);
 
@@ -4901,6 +4895,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 				name: strategy.meta.name,
 				meta: strategy.meta,
 				prompts: strategy.prompts,
+				// 直接返回完整 params，确保 tradingSymbols 等字段不丢失
+				params: strategy.params,
 				config: {
 					MAX_LEVERAGE: strategy.params.leverage,
 					MAX_POSITIONS: strategy.params.maxPositions,
