@@ -1,9 +1,9 @@
 {
-  "name": "q4-ai-trading-platform",
+  "name": "open-nof1.ai",
   "version": "0.1.0",
-  "description": "Q4 AI智能交易平台",
+  "description": "nof1.ai Agent 自动交易系统",
   "type": "module",
-  "author": "Q4.NET",
+  "author": "195440",
   "license": "AGPL-3.0",
   "keywords": [
     "bitcoin",

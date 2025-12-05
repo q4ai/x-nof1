@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title data-i18n="login.pageTitle">Q4AI Admin Login</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      background: linear-gradient(135deg, #0f172a, #111827 60%, #020617);
+      min-height: 100vh;
+      color: #e2e8f0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 24px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: rgba(15, 23, 42, 0.82);
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 18px;
+      padding: 32px;
+      box-shadow: 0 18px 36px rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(14px);
+    }
+    .login-card h1 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: 0.02em;
+    }
+    .login-card p.subtitle {
+      margin: 0 0 24px;
+      color: rgba(148, 163, 184, 0.85);
+      font-size: 15px;
+    }
+    .login-card p.admin-path {
+      margin: 0 0 18px;
+      font-size: 13px;
+      color: rgba(148, 163, 184, 0.75);
+    }
+    .login-card p.admin-path code {
+      font-family: "SF Mono", "Fira Code", monospace;
+      background: rgba(30, 41, 59, 0.8);
+      padding: 4px 8px;
+      border-radius: 6px;
+      color: #38bdf8;
+    }
+    .form-group {
+      margin-bottom: 18px;
+    }
+    label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      color: rgba(226, 232, 240, 0.9);
+    }
+    input[type="text"],
+    input[type="password"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 10px;
+      background: rgba(15, 23, 42, 0.6);
+      color: #f8fafc;
+      font-size: 15px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+    input[type="text"]:focus,
+    input[type="password"]:focus {
+      outline: none;
+      border-color: #38bdf8;
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+    button[type="submit"] {
+      width: 100%;
+      border: none;
+      padding: 12px 16px;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #0f172a;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+    button[type="submit"]:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 24px rgba(56, 189, 248, 0.35);
+    }
+    .message {
+      margin-top: 18px;
+      font-size: 13px;
+      min-height: 18px;
+    }
+    .message.success {
+      color: #4ade80;
+    }
+    .message.error {
+      color: #f87171;
+    }
+    .message.info {
+      color: rgba(148, 163, 184, 0.85);
+    }
+  </style>
+</head>
+<body>
+  <div class="login-card">
+    <h1 data-i18n="login.title">Q4AI Admin Login</h1>
+    <p class="subtitle" data-i18n="login.subtitle">Sign in with your admin credentials to manage the system</p>
+    <p class="admin-path" data-admin-path="{{ADMIN_PATH}}" data-i18n="login.adminPath">Admin entry point: {{ADMIN_PATH}}</p>
+    <form id="login-form">
+      <div class="form-group">
+        <label for="username" data-i18n="login.usernameLabel">Username</label>
+        <input type="text" id="username" name="username" placeholder="Enter username" data-i18n-placeholder="login.usernamePlaceholder" required autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label for="password" data-i18n="login.passwordLabel">Password</label>
+        <input type="password" id="password" name="password" placeholder="Enter password" data-i18n-placeholder="login.passwordPlaceholder" required autocomplete="current-password" />
+      </div>
+      <button type="submit" data-i18n="login.submit">Sign In</button>
+    </form>
+    <p class="message info" id="message" data-i18n="login.initialMessage">On first launch, check the console or ./.q4ai file for credentials.</p>
+  </div>
+  <script src="csrf.js"></script>
+  <script>
+  const SUPPORTED_LANGUAGES = ["en", "zh", "ja"];
+    const DEFAULT_LANGUAGE = "en";
+    const LANGUAGE_STORAGE_KEY = "nof1_ui_language";
+    const LANGUAGE_ENDPOINT = "/language";
+
+    let defaultLanguagePack = {};
+    let activeLanguagePack = {};
+    let activeLanguage = DEFAULT_LANGUAGE;
+
+    function getCurrentLanguage() {
+      const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY);
+      if (stored && SUPPORTED_LANGUAGES.includes(stored)) {
+        return stored;
+      }
+      return DEFAULT_LANGUAGE;
+    }
+
+    function resolveValue(pack, key) {
+      const segments = key.split('.');
+      let current = pack;
+      for (const segment of segments) {
+        if (current && typeof current === 'object' && segment in current) {
+          current = current[segment];
+        } else {
+          return undefined;
+        }
+      }
+      return current;
+    }
+
+    function formatValue(value, replacements) {
+      if (typeof value !== 'string' || !replacements) {
+        return value;
+      }
+      return value.replace(/\{\{(\w+)\}\}/g, (match, token) => {
+        if (Object.prototype.hasOwnProperty.call(replacements, token)) {
+          return String(replacements[token]);
+        }
+        return match;
+      });
+    }
+
+    function t(key, replacements) {
+      let value = resolveValue(activeLanguagePack, key);
+      if (value === undefined) {
+        value = resolveValue(defaultLanguagePack, key);
+      }
+      if (value === undefined) {
+        return key;
+      }
+      if (typeof value === 'string') {
+        return formatValue(value, replacements);
+      }
+      return value;
+    }
+
+    async function fetchLanguagePack(lang) {
+      const response = await fetch(`${LANGUAGE_ENDPOINT}/${lang}`, { cache: 'no-store' });
+      if (!response.ok) {
+        throw new Error(`Failed to load language pack ${lang} (${response.status})`);
+      }
+      return response.json();
+    }
+
+    function applyLoginTranslations() {
+      const lang = activeLanguage;
+      if (lang === 'zh') {
+        document.documentElement.lang = 'zh-CN';
+      } else if (lang === 'ja') {
+        document.documentElement.lang = 'ja-JP';
+      } else {
+        document.documentElement.lang = lang;
+      }
+
+      const pageTitle = t('login.pageTitle');
+      if (pageTitle && typeof pageTitle === 'string') {
+        document.title = pageTitle;
+        const titleEl = document.querySelector('title[data-i18n]');
+        if (titleEl) {
+          titleEl.textContent = pageTitle;
+        }
+      }
+
+      document.querySelectorAll('[data-i18n]').forEach((element) => {
+        const key = element.getAttribute('data-i18n');
+        if (!key || key === 'login.adminPath') {
+          return;
+        }
+        element.textContent = t(key);
+      });
+
+      const adminPathEl = document.querySelector('[data-i18n="login.adminPath"]');
+      if (adminPathEl) {
+        const path = adminPathEl.getAttribute('data-admin-path') || '';
+        adminPathEl.innerHTML = '';
+        const template = t('login.adminPath');
+        const pathCode = document.createElement('code');
+        pathCode.textContent = path;
+
+        const parts = String(template).split('{{path}}');
+        if (parts.length === 2) {
+          adminPathEl.append(parts[0]);
+          adminPathEl.append(pathCode);
+          adminPathEl.append(parts[1]);
+        } else {
+          adminPathEl.textContent = String(template).replace('{{path}}', path);
+        }
+      }
+
+      document.querySelectorAll('[data-i18n-placeholder]').forEach((element) => {
+        const key = element.getAttribute('data-i18n-placeholder');
+        if (!key) {
+          return;
+        }
+        element.setAttribute('placeholder', t(key));
+      });
+
+      const messageEl = document.getElementById('message');
+      if (messageEl && messageEl.getAttribute('data-i18n') === 'login.initialMessage') {
+        messageEl.textContent = t('login.initialMessage');
+      }
+    }
+
+    async function initLanguage() {
+      activeLanguage = getCurrentLanguage();
+      try {
+        defaultLanguagePack = await fetchLanguagePack(DEFAULT_LANGUAGE);
+      } catch (error) {
+        console.error('Failed to load default language pack', error);
+        defaultLanguagePack = {};
+      }
+
+      if (activeLanguage !== DEFAULT_LANGUAGE) {
+        try {
+          activeLanguagePack = await fetchLanguagePack(activeLanguage);
+        } catch (error) {
+          console.warn(`Failed to load language pack ${activeLanguage}, falling back to default`, error);
+          activeLanguagePack = defaultLanguagePack;
+          activeLanguage = DEFAULT_LANGUAGE;
+        }
+      } else {
+        activeLanguagePack = defaultLanguagePack;
+      }
+
+      applyLoginTranslations();
+    }
+
+    const languageReady = initLanguage();
+
+    async function checkStatus() {
+      await languageReady;
+      try {
+        const response = await fetch('/api/auth/status', { cache: 'no-store', credentials: 'same-origin' });
+        if (response.ok) {
+          const data = await response.json();
+          if (data && data.authenticated) {
+            window.location.href = '/';
+          }
+        }
+      } catch (error) {
+        console.warn(t('login.messages.statusError'), error);
+      }
+    }
+
+    checkStatus();
+
+    const form = document.getElementById('login-form');
+    const messageEl = document.getElementById('message');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      await languageReady;
+      messageEl.textContent = t('login.messages.verifying');
+      messageEl.className = 'message info';
+
+      const formData = new FormData(form);
+      const payload = Object.fromEntries(formData.entries());
+
+      try {
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload),
+          credentials: 'same-origin',
+        });
+
+        const result = await response.json().catch(() => null);
+
+        if (response.ok && result && result.success) {
+          if (result.csrfToken && window.csrfManager) {
+            window.csrfManager.setToken(result.csrfToken);
+          }
+          messageEl.textContent = t('login.messages.success');
+          messageEl.className = 'message success';
+          setTimeout(() => {
+            window.location.href = '/';
+          }, 600);
+          return;
+        }
+
+        messageEl.textContent = (result && result.error) || t('login.messages.failure');
+        messageEl.className = 'message error';
+      } catch (error) {
+        console.error('登录请求异常', error);
+        messageEl.textContent = t('login.messages.networkError');
+        messageEl.className = 'message error';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,35 @@
+
+
+C:\Program Files\q4-ai-trading-platform>nof1.ai.exe
+pkg/prelude/bootstrap.js:1872
+      throw error;
+      ^
+
+Error: Cannot find module '@libsql/win32-x64-msvc'
+Require stack:
+- C:\snapshot\exe_package\dist\node-CvnuDzz2.js
+- C:\snapshot\exe_package\dist\installService-MvUV4FW0.js
+- C:\snapshot\exe_package\dist\index.js
+1) If you want to compile the package/file into executable, please pay attention to compilation warnings and specify a literal in 'require' call. 2) If you don't want to compile the package/file into executable and want to 'require' it from filesystem (likely plugin), specify an absolute path in 'require' call using process.cwd() or process.execPath.
+[90m    at Module._resolveFilename (node:internal/modules/cjs/loader:946:15)[39m
+    at Function._resolveFilename (pkg/prelude/bootstrap.js:1951:46)
+[90m    at Module._load (node:internal/modules/cjs/loader:787:27)[39m
+[90m    at Module.require (node:internal/modules/cjs/loader:1012:19)[39m
+    at Module.require (pkg/prelude/bootstrap.js:1851:31)
+[90m    at require (node:internal/modules/cjs/helpers:102:18)[39m
+    at _0x13356b (C:\snapshot\exe_package\dist\node-CvnuDzz2.js:1:277990)
+    at node_modules/libsql/index.js (C:\snapshot\exe_package\dist\node-CvnuDzz2.js:1:278682)
+    at C:\snapshot\exe_package\dist\chunk-BxBTb9qk.js:1:4438
+    at Object.<anonymous> (C:\snapshot\exe_package\dist\node-CvnuDzz2.js:1:293961) {
+  code: [32m'MODULE_NOT_FOUND'[39m,
+  requireStack: [
+    [32m'C:\\snapshot\\exe_package\\dist\\node-CvnuDzz2.js'[39m,
+    [32m'C:\\snapshot\\exe_package\\dist\\installService-MvUV4FW0.js'[39m,
+    [32m'C:\\snapshot\\exe_package\\dist\\index.js'[39m
+  ],
+  pkg: [33mtrue[39m
+}
+
+Node.js v18.5.0
+
+C:\Program Files\q4-ai-trading-platform>

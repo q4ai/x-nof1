@@ -1,0 +1,1373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title data-i18n="pageTitle">Q4AI - AI Crypto Trading Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- 全局加载遮罩 -->
+  <div class="global-loading" id="global-loading">
+    <div class="loading-spinner">
+  <div class="spinner"></div>
+  <p class="loading-text" data-i18n="loadingGlobal">Loading data...</p>
+    </div>
+  </div>
+
+  <div class="app-container">
+    <!-- 顶部导航栏 -->
+    <header class="top-bar">
+      <div class="logo-section">
+        <h1 class="logo">Q4</h1>
+        <span class="tagline" data-i18n="tagline">AI Trading Platform</span>
+        
+        <!-- 视图切换开关 -->
+        <div class="view-switcher" role="group" aria-label="View Mode">
+          <input type="checkbox" id="view-mode-toggle" class="view-switcher-input" aria-hidden="true">
+          <div class="view-switcher-inner">
+            <span class="view-switcher-highlight" aria-hidden="true"></span>
+            <button type="button" class="view-switcher-label" data-mode="trading" data-i18n="viewMode.trading">Trading</button>
+            <button type="button" class="view-switcher-label" data-mode="strategy" data-i18n="viewMode.strategy">Strategy</button>
+          </div>
+        </div>
+      </div>
+      <nav class="nav-links">
+        <a href="https://github.com/q4ai/x-nof1" target="_blank" rel="noopener noreferrer">
+          <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+          <span data-i18n="github">GitHub</span>
+        </a>
+  <a href="https://github.com/q4ai/x-nof1/blob/main/README.md" target="_blank" rel="noopener noreferrer" data-i18n="docs">Docs</a>
+        <div class="language-selector" id="language-selector">
+          <button
+            type="button"
+            class="language-toggle"
+            id="language-toggle"
+            aria-haspopup="true"
+            aria-expanded="false"
+            aria-label="Language"
+            data-i18n-aria="navigation.language"
+            data-i18n-title="navigation.language"
+          >
+            <span class="language-label">English</span>
+            <span class="language-caret" aria-hidden="true">
+              <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor" role="presentation">
+                <path d="M2.146 4.646a.5.5 0 0 1 .708 0L6 7.793l3.146-3.147a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 0 1 0-.708z" />
+              </svg>
+            </span>
+          </button>
+          <div class="language-menu" id="language-menu" role="menu">
+            <button type="button" class="language-option" data-lang="en" role="menuitem">English</button>
+            <button type="button" class="language-option" data-lang="zh" role="menuitem">中文</button>
+            <button type="button" class="language-option" data-lang="ja" role="menuitem">日本語</button>
+          </div>
+        </div>
+        <div class="account-switcher hidden" id="account-switcher">
+          <button type="button" class="account-switcher-trigger" id="account-switcher-trigger" aria-haspopup="true" aria-expanded="false">
+            <span class="account-switcher-label" id="account-switcher-label" data-i18n="accounts.switcher.label">Account</span>
+            <span class="account-switcher-caret" aria-hidden="true">
+              <svg viewBox="0 0 12 12" width="10" height="10" fill="currentColor">
+                <path d="M2.146 4.646a.5.5 0 0 1 .708 0L6 7.793l3.146-3.147a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 0 1 0-.708z"></path>
+              </svg>
+            </span>
+          </button>
+          <div class="account-switcher-dropdown" id="account-switcher-dropdown" role="menu" aria-hidden="true">
+            <div class="account-switcher-empty" id="account-switcher-empty" data-i18n="accounts.switcher.empty">No other accounts</div>
+            <ul class="account-switcher-list" id="account-switcher-list"></ul>
+          </div>
+        </div>
+  <a href="#" class="nav-action nav-settings hidden" id="settings-btn" data-i18n="navigation.settings" data-i18n-title="navigation.settings">Settings</a>
+  <a href="#" class="nav-action nav-logout hidden" id="logout-btn" data-i18n="navigation.logout" data-i18n-title="navigation.logout">Logout</a>
+      </nav>
+    </header>
+
+    <!-- 主内容区域 -->
+    <main class="main-content">
+      <!-- 左侧：币种列表 -->
+      <aside class="symbol-sidebar">
+        <div class="sidebar-header">
+          <!-- 币种筛选自定义下拉选择器 -->
+          <div class="symbol-filter-dropdown" id="symbol-filter-dropdown">
+            <button type="button" class="symbol-filter-trigger" id="symbol-filter-trigger">
+              <span class="symbol-filter-label" id="symbol-filter-label" data-i18n="symbolFilter.allSymbols">All Symbols</span>
+              <svg class="symbol-filter-arrow" width="12" height="12" viewBox="0 0 12 12" fill="none">
+                <path d="M3 4.5L6 7.5L9 4.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+            <div class="symbol-filter-menu" id="symbol-filter-menu" aria-hidden="true">
+              <div class="symbol-filter-option active" data-value="all" data-i18n="symbolFilter.allSymbols">All Symbols</div>
+              <!-- 任务实例选项会动态加载 -->
+            </div>
+          </div>
+        </div>
+        <div class="symbol-list" id="symbol-list">
+          <p class="loading" data-i18n="loading">Loading...</p>
+        </div>
+      </aside>
+
+      <!-- 中间：K线图表 -->
+      <section class="chart-area">
+        <div class="chart-header">
+          <h3 class="chart-title" id="chart-title">BTC-USDT</h3>
+          <!-- 时间周期切换 -->
+          <div class="interval-selector">
+            <button class="interval-btn active" data-interval="1m">1m</button>
+            <button class="interval-btn" data-interval="5m">5m</button>
+            <button class="interval-btn" data-interval="15m">15m</button>
+            <button class="interval-btn" data-interval="1h">1H</button>
+            <button class="interval-btn" data-interval="4h">4H</button>
+            <button class="interval-btn" data-interval="1D">1D</button>
+          </div>
+          <span class="chart-interval" id="chart-interval">1m</span>
+        </div>
+        <div class="kline-container">
+          <div id="kline-chart"></div>
+          <!-- AI 控件已移至 overlay，不再需要顶部控制按钮 -->
+        </div>
+      </section>
+
+      <!-- 右侧：资产曲线 + AI 决策 / 手动交易 -->
+      <aside class="info-sidebar">
+        <div class="sidebar-tabs main-tabs">
+          <button type="button" class="tab-btn active" data-tab="view-stats" data-i18n="tabs.dashboard">Dashboard</button>
+          <button type="button" class="tab-btn" data-tab="view-manual" data-i18n="tabs.manualTrade">Manual Trade</button>
+        </div>
+
+        <div class="sidebar-view active" id="view-stats">
+          <!-- 资产曲线 -->
+          <div class="equity-section">
+            <div class="section-header">
+              <h4 data-i18n="accountStats">Account Stats</h4>
+              <a href="#" class="stats-detail-link" id="stats-detail-btn" data-i18n="statsDetail">Details</a>
+            </div>
+            <div class="equity-metrics">
+              <div class="metric-item">
+                <span class="label" data-i18n="totalEquity">Total Equity</span>
+                <span class="value" id="metric-total">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="availableBalance">Available</span>
+                <span class="value" id="metric-available">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="unrealizedPnL">Unrealized</span>
+                <span class="value" id="metric-unrealised">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="totalReturn">Return</span>
+                <span class="value" id="metric-return">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="winRate">Win Rate</span>
+                <span class="value" id="metric-winrate">--</span>
+              </div>
+              <div class="metric-item">
+                <span class="label" data-i18n="maxDrawdown">Max Drawdown</span>
+                <span class="value" id="metric-maxdrawdown">--</span>
+              </div>
+            </div>
+            <div class="equity-chart">
+              <canvas id="equity-canvas"></canvas>
+            </div>
+          </div>
+
+          <!-- AI 决策列表 -->
+          <div class="decision-section">
+            <div class="section-header">
+              <h4 data-i18n="decision.title">AI Decisions</h4>
+              <span class="update-time" id="decision-updated">--</span>
+            </div>
+            <div class="decision-list" id="decision-list">
+              <p class="loading" data-i18n="loading">Loading...</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="sidebar-view" id="view-manual">
+          <div class="manual-trade-card">
+            <div class="manual-header">
+              <h4 data-i18n="tabs.manualTrade">Manual Trade</h4>
+              <div class="manual-balance">
+                <span class="label" data-i18n="trade.available">Available</span>
+                <span class="value" id="manual-available-balance">--</span>
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label data-i18n="trade.action">Action</label>
+              <div class="manual-segmented manual-action-tabs" role="group">
+                <label class="manual-segmented-option manual-action-open">
+                  <input type="radio" name="manual-action" value="open" checked>
+                  <span data-i18n="trade.open">Open</span>
+                </label>
+                <label class="manual-segmented-option manual-action-close">
+                  <input type="radio" name="manual-action" value="close">
+                  <span data-i18n="trade.close">Close</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label for="manual-symbol" data-i18n="trade.symbol">Symbol</label>
+              <div class="manual-select" id="manual-symbol-select">
+                <button type="button" class="manual-select-trigger" id="manual-symbol-trigger" aria-haspopup="listbox" aria-expanded="false">
+                  <span class="manual-select-label">--</span>
+                  <span class="select-caret" aria-hidden="true">
+                    <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                      <path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </span>
+                </button>
+                <div class="manual-select-menu" id="manual-symbol-menu" role="listbox"></div>
+                <select id="manual-symbol" class="manual-select-native" tabindex="-1" aria-hidden="true"></select>
+              </div>
+            </div>
+
+            <div class="manual-inline-fields manual-margin-row">
+              <div class="manual-field flex-1">
+                <label data-i18n="trade.marginMode">Margin Mode</label>
+                <div class="manual-select" id="manual-margin-select">
+                  <button type="button" class="manual-select-trigger" id="manual-margin-trigger" aria-haspopup="listbox" aria-expanded="false">
+                    <span class="manual-select-label" data-i18n="trade.cross">Cross</span>
+                    <span class="select-caret" aria-hidden="true">
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+                        <path d="M3 5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                      </svg>
+                    </span>
+                  </button>
+                  <div class="manual-select-menu" id="manual-margin-menu" role="listbox"></div>
+                  <select id="manual-margin-mode" class="manual-select-native" tabindex="-1" aria-hidden="true">
+                    <option value="cross" selected data-i18n="trade.cross">Cross</option>
+                    <option value="isolated" data-i18n="trade.isolated">Isolated</option>
+                  </select>
+                </div>
+              </div>
+              <div class="manual-field manual-leverage-field">
+                <label for="manual-leverage" data-i18n="trade.leverage">Leverage (x)</label>
+                <input type="number" id="manual-leverage" min="1" step="1" value="1" />
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label data-i18n="trade.orderType">Order Type</label>
+              <div class="manual-amount-row">
+                <div class="manual-unit-toggle" role="group" aria-label="Order type">
+                  <button type="button" class="unit-btn active" data-order-type="market" data-i18n="trade.market">Market</button>
+                  <button type="button" class="unit-btn" data-order-type="limit" data-i18n="trade.limit">Limit</button>
+                </div>
+                <input type="number" id="manual-price" min="0" step="0.0001" placeholder="Market Price" disabled />
+              </div>
+            </div>
+
+            <div class="manual-field">
+              <label for="manual-amount" data-i18n="trade.amount">Amount</label>
+              <div class="manual-amount-row">
+                <div class="manual-unit-toggle" role="group" aria-label="Amount unit">
+                  <button type="button" class="unit-btn active" data-amount-unit="usdt" data-i18n="trade.amountUnitUsdt">USDT</button>
+                  <button type="button" class="unit-btn" data-amount-unit="coin" data-i18n="trade.amountUnitCoin">Coin</button>
+                </div>
+                <input type="number" id="manual-amount" min="0" step="0.0001" placeholder="100" />
+              </div>
+            </div>
+
+            <div class="manual-actions" id="manual-open-actions">
+              <button type="button" class="btn-action btn-long" data-manual-action-btn data-action="open" data-direction="long" data-i18n="trade.longOpen">Long</button>
+              <button type="button" class="btn-action btn-short" data-manual-action-btn data-action="open" data-direction="short" data-i18n="trade.shortOpen">Short</button>
+            </div>
+
+            <div class="manual-actions hidden" id="manual-close-actions">
+              <button type="button" class="btn-action btn-long" data-manual-action-btn data-action="close" data-direction="long" data-i18n="trade.longClose">Close Long</button>
+              <button type="button" class="btn-action btn-short" data-manual-action-btn data-action="close" data-direction="short" data-i18n="trade.shortClose">Close Short</button>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </main>
+
+    <!-- 策略编辑器视图（默认隐藏，切换到“策略”模式时显示） -->
+    <section class="strategy-editor-view" id="strategy-editor-view" aria-hidden="true">
+      <!-- 左侧：策略文件列表 -->
+      <aside class="strategy-sidebar">
+        <div class="strategy-sidebar-header">
+          <h3 data-i18n="strategyEditor.listTitle">Strategy Files</h3>
+          <button type="button" class="icon-btn" id="new-strategy-btn" title="New" data-i18n-title="strategyEditor.new" aria-label="New strategy">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <path d="M8 0a1 1 0 0 1 1 1v6h6a1 1 0 1 1 0 2H9v6a1 1 0 1 1-2 0V9H1a1 1 0 0 1 0-2h6V1a1 1 0 0 1 1-1z" />
+            </svg>
+          </button>
+        </div>
+        <div class="strategy-list" id="strategy-list">
+          <p class="empty-hint" data-i18n="strategyEditor.empty">No strategies yet. Click “New Strategy” to create one.</p>
+        </div>
+      </aside>
+
+      <!-- 中间：策略内容编辑 -->
+      <section class="strategy-main">
+        <header class="editor-header">
+          <div class="strategy-quick-insert quick-insert-row" id="strategy-editor-quick-insert">
+            <span class="quick-insert-label" data-i18n="strategy.quickInsert.label">Quick insert strategies:</span>
+            <div class="quick-insert-buttons">
+              <button type="button" class="quick-insert-btn" data-editor-insert="ai-autonomous" data-i18n="strategy.labels.aiAutonomous">AI Autonomous</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="ultra-short" data-i18n="strategy.labels.ultraShort">Ultra-Short</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="swing-trend" data-i18n="strategy.labels.swingTrend">Swing Trend</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="dca" data-i18n="strategy.labels.dca">DCA</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="conservative" data-i18n="strategy.labels.conservative">Conservative</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="balanced" data-i18n="strategy.labels.balanced">Balanced</button>
+              <button type="button" class="quick-insert-btn" data-editor-insert="aggressive" data-i18n="strategy.labels.aggressive">Aggressive</button>
+            </div>
+            <button type="button" class="quick-insert-btn variable-guide-trigger" id="prompt-variable-guide-btn" aria-haspopup="dialog" aria-controls="variable-guide-modal">
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <path d="M8 0.667a6 6 0 1 0 0 12 6 6 0 0 0 0-12zm0-0.667a6.667 6.667 0 1 1 0 13.334A6.667 6.667 0 0 1 8 0z" fill="currentColor" opacity="0.6"/>
+                <path d="M8 4.667a1 1 0 0 1 .948.684c.117.353.052.742-.17 1.032L8.2 7a1 1 0 0 0-.2.6V8h1v-.4l.578-.77c.43-.574.547-1.324.318-2.005A2 2 0 0 0 8 3.667a2 2 0 0 0-2 2h1a1 1 0 0 1 1-1z" fill="currentColor"/>
+                <circle cx="8" cy="10.8" r="0.8" fill="currentColor" />
+              </svg>
+              <span data-i18n="strategyEditor.variableGuide.button">Prompt Variables</span>
+            </button>
+          </div>
+        </header>
+
+        <div class="editor-scroll-area">
+          <section class="editor-section">
+            <div class="editor-section-header">
+              <h4 data-i18n="strategyEditor.entryLogic">Entry Logic</h4>
+              <p class="editor-desc" data-i18n="strategyEditor.entryDesc">Describe the conditions for opening a position.</p>
+            </div>
+            <textarea id="strategy-entry" class="code-editor" spellcheck="false"></textarea>
+          </section>
+
+          <section class="editor-section">
+            <div class="editor-section-header">
+              <h4 data-i18n="strategyEditor.exitLogic">Exit Logic</h4>
+              <p class="editor-desc" data-i18n="strategyEditor.exitDesc">Describe the conditions for closing a position.</p>
+            </div>
+            <textarea id="strategy-exit" class="code-editor" spellcheck="false"></textarea>
+          </section>
+
+        </div>
+
+        <div class="variable-modal" id="variable-guide-modal" aria-hidden="true">
+          <div class="variable-modal-backdrop" data-variable-modal-close></div>
+          <div class="variable-modal-panel" role="dialog" aria-modal="true" aria-labelledby="variable-guide-title" tabindex="-1">
+            <button type="button" class="variable-modal-close" data-variable-modal-close aria-label="Close" data-i18n-aria="common.close">
+              <span aria-hidden="true">&times;</span>
+            </button>
+            <h3 id="variable-guide-title" data-i18n="strategyEditor.variables">Prompt Variables</h3>
+            <p class="variable-modal-desc" data-i18n="strategyEditor.variablesDesc">These placeholders are auto-injected and can be referenced directly inside your instructions.</p>
+            <div class="variable-guide" aria-live="polite">
+              <p class="variable-guide-intro" data-i18n="strategyEditor.variableGuide.intro">All presets below are available without extra configuration:</p>
+              <dl class="variable-list">
+                <div class="variable-item">
+                  <dt>{{STRATEGY_ID}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.strategyId">Current strategy file name.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{TRADING_INTERVAL_MINUTES}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.interval">Configured trading loop interval (minutes).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MAX_HOLDING_HOURS}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.maxHolding">Maximum holding hours from risk config.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MIN_HOLDING_MINUTES}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.minHolding">Minimum holding minutes constraint.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MAX_HOLDING_CYCLES}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.maxCycles">Maximum holding cycles before forced exit.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{MAX_POSITIONS}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.maxPositions">Position cap applied to the strategy.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{EXTREME_STOP_LOSS_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.extremeStop">Emergency stop-loss threshold (percent).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_STOP_LOSS_USDT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.accountSl">Account-wide stop loss in USDT (Disabled if empty).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_TAKE_PROFIT_USDT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.accountTp">Account-wide take profit in USDT (Disabled if empty).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.ddWarning">Drawdown warning threshold (percent).</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.ddPause">Drawdown level that blocks new positions.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.ddClose">Drawdown level that forces liquidation.</dd>
+                </div>
+                <div class="variable-item">
+                  <dt>{{SYMBOL_LIST}}</dt>
+                  <dd data-i18n="strategyEditor.variableGuide.symbolList">Comma-separated tradable symbols with locale-aware formatting.</dd>
+                </div>
+              </dl>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 右侧：策略参数配置 -->
+      <aside class="strategy-config-sidebar">
+        <div class="strategy-config-header">
+          <h3 data-i18n="strategyEditor.configTitle">Configuration</h3>
+        </div>
+        <div class="strategy-meta-panel">
+          <div class="strategy-meta">
+            <label for="strategy-filename" data-i18n="strategyEditor.fileName">File Name:</label>
+            <input type="text" id="strategy-filename" placeholder="strategy_name" data-i18n-placeholder="strategyEditor.filePlaceholder" />
+            <span class="extension">.json</span>
+          </div>
+          <div class="strategy-meta-footer">
+            <!-- 已移除"当前激活策略"显示 - 现在由 Strategy Task 独立选择策略 -->
+            <div class="editor-actions strategy-actions-inline">
+              <button type="button" class="btn btn-primary" id="strategy-save-btn" data-i18n="strategyEditor.save">Save Strategy</button>
+            </div>
+          </div>
+        </div>
+        <div class="strategy-config-content">
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="strategyEditor.description.title">Strategy Description</p>
+            <div class="strategy-config-field">
+              <label for="strategy-description" data-i18n="strategyEditor.description.label">Description</label>
+              <textarea id="strategy-description" class="form-input" rows="3" placeholder="Describe this strategy" data-i18n-placeholder="strategyEditor.description.placeholder"></textarea>
+              <p class="field-hint" data-i18n="strategyEditor.description.hint">Explain the core logic; this will be saved with the strategy.</p>
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.tradingConfig">Trading Config</p>
+            <div class="strategy-config-field">
+              <label for="st-symbols" data-i18n="strategyEditor.tradingSymbols">Trading Symbols (comma separated)</label>
+              <input type="text" id="st-symbols" class="form-input" placeholder="BTC,ETH,SOL,XRP,BNB" data-i18n-placeholder="strategyEditor.tradingSymbolsPlaceholder" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-leverage" data-i18n="settings.leverage">Max Leverage</label>
+              <input type="number" id="st-leverage" class="form-input" min="1" max="125" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-max-positions" data-i18n="settings.maxPositions">Max Positions</label>
+              <input type="number" id="st-max-positions" class="form-input" min="1" max="50" />
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.executionInterval">Execution Interval</p>
+            <div class="strategy-config-field">
+              <label for="st-interval" data-i18n="settings.intervalMinutes">Interval (Min)</label>
+              <input type="number" id="st-interval" class="form-input" min="1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-min-holding" data-i18n="settings.minHolding">Min Holding (Min)</label>
+              <input type="number" id="st-min-holding" class="form-input" min="0" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-max-holding" data-i18n="settings.maxHolding">Max Holding (Hours)</label>
+              <input type="number" id="st-max-holding" class="form-input" min="1" />
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.riskParams">Risk Parameters</p>
+            <div class="strategy-config-field">
+              <label for="st-stop-loss" data-i18n="settings.stopLoss">Stop Loss (USDT)</label>
+              <input type="number" id="st-stop-loss" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-take-profit" data-i18n="settings.takeProfit">Take Profit (USDT)</label>
+              <input type="number" id="st-take-profit" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-extreme-stop" data-i18n="settings.extremeStopLoss">Extreme Stop Loss (%)</label>
+              <input type="number" id="st-extreme-stop" class="form-input" step="0.1" />
+            </div>
+          </div>
+
+          <div class="strategy-config-group">
+            <p class="strategy-config-group-title" data-i18n="settings.drawdownControl">Drawdown Control</p>
+            <div class="strategy-config-field">
+              <label for="st-dd-warning" data-i18n="settings.drawdownWarning">Warning Threshold (%)</label>
+              <input type="number" id="st-dd-warning" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-dd-pause" data-i18n="settings.drawdownPause">Pause Threshold (%)</label>
+              <input type="number" id="st-dd-pause" class="form-input" step="0.1" />
+            </div>
+            <div class="strategy-config-field">
+              <label for="st-dd-close" data-i18n="settings.drawdownClose">Force Close Threshold (%)</label>
+              <input type="number" id="st-dd-close" class="form-input" step="0.1" />
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <!-- 底部：当前持仓 / 交易历史 / 交易日志 -->
+    <footer class="bottom-tabs">
+      <nav class="tab-nav" id="tab-nav">
+  <button class="tab-btn active" data-tab="positions" data-i18n="tabs.positions">Positions</button>
+  <button class="tab-btn" data-tab="open-orders" data-i18n="tabs.openOrders">Open Orders</button>
+  <button class="tab-btn" data-tab="trades" data-i18n="tabs.trades">Trade History</button>
+  <button class="tab-btn" data-tab="logs" data-i18n="tabs.logs">Trade Logs</button>
+  <button class="tab-btn" data-tab="decision-logs" data-i18n="tabs.decisionLogs">Decision Logs</button>
+      </nav>
+      <div class="tab-content">
+        <div class="tab-panel active" id="tab-positions">
+          <div class="table-container" id="positions-container">
+            <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-open-orders">
+          <div class="table-container" id="open-orders-container">
+            <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-trades">
+          <div class="table-container" id="trades-container">
+            <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-logs">
+          <div class="table-container" id="logs-container">
+            <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-decision-logs">
+          <div class="table-container" id="decision-logs-container">
+            <p class="loading" data-i18n="loading">Loading...</p>
+          </div>
+        </div>
+      </div>
+    </footer>
+
+    <!-- 策略页面底部：运行中的任务（仅在策略页面显示） -->
+    <footer class="bottom-tabs strategy-bottom-tabs" id="strategy-bottom-tabs">
+      <nav class="tab-nav">
+        <button class="tab-btn active" data-tab="all-tasks" data-i18n="instances.allTasks.title">All Tasks</button>
+        <button class="tab-btn" data-tab="running-tasks" data-i18n="instances.runningTasks.title">Running Tasks</button>
+        <button class="tab-btn add-task-btn" id="strategy-add-task-btn" data-i18n="instances.actions.add">Add Task</button>
+      </nav>
+      <div class="tab-content">
+        <div class="tab-panel active" id="tab-all-tasks">
+          <div class="running-tasks-container table-container" id="all-tasks-container">
+            <div class="running-tasks-empty" id="all-tasks-empty">
+              <span data-i18n="instances.allTasks.empty">No strategy tasks</span>
+            </div>
+            <div class="running-tasks-list" id="all-tasks-list"></div>
+          </div>
+        </div>
+        <div class="tab-panel" id="tab-running-tasks">
+          <div class="running-tasks-container table-container" id="running-tasks-container">
+            <div class="running-tasks-empty" id="running-tasks-empty">
+              <span data-i18n="instances.runningTasks.empty">No running tasks</span>
+            </div>
+            <div class="running-tasks-list" id="running-tasks-list"></div>
+          </div>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <!-- 决策详情弹窗 -->
+  <div class="modal" id="decision-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+  <h3 data-i18n="modals.decision.title">Decision Details</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="decision-detail">
+        <!-- 动态内容 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 日志详情弹窗 -->
+  <div class="modal" id="log-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+  <h3 data-i18n="modals.log.title">Log Details</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="log-detail">
+        <!-- 动态内容 -->
+      </div>
+    </div>
+  </div>
+
+  <!-- 决策请求详情弹窗 -->
+  <div class="modal" id="decision-request-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+        <h3 data-i18n="modals.decisionRequest.title">Decision Request</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="decision-request-detail"></div>
+    </div>
+  </div>
+
+  <!-- 统计详情弹窗 -->
+  <div class="modal" id="statistics-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+  <h3 data-i18n="modals.statistics.title">Trading Statistics</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <!-- PNL 曲线图 -->
+        <div class="stats-chart-section">
+          <h4 data-i18n="modals.statistics.equityCurve">Equity Curve</h4>
+          <div class="stats-chart-container">
+            <canvas id="stats-pnl-chart"></canvas>
+          </div>
+        </div>
+
+        <!-- 统计数据网格 -->
+        <div class="stats-grid">
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.winRate">Win Rate</div>
+            <div class="stats-value" id="stats-winrate">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.totalProfit">Total Profit</div>
+            <div class="stats-value positive" id="stats-total-profit">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.totalLoss">Total Loss</div>
+            <div class="stats-value negative" id="stats-total-loss">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.netPnl">Net PnL</div>
+            <div class="stats-value" id="stats-net-pnl">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.return">Return</div>
+            <div class="stats-value" id="stats-return">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.maxDrawdown">Max Drawdown</div>
+            <div class="stats-value negative" id="stats-maxdd">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.profitFactor">Profit Factor</div>
+            <div class="stats-value" id="stats-profit-factor">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.totalTrades">Total Trades</div>
+            <div class="stats-value" id="stats-total-trades">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.winTrades">Winning Trades</div>
+            <div class="stats-value positive" id="stats-win-trades">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.lossTrades">Losing Trades</div>
+            <div class="stats-value negative" id="stats-loss-trades">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.avgWin">Average Win</div>
+            <div class="stats-value" id="stats-avg-win">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.avgLoss">Average Loss</div>
+            <div class="stats-value" id="stats-avg-loss">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.maxWin">Maximum Win</div>
+            <div class="stats-value positive" id="stats-max-win">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.maxLoss">Maximum Loss</div>
+            <div class="stats-value negative" id="stats-max-loss">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.sharpe">Sharpe Ratio</div>
+            <div class="stats-value" id="stats-sharpe">--</div>
+          </div>
+          <div class="stats-card">
+            <div class="stats-label" data-i18n="stats.sortino">Sortino Ratio</div>
+            <div class="stats-value" id="stats-sortino">--</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 记录查看弹窗 -->
+  <div class="modal" id="records-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content modal-large">
+      <div class="modal-header">
+  <h3 id="records-modal-title" data-i18n="modals.records.title">All Records</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="table-container" id="records-table-container">
+          <p class="loading" data-i18n="loading">Loading...</p>
+        </div>
+        <div class="pagination" id="records-pagination">
+          <button type="button" class="pagination-btn" data-direction="prev" data-i18n="pagination.prev">Previous</button>
+          <span class="pagination-info" id="records-page-info" data-i18n="pagination.page">Page 1</span>
+          <button type="button" class="pagination-btn" data-direction="next" data-i18n="pagination.next">Next</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 账户列表弹窗 (已移动到设置) -->
+
+
+  <!-- 添加/编辑账户弹窗 -->
+  <div class="modal settings-modal" id="account-form-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="account-form-title" data-i18n="modals.accountForm.titleAdd">Add Account</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="account-edit-form" class="settings-form">
+          <input type="hidden" id="account-edit-id" />
+          
+          <div class="settings-section">
+            <div class="form-group">
+              <label for="account-edit-name" data-i18n-html="accounts.form.name">Account Name <span class="required">*</span></label>
+              <input type="text" id="account-edit-name" placeholder="My Trading Account" data-i18n-placeholder="accounts.form.namePlaceholder" required />
+            </div>
+
+            <div class="form-group">
+              <label data-i18n="accounts.form.provider">Exchange Provider</label>
+              <input type="hidden" id="account-edit-provider" value="okx">
+              <div class="provider-selector-compact">
+                <div class="provider-option-compact selected" data-value="okx">
+                  <img src="/static/icons/okx.png" alt="OKX">
+                  <span data-i18n="accounts.providers.okx">OKX</span>
+                </div>
+                <div class="provider-option-compact" data-value="binance">
+                  <img src="/static/icons/binance.png" alt="Binance">
+                  <span data-i18n="accounts.providers.binance">Binance</span>
+                </div>
+                <div class="provider-option-compact" data-value="bitget">
+                  <img src="/static/icons/bitget.png" alt="Bitget">
+                  <span data-i18n="accounts.providers.bitget">Bitget</span>
+                </div>
+                <div class="provider-option-compact" data-value="gate">
+                  <img src="/static/icons/gate.png" alt="Gate.io">
+                  <span data-i18n="accounts.providers.gate">Gate.io</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="settings-section">
+            <div class="exchange-panel is-active" data-account-panel="okx">
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.okxApiKey">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-okx-key" placeholder="OKX API Key" data-i18n-placeholder="accounts.form.okxApiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.okxApiSecret">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-okx-secret" placeholder="OKX API Secret" data-i18n-placeholder="accounts.form.okxApiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.okxPassphrase">Passphrase <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-okx-passphrase" placeholder="OKX Passphrase" data-i18n-placeholder="accounts.form.okxPassphrasePlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="account-edit-okx-paper" />
+                  <span data-i18n="accounts.form.okxUsePaper">Use Paper Trading (Sandbox)</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="exchange-panel" data-account-panel="binance">
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.binanceApiKey">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-binance-key" placeholder="Binance API Key" data-i18n-placeholder="accounts.form.binanceApiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.binanceApiSecret">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-binance-secret" placeholder="Binance API Secret" data-i18n-placeholder="accounts.form.binanceApiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="account-edit-binance-testnet" />
+                  <span data-i18n="accounts.form.binanceUseTestnet">Use Testnet</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="exchange-panel" data-account-panel="bitget">
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.bitgetApiKey">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-bitget-key" placeholder="Bitget API Key" data-i18n-placeholder="accounts.form.bitgetApiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.bitgetApiSecret">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-bitget-secret" placeholder="Bitget API Secret" data-i18n-placeholder="accounts.form.bitgetApiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.bitgetPassphrase">Passphrase <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-bitget-passphrase" placeholder="Bitget Passphrase" data-i18n-placeholder="accounts.form.bitgetPassphrasePlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="exchange-panel" data-account-panel="gate">
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.gateApiKey">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-gate-key" placeholder="Gate.io API Key" data-i18n-placeholder="accounts.form.gateApiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="accounts.form.gateApiSecret">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" id="account-edit-gate-secret" placeholder="Gate.io API Secret" data-i18n-placeholder="accounts.form.gateApiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="account-edit-gate-testnet" />
+                  <span data-i18n="accounts.form.gateUseTestnet">Use Testnet</span>
+                </label>
+              </div>
+            </div>
+
+          </div>
+
+          <div class="settings-section">
+            <h4 data-i18n="accounts.form.riskSettings">Risk Management</h4>
+            <div class="form-group">
+              <label for="account-edit-stop-loss" data-i18n="accounts.form.stopLoss">Account Stop Loss (USDT)</label>
+              <input type="number" id="account-edit-stop-loss" placeholder="e.g. 1000" data-i18n-placeholder="accounts.form.stopLossPlaceholder" step="0.01" min="0" />
+              <div class="form-hint" data-i18n="accounts.form.stopLossHint">Stop trading if equity drops below this value. Leave empty to disable.</div>
+            </div>
+            <div class="form-group">
+              <label for="account-edit-take-profit" data-i18n="accounts.form.takeProfit">Account Take Profit (USDT)</label>
+              <input type="number" id="account-edit-take-profit" placeholder="e.g. 5000" data-i18n-placeholder="accounts.form.takeProfitPlaceholder" step="0.01" min="0" />
+              <div class="form-hint" data-i18n="accounts.form.takeProfitHint">Stop trading if equity reaches this value. Leave empty to disable.</div>
+            </div>
+          </div>
+
+          <div id="account-form-test-result" class="api-test-result" style="display: none; margin-bottom: 15px;"></div>
+
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="account-form-test" data-i18n="accounts.form.testConnection">Test Connection</button>
+            <div style="flex: 1;"></div>
+            <button type="button" class="btn-secondary" id="account-form-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="common.save">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 账户配置弹窗 (旧版，保留用于兼容) -->
+  <div class="modal settings-modal" id="account-modal" style="display: none;">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+  <h3 data-i18n="modals.account.title">Account Settings</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body" id="account-body">
+        <form id="account-form" class="settings-form">
+
+          <!-- 交易所配置 -->
+          <div class="settings-section">
+            <div class="section-header">
+              <h4 data-i18n-html="account.exchange.sectionTitle">🔑 Exchange Configuration</h4>
+            </div>
+
+            <div class="form-group">
+              <label for="exchange-provider" data-i18n="account.exchange.label">Exchange Provider</label>
+              <select id="exchange-provider" name="EXCHANGE_PROVIDER">
+                <option value="okx" data-i18n="account.exchange.providers.okx">OKX Perpetual</option>
+                <option value="binance" data-i18n="account.exchange.providers.binance">Binance Futures</option>
+              </select>
+            </div>
+            <p class="form-help">
+              <a href="https://www.afibbjgrubxx.com/join/Q4AIX" target="_blank" class="register-link" data-i18n="account.okx.registerLink">注册 OKX 返佣账号 ↗</a>
+            </p>
+
+            <div class="exchange-panel is-active" data-exchange-panel="okx">
+              <div class="form-group">
+                <label data-i18n-html="account.okx.apiKeyLabel">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="OKX_API_KEY" placeholder="Enter OKX API Key" data-i18n-placeholder="account.okx.apiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="account.okx.apiSecretLabel">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="OKX_API_SECRET" placeholder="Enter OKX API Secret" data-i18n-placeholder="account.okx.apiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="account.okx.apiPassphraseLabel">API Passphrase <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="OKX_API_PASSPHRASE" placeholder="Enter OKX Passphrase" data-i18n-placeholder="account.okx.apiPassphrasePlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-row" style="align-items: center; margin-top: 12px;">
+                <div class="form-group" style="flex: 0 0 auto;">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="OKX_USE_PAPER" />
+                    <span data-i18n="account.okx.usePaper">Use Paper Trading (Sandbox)</span>
+                  </label>
+                </div>
+                <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
+                  <button type="button" class="btn-test" id="test-okx-api" data-i18n-html="account.okx.testButton">🔍 Test API Connection</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="exchange-panel" data-exchange-panel="binance">
+              <div class="form-group">
+                <label data-i18n-html="account.binance.apiKeyLabel">API Key <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="BINANCE_API_KEY" placeholder="Enter Binance API Key" data-i18n-placeholder="account.binance.apiKeyPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label data-i18n-html="account.binance.apiSecretLabel">API Secret <span class="required">*</span></label>
+                <div class="password-input">
+                  <input type="password" name="BINANCE_API_SECRET" placeholder="Enter Binance API Secret" data-i18n-placeholder="account.binance.apiSecretPlaceholder" autocomplete="off" />
+                  <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+                </div>
+              </div>
+              <div class="form-row" style="align-items: center; margin-top: 12px;">
+                <div class="form-group" style="flex: 0 0 auto;">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="BINANCE_USE_TESTNET" />
+                    <span data-i18n="account.binance.useTestnet">Use Binance Futures Testnet</span>
+                  </label>
+                </div>
+                <div class="form-group" style="flex: 0 0 auto; margin-left: auto;">
+                  <button type="button" class="btn-test" id="test-binance-api" data-i18n-html="account.binance.testButton">🔍 Test Binance API</button>
+                </div>
+              </div>
+            </div>
+
+            <div id="api-test-result" class="api-test-result" style="display: none;"></div>
+          </div>
+
+          <!-- 账户参数 -->
+          <div class="settings-section">
+            <h4 data-i18n-html="account.parameters.sectionTitle">💰 Account Parameters</h4>
+            <div class="form-row">
+              <div class="form-group">
+                <label data-i18n="account.parameters.initialBalance">Initial Balance (USDT)</label>
+                <input type="number" name="INITIAL_BALANCE" min="10" step="0.01" data-i18n-placeholder="account.parameters.initialBalancePlaceholder" placeholder="Enter initial balance" />
+              </div>
+              <div class="form-group">
+                <label data-i18n="account.parameters.stopLoss">Stop Loss (USDT)</label>
+                <input type="number" name="ACCOUNT_STOP_LOSS_USDT" min="0" step="0.01" data-i18n-placeholder="account.parameters.stopLossPlaceholder" placeholder="Enter stop loss" />
+              </div>
+              <div class="form-group">
+                <label data-i18n="account.parameters.takeProfit">Take Profit (USDT)</label>
+                <input type="number" name="ACCOUNT_TAKE_PROFIT_USDT" min="0" step="0.01" data-i18n-placeholder="account.parameters.takeProfitPlaceholder" placeholder="Enter take profit" />
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="account-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="account.saveAndRestart">Save & Restart</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="balanced" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.balanced">Balanced</button>
+                      <button type="button" class="quick-insert-btn" data-strategy-insert="aggressive" data-target-field="PROMPT_SECTION_VARIABLES" data-i18n="strategy.labels.aggressive">Aggressive</button>
+                    </div>
+                  </div>
+                </div>
+                <div class="placeholder-docs">
+                  <h4 data-i18n="strategy.variables.placeholdersTitle">Available Placeholders</h4>
+                  <ul class="placeholder-list">
+                    <li data-i18n-html="strategy.variables.placeholder.strategyId"><code>{{STRATEGY_ID}}</code> Strategy identifier</li>
+                    <li data-i18n-html="strategy.variables.placeholder.entryPrompt"><code>{{ENTRY_PROMPT}}</code> Default entry prompt fragment</li>
+                    <li data-i18n-html="strategy.variables.placeholder.exitPrompt"><code>{{EXIT_PROMPT}}</code> Default exit / risk prompt fragment</li>
+                    <li data-i18n-html="strategy.variables.placeholder.varPrompt"><code>{{VAR_PROMPT}}</code> Default variable notes</li>
+                    <li data-i18n-html="strategy.variables.placeholder.interval"><code>{{TRADING_INTERVAL_MINUTES}}</code> Trading loop interval (minutes)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.maxHoldingHours"><code>{{MAX_HOLDING_HOURS}}</code> Maximum holding hours</li>
+                    <li data-i18n-html="strategy.variables.placeholder.maxHoldingCycles"><code>{{MAX_HOLDING_CYCLES}}</code> Maximum holding cycles</li>
+                    <li data-i18n-html="strategy.variables.placeholder.maxPositions"><code>{{MAX_POSITIONS}}</code> Maximum open positions</li>
+                    <li data-i18n-html="strategy.variables.placeholder.extremeStopLoss"><code>{{EXTREME_STOP_LOSS_PERCENT}}</code> System extreme stop loss (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.accountStopLoss"><code>{{ACCOUNT_STOP_LOSS_USDT}}</code> Account stop loss (USDT)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.accountTakeProfit"><code>{{ACCOUNT_TAKE_PROFIT_USDT}}</code> Account take profit (USDT)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.drawdownWarning"><code>{{ACCOUNT_DRAWDOWN_WARNING_PERCENT}}</code> Drawdown warning threshold (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.drawdownNoNew"><code>{{ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT}}</code> Drawdown no-new-position threshold (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.drawdownForceClose"><code>{{ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT}}</code> Drawdown force-close threshold (%)</li>
+                    <li data-i18n-html="strategy.variables.placeholder.symbolList"><code>{{SYMBOL_LIST}}</code> Trading symbols list (delimited)</li>
+                  </ul>
+                  <p class="field-hint" data-i18n="strategy.variables.placeholderHint">On save, the system replaces {{VARIABLE}} tokens with live parameters and injects them into prompts.</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="settings-tab-panel" data-strategy-panel="preview">
+              <div class="strategy-preview-section">
+                <div class="preview-header">
+                  <h4 data-i18n-html="strategy.preview.title">📝 Strategy Preview</h4>
+                  <span class="preview-subtitle" data-i18n="strategy.preview.subtitle">Preview of combined strategy sections that the agent will use after saving.</span>
+                </div>
+                <pre id="strategy-preview" class="strategy-preview" data-i18n="strategy.preview.empty">No content yet</pre>
+              </div>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="strategy-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="strategy.saveAndRestart">Save & Restart</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 系统设置弹窗 -->
+  <div class="modal settings-modal settings-modal--fullscreen" id="settings-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 data-i18n="modals.settings.title">Global Settings</h3>
+        <div class="header-actions">
+          <button type="submit" form="settings-form" class="btn-primary" data-i18n="settings.saveAndRestart">Save & Restart</button>
+          <button type="button" class="btn-secondary" id="settings-cancel" data-i18n="common.cancel">Cancel</button>
+        </div>
+      </div>
+      <div class="modal-body" id="settings-body">
+        <form id="settings-form" class="settings-form">
+
+          <!-- Tab 导航 -->
+          <div class="settings-tabs" id="settings-tabs">
+            <button type="button" class="settings-tab-btn active" data-settings-tab="basic" data-i18n="settings.tabs.basic">Basic Settings</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="account" data-i18n="settings.tabs.account">Account Config</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="ai" data-i18n="settings.tabs.aiModel">AI Config</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="notification" data-i18n="settings.tabs.notification">Notification</button>
+            <button type="button" class="settings-tab-btn" data-settings-tab="backup" data-i18n="settings.tabs.backup">Data Backup</button>
+          </div>
+
+          <div class="settings-tab-panels">
+            <!-- Tab 1: 基本设置 -->
+            <div class="settings-tab-panel active" data-settings-panel="basic">
+              <!-- 网络配置 -->
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.network.sectionTitle">🌐 Network Configuration</h4>
+                <div class="form-group">
+                  <label data-i18n="settings.network.httpProxy">HTTP Proxy (optional)</label>
+                  <input type="text" name="HTTP_PROXY_URL" placeholder="http://127.0.0.1:7890" data-i18n-placeholder="settings.network.httpProxyPlaceholder" />
+                </div>
+              </div>
+
+              <!-- 隐私设置 -->
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.privacy.sectionTitle">🔒 Privacy Settings</h4>
+                <p class="field-hint" data-i18n="settings.privacy.description">Control how your strategy contributes to the community leaderboard.</p>
+                <div class="form-group">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="COMMUNITY_REPORT_ENABLED" />
+                    <span data-i18n="settings.privacy.reportEnabled">Join community AI competition leaderboard</span>
+                  </label>
+                  <p class="field-hint" data-i18n="settings.privacy.reportEnabledHint">When enabled, anonymized performance reports are sent hourly.</p>
+                </div>
+                <div class="form-group privacy-sharing">
+                  <label class="checkbox-label">
+                    <input type="checkbox" name="COMMUNITY_SHARE_PROMPTS" />
+                    <span data-i18n="settings.privacy.sharePrompts">Share my entry & exit prompt logic</span>
+                  </label>
+                  <p class="field-hint" data-i18n="settings.privacy.sharePromptsHint">Prompt details are only shared if leaderboard reporting is enabled.</p>
+                </div>
+              </div>
+
+              <!-- 重置实盘数据 -->
+              <div class="settings-danger-zone">
+                <h4 data-i18n-html="settings.reset.sectionTitle">⚠️ Reset Live Environment</h4>
+                <p class="danger-hint" data-i18n="settings.reset.hint">This action clears all trading data and strategy settings while keeping API and proxy configurations. Ensure live trading is stopped before proceeding.</p>
+                <div class="form-group reset-account-select">
+                  <label for="reset-live-data-account" data-i18n="settings.reset.accountLabel">Choose target account</label>
+                  <select id="reset-live-data-account">
+                    <option value="" data-i18n="settings.reset.accountOptionCurrent">Current active account</option>
+                  </select>
+                  <p class="field-hint" data-i18n="settings.reset.accountHint">Select which account's live data will be cleared.</p>
+                </div>
+                <button type="button" class="btn-danger" id="reset-live-data-btn" data-i18n="settings.reset.trigger">Reset Live Data</button>
+                <div class="reset-confirm hidden" id="reset-live-data-confirm">
+                  <p class="confirm-hint" data-i18n-html="settings.reset.confirmHint">Type <code>RESET</code> to confirm.</p>
+                  <input type="text" id="reset-live-data-input" placeholder="Enter RESET to continue" data-i18n-placeholder="settings.reset.confirmPlaceholder" autocomplete="off" />
+                  <div class="reset-confirm-actions">
+                    <button type="button" class="btn-secondary" id="reset-live-data-cancel" data-i18n="common.cancel">Cancel</button>
+                    <button type="button" class="btn-danger" id="reset-live-data-confirm-btn" data-i18n="settings.reset.confirm">Confirm Reset</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 2: 账户配置 -->
+            <div class="settings-tab-panel" data-settings-panel="account">
+              <div class="accounts-list-header">
+                <button type="button" class="btn-primary" id="add-account-btn" data-i18n="accounts.addAccount">+ Add Account</button>
+              </div>
+              <div class="accounts-list-container" id="accounts-list-container">
+                <div class="loading-spinner" id="accounts-loading" data-i18n="loading">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Tab 3: AI 模型配置 -->
+            <div class="settings-tab-panel" data-settings-panel="ai">
+              <div class="accounts-list-header">
+                <button type="button" class="btn-primary" id="add-ai-model-btn" data-i18n="aiModels.addModel">+ Add AI Model</button>
+              </div>
+              <div class="accounts-list-container" id="ai-models-list-container">
+                <div class="loading-spinner" id="ai-models-loading" data-i18n="loading">Loading...</div>
+              </div>
+            </div>
+
+            <!-- Tab 4: 通知设置 -->
+            <div class="settings-tab-panel" data-settings-panel="notification">
+              <div class="settings-section">
+                <h4 data-i18n-html="settings.emergency.sectionTitle">🚨 Emergency Notification</h4>
+                <p class="field-hint" data-i18n="settings.emergency.noticeUrlHint">AI will call this URL when critical situations occur (e.g., repeated trading failures). Leave empty to disable.</p>
+                <div class="form-group">
+                  <label data-i18n="settings.emergency.noticeUrl">Emergency Notice URL (GET request)</label>
+                  <div class="input-with-action">
+                    <input type="text" name="EMERGENCY_NOTICE_URL" placeholder="https://your-webhook-url.com/notify?key=xxx" data-i18n-placeholder="settings.emergency.noticeUrlPlaceholder" />
+                    <button type="button" class="btn-secondary btn-small" id="test-emergency-notice-btn" data-i18n="settings.emergency.testButton">🔔 Test</button>
+                  </div>
+                  <span id="emergency-test-result" class="test-result"></span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Tab 5: 数据备份 -->
+            <div class="settings-tab-panel" data-settings-panel="backup">
+              <div class="backup-section">
+                <!-- 备份操作区 -->
+                <div class="backup-actions-header">
+                  <div class="backup-actions-left">
+                    <button type="button" class="btn-primary" id="create-backup-btn" data-i18n="backup.createBackup">
+                      <span class="btn-icon">💾</span> One-Click Backup
+                    </button>
+                  </div>
+                  <div class="backup-actions-right">
+                    <label class="btn-secondary import-btn">
+                      <span class="btn-icon">📥</span> <span data-i18n="backup.import">Import</span>
+                      <input type="file" id="import-backup-input" accept=".zip,.db,.sqlite,.backup" style="display: none;" />
+                    </label>
+                  </div>
+                </div>
+                
+                <!-- 备份列表 -->
+                <div class="backup-list-container" id="backup-list-container">
+                  <div class="loading-spinner" id="backup-loading" data-i18n="loading">Loading...</div>
+                  <table class="backup-table" id="backup-table" style="display: none;">
+                    <thead>
+                      <tr>
+                        <th data-i18n="backup.table.name">Backup Name</th>
+                        <th data-i18n="backup.table.time">Created At</th>
+                        <th data-i18n="backup.table.size">Size</th>
+                        <th data-i18n="backup.table.actions">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="backup-list-body">
+                    </tbody>
+                  </table>
+                  <div class="backup-empty-state" id="backup-empty-state" style="display: none;">
+                    <span class="empty-icon">📁</span>
+                    <p data-i18n="backup.noBackups">No backups found. Create your first backup to protect your data.</p>
+                  </div>
+                </div>
+                
+                <!-- 提示信息 -->
+                <div class="backup-hint">
+                  <p data-i18n="backup.hint">💡 Backups include the database (trading data, account configs, AI models) and custom strategy files, packaged as ZIP. Stored in the <code>data/backup</code> directory.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加/编辑 AI 模型弹窗 -->
+  <div class="modal settings-modal" id="ai-model-form-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="ai-model-form-title" data-i18n="modals.aiModelForm.titleAdd">Add AI Model</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="ai-model-edit-form" class="settings-form">
+          <input type="hidden" id="ai-model-edit-id" />
+          
+          <div class="settings-section">
+            <div class="form-group">
+              <label for="ai-model-edit-name" data-i18n-html="aiModels.form.name">Model Name <span class="required">*</span></label>
+              <input type="text" id="ai-model-edit-name" placeholder="DeepSeek V3" data-i18n-placeholder="aiModels.form.namePlaceholder" required />
+            </div>
+
+            <div class="form-group">
+              <label for="ai-model-edit-base-url" data-i18n-html="aiModels.form.baseUrl">API Base URL <span class="required">*</span></label>
+              <div class="base-url-selector">
+                <select class="base-url-preset" id="ai-model-base-url-preset" aria-label="API Provider Preset">
+                  <option value="" data-i18n="settings.ai.customOption">Custom</option>
+                  <option value="https://openrouter.ai/api/v1/chat/completions">OpenRouter</option>
+                  <option value="https://api.deepseek.com/chat/completions">DeepSeek</option>
+                  <option value="https://api.openai.com/v1/chat/completions">OpenAI</option>
+                  <option value="https://open.bigmodel.cn/api/paas/v4/chat/completions">智谱 BigModel</option>
+                  <option value="https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions">阿里云 DashScope</option>
+                </select>
+                <input type="text" id="ai-model-edit-base-url" placeholder="https://openrouter.ai/api/v1/chat/completions" data-i18n-placeholder="aiModels.form.baseUrlPlaceholder" required />
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="ai-model-edit-api-key" data-i18n-html="aiModels.form.apiKey">API Key <span class="required">*</span></label>
+              <div class="password-input">
+                <input type="password" id="ai-model-edit-api-key" placeholder="sk-..." autocomplete="off" data-i18n-placeholder="aiModels.form.apiKeyPlaceholder" required />
+                <button type="button" class="toggle-password" onclick="togglePassword(this)">👁️</button>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label for="ai-model-edit-model-name" data-i18n-html="aiModels.form.modelName">Model Name <span class="required">*</span></label>
+              <input type="text" id="ai-model-edit-model-name" placeholder="deepseek/deepseek-v3.2-exp" data-i18n-placeholder="aiModels.form.modelNamePlaceholder" required />
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="ai-model-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="button" class="btn-test" id="ai-model-test" data-i18n-html="aiModels.form.testButton">🔍 Test Connection</button>
+            <button type="submit" class="btn-primary" data-i18n="common.save">Save</button>
+          </div>
+
+          <div id="ai-model-test-result" class="api-test-result" style="display: none;"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- 添加/编辑 Strategy Task 弹窗 -->
+  <div class="modal settings-modal" id="instance-form-modal">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="instance-form-title" data-i18n="instances.form.titleAdd">Add Strategy Task</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <form id="instance-edit-form" class="settings-form">
+          <input type="hidden" id="instance-edit-id" />
+          
+          <div class="settings-section">
+            <div class="form-group">
+              <label for="instance-edit-name" data-i18n-html="instances.form.name">Instance Name <span class="required">*</span></label>
+              <input type="text" id="instance-edit-name" placeholder="BTC Scalping" data-i18n-placeholder="instances.form.namePlaceholder" required />
+            </div>
+
+            <div class="form-group">
+              <label for="instance-edit-account" data-i18n-html="instances.form.account">Trading Account <span class="required">*</span></label>
+              <select id="instance-edit-account" required>
+                <option value="" data-i18n="instances.form.selectAccount">Select an account</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="instance-edit-ai-model" data-i18n-html="instances.form.aiModel">AI Model <span class="required">*</span></label>
+              <select id="instance-edit-ai-model" required>
+                <option value="" data-i18n="instances.form.selectModel">Select an AI model</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label for="instance-edit-strategy" data-i18n-html="instances.form.strategy">Strategy <span class="required">*</span></label>
+              <select id="instance-edit-strategy" required>
+                <option value="" data-i18n="instances.form.selectStrategy">Select a strategy</option>
+              </select>
+              <p class="form-hint" data-i18n="instances.form.strategyHint">Execution interval will be read from the strategy's configuration</p>
+            </div>
+          </div>
+
+          <div class="form-actions">
+            <button type="button" class="btn-secondary" id="instance-cancel" data-i18n="common.cancel">Cancel</button>
+            <button type="submit" class="btn-primary" data-i18n="common.save">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script src="https://unpkg.com/lightweight-charts@4.1.1/dist/lightweight-charts.standalone.production.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked@11.1.1/marked.min.js"></script>
+  
+  <script>
+    // 密码显示/隐藏切换
+    function togglePassword(btn) {
+      const input = btn.previousElementSibling;
+      if (input.type === 'password') {
+        input.type = 'text';
+        btn.textContent = '🙈';
+      } else {
+        input.type = 'password';
+        btn.textContent = '👁️';
+      }
+    }
+  </script>
+  
+  <!-- Toast 通知容器 -->
+  <div class="toast-container" id="toast-container"></div>
+  
+  <script src="csrf.js"></script>
+  <script src="scripts.js"></script>
+</body>
+</html>
