@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 /**
  * Community reporting scheduler - submits anonymized performance snapshots
  */
@@ -16,7 +17,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 const REPORT_ENDPOINT =

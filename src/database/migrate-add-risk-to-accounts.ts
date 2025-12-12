@@ -1,4 +1,5 @@
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import * as dotenv from "dotenv";
 
 dotenv.config();

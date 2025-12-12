@@ -17,6 +17,7 @@
  */
 
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../../utils/pathUtils";
 /**
  * 账户管理工具
  */
@@ -29,7 +30,7 @@ import { createTradingClient } from "../../services/okxTradingClient";
 import { getQuantoMultiplier } from "../../utils/contractUtils";
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 /**

@@ -24,6 +24,7 @@ import { Hono } from "hono";
 import { installSystem, isSystemInstalled } from "./services/installService";
 import { initializeTerminalEncoding } from "./utils/encodingUtils";
 import { createLogger } from "./utils/loggerUtils";
+import { getPublicFilePath } from "./utils/pathUtils";
 
 // 设置时区为中国时间（Asia/Shanghai，UTC+8）
 process.env.TZ = "Asia/Shanghai";
@@ -62,13 +63,14 @@ async function main() {
 async function runInstallServer() {
 	return new Promise<void>((resolve) => {
 		const app = new Hono();
-		const port = Number.parseInt(process.env.PORT || "3141");
+		const port = Number.parseInt(process.env.PORT || "3888");
 
 		// 优先处理特定路由，防止被 serveStatic 拦截
 		app.get("/", (c) => c.redirect("/install"));
 
 		app.get("/install", (c) => {
-			const html = fs.readFileSync("./public/install.html", "utf-8");
+			const installPath = getPublicFilePath("install.html");
+			const html = fs.readFileSync(installPath, "utf-8");
 			return c.html(html);
 		});
 
@@ -89,7 +91,7 @@ async function runInstallServer() {
 					return c.json({ error: "缺少必需参数" }, 400);
 				}
 
-				if (!["okx", "binance", "bitget"].includes(provider)) {
+				if (!["okx", "binance", "bitget", "gate"].includes(provider)) {
 					return c.json({ error: "不支持的交易所" }, 400);
 				}
 
@@ -97,6 +99,7 @@ async function runInstallServer() {
 				const { OkxClient } = await import("./services/okxClient");
 				const { BinanceClient } = await import("./services/binanceClient");
 				const { BitgetClient } = await import("./services/bitgetClient");
+				const { GateClient } = await import("./services/gateClient");
 
 				// 简单的代理 URL 验证
 				const normalizedProxy = proxy_url
@@ -136,6 +139,22 @@ async function runInstallServer() {
 							success: true,
 							provider: "Bitget",
 							mode: use_paper ? "模拟盘" : "实盘",
+							balance: account.total || "0",
+						});
+					}
+
+					if (provider === "gate") {
+						const client = new GateClient(
+							String(api_key),
+							String(api_secret),
+							Boolean(use_paper),
+							normalizedProxy,
+						);
+						const account = await client.getFuturesAccount();
+						return c.json({
+							success: true,
+							provider: "Gate.io",
+							mode: use_paper ? "测试网" : "实盘",
 							balance: account.total || "0",
 						});
 					}
@@ -295,7 +314,7 @@ async function startApp() {
 	logger.info("🌐 启动 Web 服务器...");
 	const apiRoutes = createApiRoutes(adminAuth);
 
-	const port = Number.parseInt(process.env.PORT || "3141");
+	const port = Number.parseInt(process.env.PORT || "3888");
 
 	server = serve({
 		fetch: apiRoutes.fetch,

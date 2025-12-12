@@ -6,9 +6,10 @@
  */
 
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 async function migrateRemoveProvider() {

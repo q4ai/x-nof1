@@ -1,4 +1,5 @@
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import { createLogger } from "../utils/loggerUtils";
 
 const logger = createLogger({
@@ -7,7 +8,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 async function migrate() {

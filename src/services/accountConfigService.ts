@@ -20,6 +20,7 @@
  * 账户配置服务 - 多账户管理
  */
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import type { AccountConfig } from "../database/schema";
 import { createLogger } from "../utils/loggerUtils";
 
@@ -29,7 +30,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 /**

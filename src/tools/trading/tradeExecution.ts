@@ -1,4 +1,5 @@
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../../utils/pathUtils";
 /**
  * open-nof1.ai - AI 加密货币自动交易系统
  * Copyright (C) 2025 195440
@@ -54,7 +55,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 /**
@@ -236,6 +237,8 @@ type LotSizingInfo = {
 	minSizeRaw: number;
 	maxSizeRaw: number;
 	normalizeToStep: (value: number, direction: "up" | "down") => number;
+	priceTickSize: number | null;
+	normalizePriceToStep: (value: number, direction: "up" | "down") => number;
 };
 
 function computeLotSizePrecision(lotSizeString: string): number {
@@ -265,6 +268,7 @@ async function buildLotSizingInfo(
 	const lotSizeCandidates: number[] = [];
 	const minSizeCandidates: number[] = [];
 	const maxSizeCandidates: number[] = [];
+	const priceTickCandidates: number[] = [];
 
 	const exchangeLotSize = toPositiveNumber(contractInfo?.lotSize);
 	if (exchangeLotSize !== null) {
@@ -281,6 +285,14 @@ async function buildLotSizingInfo(
 	const exchangeMax = toPositiveNumber(
 		contractInfo?.orderSizeMax ?? contractInfo?.maxSize,
 	);
+		const exchangeTickSize = toPositiveNumber(
+			contractInfo?.tickSize ??
+				contractInfo?.priceTick ??
+				contractInfo?.orderPriceRound,
+		);
+		if (exchangeTickSize !== null) {
+			priceTickCandidates.push(exchangeTickSize);
+		}
 	if (exchangeMax !== null) {
 		maxSizeCandidates.push(exchangeMax);
 	}
@@ -302,6 +314,11 @@ async function buildLotSizingInfo(
 			const dbMax = toPositiveNumber(precisionRecord.max_qty);
 			if (dbMax !== null) {
 				maxSizeCandidates.push(dbMax);
+			}
+
+			const dbTick = toPositiveNumber(precisionRecord.tick_size);
+			if (dbTick !== null) {
+				priceTickCandidates.push(dbTick);
 			}
 		}
 	}
@@ -358,6 +375,22 @@ async function buildLotSizingInfo(
 		return Number(stepped.toFixed(Math.min(lotSizePrecision, 12)));
 	};
 
+	const priceTickSize = priceTickCandidates.length
+		? Math.max(...priceTickCandidates)
+		: null;
+
+	const normalizePriceToStep = (value: number, direction: "up" | "down") => {
+		if (!Number.isFinite(value) || !priceTickSize || priceTickSize <= 0) {
+			return value;
+		}
+		const ratio =
+			direction === "up"
+				? Math.ceil((value - Number.EPSILON) / priceTickSize)
+				: Math.floor((value + Number.EPSILON) / priceTickSize);
+		const stepped = Math.max(ratio, 0) * priceTickSize;
+		return Number(stepped.toFixed(10));
+	};
+
 	return {
 		lotSize,
 		lotSizePrecision,
@@ -366,6 +399,8 @@ async function buildLotSizingInfo(
 		maxSizeRaw:
 			Number.isFinite(maxSizeRaw) && maxSizeRaw > 0 ? maxSizeRaw : 1000000,
 		normalizeToStep,
+		priceTickSize,
+		normalizePriceToStep,
 	};
 }
 
@@ -729,7 +764,13 @@ export async function executeOpenPosition({
 		// 设置杠杆
 		await client.setLeverage(contract, leverage);
 
-		const { lotSize, minSizeRaw, maxSizeRaw, normalizeToStep } =
+		const {
+			lotSize,
+			minSizeRaw,
+			maxSizeRaw,
+			normalizeToStep,
+			normalizePriceToStep,
+		} =
 			await buildLotSizingInfo(contract, contractInfo, exchangeProvider);
 
 		const minSize =
@@ -764,6 +805,20 @@ export async function executeOpenPosition({
 
 		if (quantity > maxSize) {
 			quantity = maxSize;
+		}
+
+		if (orderType === "limit") {
+			const priceDirection = side === "long" ? "down" : "up";
+			const normalizedPrice = normalizePriceToStep(
+				executionPrice,
+				priceDirection,
+			);
+			if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
+				return fail(
+					`限价价格 ${executionPrice} 无法按照精度要求对齐，请检查tick size配置`,
+				);
+			}
+			executionPrice = normalizedPrice;
 		}
 
 		const size = side === "long" ? quantity : -quantity;

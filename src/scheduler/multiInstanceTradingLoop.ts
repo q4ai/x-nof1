@@ -16,6 +16,7 @@
  */
 
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import {
 	type TradingInstanceWithDetails,
 	getRunningInstances,
@@ -32,7 +33,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 // 多实例调度状态

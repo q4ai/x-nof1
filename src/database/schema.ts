@@ -253,7 +253,7 @@ CREATE TABLE IF NOT EXISTS trade_logs (
 -- 持仓表
 CREATE TABLE IF NOT EXISTS positions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  account_id INTEGER,
+  account_id INTEGER NOT NULL DEFAULT 0,
   symbol TEXT NOT NULL,
   quantity REAL NOT NULL,
   entry_price REAL NOT NULL,
@@ -272,7 +272,7 @@ CREATE TABLE IF NOT EXISTS positions (
   risk_usd REAL,
   peak_pnl_percent REAL DEFAULT 0,
   partial_close_percentage REAL DEFAULT 0,
-  UNIQUE(symbol, side)
+  UNIQUE(account_id, symbol, side)
 );
 
 -- 账户历史表

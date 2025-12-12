@@ -22,6 +22,7 @@
 import "dotenv/config";
 import { createClient } from "@libsql/client";
 import { createLogger } from "../utils/loggerUtils";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import { CREATE_TABLES_SQL } from "./schema";
 
 const logger = createLogger({
@@ -84,7 +85,7 @@ async function resolveInitialBalanceFromConfig(
 }
 
 async function initDatabase() {
-	const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
+	const dbUrl = getDatabaseUrl();
 	let initialBalance = Number.parseFloat(process.env.INITIAL_BALANCE || "1000");
 
 	logger.info(`初始化数据库: ${dbUrl}`);

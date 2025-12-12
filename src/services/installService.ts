@@ -4,6 +4,7 @@ import path from "node:path";
 import { createClient } from "@libsql/client";
 import { CREATE_TABLES_SQL } from "../database/schema";
 import { createLogger } from "../utils/loggerUtils";
+import { getAppDataPath, getDatabaseDir, getInstallLockPath } from "../utils/pathUtils";
 import { getChinaTimeISO } from "../utils/timeUtils";
 
 const logger = createLogger({ name: "install-service", level: "info" });
@@ -39,11 +40,11 @@ function generateAdminCredentials() {
 	return { adminPath, username, password };
 }
 
-// 数据库路径
-const DATA_DIR = path.resolve(process.cwd(), "data");
-const DB_DIR = path.resolve(process.cwd(), "data/database");
+// 数据库路径（使用跨平台路径工具）
+const DATA_DIR = getAppDataPath();
+const DB_DIR = getDatabaseDir();
 const DB_PATH = path.join(DB_DIR, "sqlite.db");
-const INSTALL_LOCK_PATH = path.join(DATA_DIR, "install.lock");
+const INSTALL_LOCK_PATH = getInstallLockPath();
 
 export interface InstallData {
 	systemConfig: {
@@ -58,7 +59,7 @@ export interface InstallData {
 	};
 	accountConfig: {
 		name: string;
-		provider: "okx" | "binance" | "bitget";
+		provider: "okx" | "binance" | "bitget" | "gate";
 		api_key: string;
 		api_secret: string;
 		api_passphrase?: string;
@@ -129,7 +130,7 @@ export async function installSystem(data: InstallData): Promise<InstallResult> {
 		}
 
 		const accountProvider = data.accountConfig.provider.toLowerCase();
-		const supportedProviders = new Set(["okx", "binance", "bitget"]);
+		const supportedProviders = new Set(["okx", "binance", "bitget", "gate"]);
 		if (!supportedProviders.has(accountProvider)) {
 			throw new Error(`不支持的交易所类型: ${accountProvider}`);
 		}

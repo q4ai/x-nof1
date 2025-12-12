@@ -57,9 +57,9 @@ Section "Install"
 
   ; Create shortcuts
   CreateDirectory "\$SMPROGRAMS\\${APP_NAME}"
-  CreateShortcut "\$SMPROGRAMS\\${APP_NAME}\\${APP_NAME}.lnk" "\$INSTDIR\\nof1.ai.exe"
+  CreateShortcut "\$SMPROGRAMS\\${APP_NAME}\\${APP_NAME}.lnk" "\$INSTDIR\\${APP_NAME}.exe"
   CreateShortcut "\$SMPROGRAMS\\${APP_NAME}\\Uninstall.lnk" "\$INSTDIR\\Uninstall.exe"
-  CreateShortcut "\$DESKTOP\\${APP_NAME}.lnk" "\$INSTDIR\\nof1.ai.exe"
+  CreateShortcut "\$DESKTOP\\${APP_NAME}.lnk" "\$INSTDIR\\${APP_NAME}.exe"
 
   ; Write uninstaller
   WriteUninstaller "\$INSTDIR\\Uninstall.exe"
@@ -69,7 +69,7 @@ Section "Install"
 SectionEnd
 
 Section "Uninstall"
-  Delete "\$INSTDIR\\nof1.ai.exe"
+  Delete "\$INSTDIR\\${APP_NAME}.exe"
   Delete "\$INSTDIR\\Uninstall.exe"
   Delete "\$INSTDIR\\package.json"
   RMDir /r "\$INSTDIR\\node_modules"
@@ -169,13 +169,17 @@ RUN echo '{ \
     "scripts": [ \
       "node_modules/ws/**/*.js", \
       "node_modules/@libsql/**/*.js", \
-      "node_modules/libsql/**/*.js" \
+      "node_modules/libsql/**/*.js", \
+      "node_modules/@voltagent/**/*.js", \
+      "node_modules/dotenv/**/*.js" \
     ], \
     "assets": [ \
       "dist/**/*", \
       "public/**/*", \
       "node_modules/@libsql/**/*", \
-      "node_modules/libsql/**/*" \
+      "node_modules/libsql/**/*", \
+      "node_modules/@voltagent/**/*", \
+      "node_modules/dotenv/**/*" \
     ], \
     "targets": [ \
       "node18-win-x64" \
@@ -184,11 +188,11 @@ RUN echo '{ \
   } \
 }' > pkg-config.json
 
-RUN pkg -c pkg-config.json dist/index.js --compress GZip -o output/nof1.ai.exe
+RUN pkg -c pkg-config.json dist/index.js --compress GZip -o output/${APP_NAME}.exe
 
 # 准备最终输出结构 (供 NSIS 打包)
 RUN mkdir -p /build/nsis_input
-RUN cp output/nof1.ai.exe /build/nsis_input/
+RUN cp output/${APP_NAME}.exe /build/nsis_input/
 RUN cp -R node_modules /build/nsis_input/
 RUN cp -R public /build/nsis_input/
 RUN cp -R data /build/nsis_input/

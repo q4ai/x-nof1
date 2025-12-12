@@ -480,6 +480,10 @@
                                 <img src="/static/icons/bitget.png" alt="Bitget">
                                 <span data-i18n="account.providers.bitget">Bitget</span>
                             </div>
+                            <div class="provider-card-install" data-provider="gate">
+                                <img src="/static/icons/gate.png" alt="Gate.io">
+                                <span data-i18n="account.providers.gate">Gate.io</span>
+                            </div>
                         </div>
                     </div>
                     <div class="form-group">
@@ -614,6 +618,7 @@
                             okx: "OKX 永续合约",
                             binance: "Binance Futures",
                             bitget: "Bitget Futures",
+                            gate: "Gate.io 永续合约",
                         },
                         apiKey: "API Key",
                         apiKeyPlaceholder: "请输入交易所 API Key",
@@ -711,6 +716,7 @@
                             okx: "OKX Perpetual",
                             binance: "Binance Futures",
                             bitget: "Bitget Futures",
+                            gate: "Gate.io Futures",
                         },
                         apiKey: "API Key",
                         apiKeyPlaceholder: "Enter exchange API Key",
@@ -808,6 +814,7 @@
                             okx: "OKX パーペチュアル",
                             binance: "Binance 先物",
                             bitget: "Bitget 先物",
+                            gate: "Gate.io 先物",
                         },
                         apiKey: "API Key",
                         apiKeyPlaceholder: "取引所の API Key",
@@ -873,6 +880,7 @@
         const LANGUAGE_STORAGE_KEY = "nof1_install_language";
         const FORM_DATA_STORAGE_KEY = "nof1_install_form_data";
         const SUPPORTED_LANGUAGES = Object.keys(INSTALL_I18N);
+        const PASSPHRASE_REQUIRED_PROVIDERS = new Set(["okx", "bitget"]);
         let currentLanguage = getInitialLanguage();
 
         function getInitialLanguage() {
@@ -1065,12 +1073,22 @@
             }
         }
 
+        function updatePassphraseVisibility(provider) {
+            const passphraseGroup = document.getElementById('passphrase-group');
+            if (!passphraseGroup) return;
+
+            if (PASSPHRASE_REQUIRED_PROVIDERS.has(provider)) {
+                passphraseGroup.classList.remove('hidden');
+            } else {
+                passphraseGroup.classList.add('hidden');
+            }
+        }
+
         // 交易所选择器逻辑
         document.querySelectorAll('.provider-card-install').forEach(card => {
             card.addEventListener('click', function() {
                 const provider = this.getAttribute('data-provider');
                 const providerInput = document.querySelector('input[name="account_provider"]');
-                const passphraseGroup = document.getElementById('passphrase-group');
                 
                 // 更新选中状态
                 document.querySelectorAll('.provider-card-install').forEach(c => c.classList.remove('selected'));
@@ -1081,16 +1099,12 @@
                     providerInput.value = provider;
                 }
                 
-                // 控制 Passphrase 显示
-                if (passphraseGroup) {
-                    if (provider === 'binance') {
-                        passphraseGroup.classList.add('hidden');
-                    } else {
-                        passphraseGroup.classList.remove('hidden');
-                    }
-                }
+                updatePassphraseVisibility(provider || 'okx');
             });
         });
+
+        const currentProviderValue = document.querySelector('input[name="account_provider"]')?.value || 'okx';
+        updatePassphraseVisibility(currentProviderValue);
 
         // Base URL 预设选择器逻辑（AI 模型配置）
         function initInstallAiBaseUrlSelector() {
@@ -1231,7 +1245,7 @@
                 return false;
             }
             
-            if ((provider === 'okx' || provider === 'bitget') && !passphrase) {
+            if (PASSPHRASE_REQUIRED_PROVIDERS.has(provider) && !passphrase) {
                 alert(t('account.testFailed') + ': Passphrase 不能为空');
                 return false;
             }
@@ -1417,7 +1431,21 @@
                     return false;
                 }
                 
-                const result = await response.json();
+                const rawText = await response.text();
+                let result;
+                try {
+                    result = JSON.parse(rawText);
+                } catch (parseErr) {
+                    // 返回的是 HTML 或纯文本，直接展示文本避免 "Unexpected token '<'"
+                    message.innerHTML = `
+                        <div style="color: var(--error-color); font-size: 2rem; margin-bottom: 1rem;">✗</div>
+                        <div style="font-size: 1.1rem; color: var(--error-color); margin-bottom: 0.5rem;">AI 模型连接失败</div>
+                        <div style="color: var(--text-secondary); margin-top: 0.5rem; max-width: 500px; word-wrap: break-word; font-size: 0.9rem; max-height: 200px; overflow-y: auto; text-align: left; padding: 1rem; background: var(--bg-secondary); border-radius: 0.25rem;">${rawText.substring(0, 500) || '服务器返回了非 JSON 响应'}</div>
+                        <button onclick="this.closest('div[style*=fixed]').remove()" style="margin-top: 1.5rem; padding: 0.5rem 1.5rem; background: var(--accent-color); color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 1rem;">关闭</button>
+                    `;
+                    return false;
+                }
+
                 const aiResponse = result.choices?.[0]?.message?.content || result.response || '(no response)';
                 
                 // 测试成功

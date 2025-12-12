@@ -28,6 +28,7 @@ import {
 	DEFAULT_PROMPT_EXIT,
 	DEFAULT_PROMPT_VARIABLES,
 } from "../config/promptDefaults";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import { RISK_PARAMS, getConfigStringValue } from "../config/riskParams.new";
 import type {
 	StrategyLanguage,
@@ -1327,7 +1328,7 @@ export async function createTradingAgent(
 
 	const memory = new Memory({
 		storage: new LibSQLMemoryAdapter({
-			url: "file:./data/database/trading-memory.db",
+			url: process.env.TRADING_MEMORY_DB_URL || getDatabaseUrl().replace("sqlite.db", "trading-memory.db"),
 			logger: logger.child({ component: "libsql" }),
 		}),
 	});

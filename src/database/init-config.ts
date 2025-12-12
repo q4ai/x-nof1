@@ -2,6 +2,7 @@
  * 配置初始化和管理
  */
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import {
 	DEFAULT_PROMPT_ENTRY,
 	DEFAULT_PROMPT_EXIT,
@@ -13,7 +14,7 @@ import { createLogger } from "../utils/loggerUtils";
 const logger = createLogger({ name: "init-config", level: "info" });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 // 默认配置值

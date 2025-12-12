@@ -9,6 +9,7 @@
  */
 
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import { createLogger } from "../utils/loggerUtils";
 import { getChinaTimeISO } from "../utils/timeUtils";
 
@@ -18,7 +19,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 /**

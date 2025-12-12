@@ -4,6 +4,7 @@
  * 同步账户风控参数，确保 Binance 等交易所按预期配置仓位模式。
  */
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import {
 	type AccountRiskConfig,
 	getAccountRiskConfig,
@@ -24,7 +25,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 async function syncRiskConfigToDatabase(

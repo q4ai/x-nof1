@@ -20,6 +20,7 @@
  * 合约工具函数
  */
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "./pathUtils";
 import { createOkxClient } from "../services/okxClient";
 import { createLogger } from "./loggerUtils";
 
@@ -29,7 +30,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 // 合约乘数缓存（避免重复API调用）

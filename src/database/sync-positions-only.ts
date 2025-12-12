@@ -36,8 +36,9 @@ const logger = createLogger({
 export async function syncPositionsFromOkx() {
 	try {
 		const activeAccount = await getActiveAccount();
-		const accountId = activeAccount ? activeAccount.id.toString() : "default";
-		logger.info(`🔄 从 OKX 同步持仓 (account_id=${accountId})...`);
+		const accountId = activeAccount?.id ?? 0;
+		const accountLabel = activeAccount ? String(activeAccount.id) : "default";
+		logger.info(`🔄 从 OKX 同步持仓 (account_id=${accountLabel})...`);
 
 		// 1. 连接数据库
 		const dbUrl = process.env.DATABASE_URL || "file:./data/database/sqlite.db";
@@ -53,29 +54,30 @@ export async function syncPositionsFromOkx() {
 			logger.warn("⚠️  数据库表不存在，正在创建...");
 			// 创建必要的表
 			await client.execute(`
-        CREATE TABLE IF NOT EXISTS positions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          symbol TEXT NOT NULL,
-          quantity REAL NOT NULL,
-          entry_price REAL NOT NULL,
-          current_price REAL NOT NULL,
-          liquidation_price REAL NOT NULL,
-          unrealized_pnl REAL NOT NULL,
-          leverage INTEGER NOT NULL,
-          side TEXT NOT NULL,
-          profit_target REAL,
-          stop_loss REAL,
-          tp_order_id TEXT,
-          sl_order_id TEXT,
-          entry_order_id TEXT,
-          opened_at TEXT NOT NULL,
-          closed_at TEXT,
-          confidence REAL,
-          risk_usd REAL,
-          peak_pnl_percent REAL DEFAULT 0,
-          partial_close_percentage REAL DEFAULT 0
-        )
-      `);
+				CREATE TABLE IF NOT EXISTS positions (
+					id INTEGER PRIMARY KEY AUTOINCREMENT,
+					account_id INTEGER NOT NULL DEFAULT 0,
+					symbol TEXT NOT NULL,
+					quantity REAL NOT NULL,
+					entry_price REAL NOT NULL,
+					current_price REAL NOT NULL,
+					liquidation_price REAL NOT NULL,
+					unrealized_pnl REAL NOT NULL,
+					leverage INTEGER NOT NULL,
+					side TEXT NOT NULL,
+					profit_target REAL,
+					stop_loss REAL,
+					tp_order_id TEXT,
+					sl_order_id TEXT,
+					entry_order_id TEXT NOT NULL,
+					opened_at TEXT NOT NULL,
+					confidence REAL,
+					risk_usd REAL,
+					peak_pnl_percent REAL DEFAULT 0,
+					partial_close_percentage REAL DEFAULT 0,
+					UNIQUE(account_id, symbol, side)
+				)
+			`);
 			logger.info("✅ 数据库表创建完成");
 		}
 
@@ -133,7 +135,7 @@ export async function syncPositionsFromOkx() {
 					sql: `INSERT INTO positions 
                 (account_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
                  leverage, side, entry_order_id, opened_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)` ,
 					args: [
 						accountId,
 						symbol,

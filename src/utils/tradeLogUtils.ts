@@ -1,4 +1,5 @@
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "./pathUtils";
 import { getActiveAccount } from "../services/accountConfigService";
 import { getInstanceAccountId } from "../services/instanceContext";
 import { createLogger } from "./loggerUtils";
@@ -28,7 +29,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 function safeSerialize(value: unknown): string | null {

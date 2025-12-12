@@ -25,6 +25,14 @@ import { createPinoLogger } from "@voltagent/logger";
 import { createSafeLogger } from "./encodingUtils";
 
 /**
+ * pkg 打包运行时标记。用于避免线程日志在退出时阻塞。
+ */
+const isPackagedRuntime = Boolean(
+	typeof process !== "undefined" &&
+	(process as NodeJS.Process & { pkg?: unknown }).pkg,
+);
+
+/**
  * 日志级别类型定义
  */
 export type LogLevel = "fatal" | "error" | "warn" | "info" | "debug" | "trace";
@@ -62,10 +70,13 @@ const DEFAULT_CONFIG: LoggerConfig = {
  * @returns Pino日志实例
  */
 function createPinoInstance(config: LoggerConfig) {
-	return createPinoLogger({
+	const loggerOptions: Record<string, unknown> = {
 		name: config.name,
 		level: config.level,
-		transport: {
+	};
+
+	if (!isPackagedRuntime) {
+		loggerOptions.transport = {
 			target: "pino-pretty",
 			options: {
 				colorize: config.colorize ?? true,
@@ -74,8 +85,10 @@ function createPinoInstance(config: LoggerConfig) {
 				messageFormat: "{msg}",
 				singleLine: config.singleLine ?? true,
 			},
-		},
-	});
+		};
+	}
+
+	return createPinoLogger(loggerOptions);
 }
 
 /**

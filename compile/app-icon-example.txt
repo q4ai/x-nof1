@@ -1,0 +1,33 @@
+# 自定义图标示例
+
+## 方法 1: 使用在线工具
+1. 访问 https://www.icoconverter.com/
+2. 上传你的 PNG/JPG 图片
+3. 下载生成的 .ico 文件
+4. 重命名为 app-icon.ico
+5. 放到 compile/ 目录
+
+## 方法 2: 使用系统工具（macOS）
+如果你有 PNG 文件：
+```bash
+# 使用 ImageMagick（需先安装：brew install imagemagick）
+convert your-logo.png -resize 256x256 compile/app-icon.ico
+```
+
+## 方法 3: 提取现有应用图标（Windows）
+1. 在 Windows 上找一个你喜欢的应用
+2. 右键点击 .exe 文件 → 属性 → 更改图标
+3. 使用 Resource Hacker 等工具提取 .ico 文件
+
+## 当前状态
+如果 compile/app-icon.ico 不存在，编译脚本会使用 NSIS 默认图标。
+创建该文件后重新编译即可应用自定义图标。
+
+## 图标尺寸建议
+标准 Windows .ico 文件应包含以下尺寸：
+- 256x256 (Windows 7+ 大图标)
+- 128x128 (中等图标)
+- 64x64
+- 48x48 (XP 大图标)
+- 32x32 (标准图标)
+- 16x16 (小图标)

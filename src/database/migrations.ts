@@ -145,35 +145,44 @@ async function ensureAgentRequestLogsDurationColumn(
  */
 export async function ensureDualPositionSupport(client: Client): Promise<void> {
 	try {
-		// 检查是否已经是新结构
-		const indexInfo = await client.execute(
-			"SELECT sql FROM sqlite_master WHERE type='table' AND name='positions'",
-		);
-		if (indexInfo.rows.length > 0) {
-			const createSql = (indexInfo.rows[0] as any).sql || "";
-			// 如果已经包含 UNIQUE(symbol, side)，说明已迁移
-			if (
-				createSql.includes("UNIQUE(symbol, side)") ||
-				createSql.includes("UNIQUE (symbol, side)")
-			) {
-				logger.info("positions 表已支持双向持仓");
-				return;
-			}
+		const [tableSqlResult, tableInfo] = await Promise.all([
+			client.execute(
+				"SELECT sql FROM sqlite_master WHERE type='table' AND name='positions'",
+			),
+			client.execute("PRAGMA table_info(positions)"),
+		]);
+
+		const createSql =
+			tableSqlResult.rows.length > 0
+				? ((tableSqlResult.rows[0] as any).sql || "")
+				: "";
+		const hasAccountScopedUnique =
+			createSql.includes("UNIQUE(account_id, symbol, side)") ||
+			createSql.includes("UNIQUE (account_id, symbol, side)");
+		const hasAccountIdColumn = Array.isArray(tableInfo.rows)
+			? tableInfo.rows.some(
+					(row: any) =>
+						row &&
+						typeof row === "object" &&
+						(typeof row.name === "string"
+							? row.name
+							: row.column_name) === "account_id",
+				)
+			: false;
+
+		if (hasAccountScopedUnique && hasAccountIdColumn) {
+			logger.info("positions 表已具备按账户分区的双向持仓约束");
+			return;
 		}
 
-		logger.info("开始迁移 positions 表以支持双向持仓...");
+		logger.info("开始迁移 positions 表，启用 (account_id, symbol, side) 唯一约束...");
+		await client.execute("BEGIN");
+		await client.execute("ALTER TABLE positions RENAME TO positions_backup");
 
-		// 1. 备份现有数据
-		const existingPositions = await client.execute("SELECT * FROM positions");
-		logger.info(`备份了 ${existingPositions.rows.length} 条持仓记录`);
-
-		// 2. 删除旧表
-		await client.execute("DROP TABLE IF EXISTS positions");
-
-		// 3. 创建新表（支持双向持仓）
 		await client.execute(`
       CREATE TABLE IF NOT EXISTS positions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        account_id INTEGER NOT NULL DEFAULT 0,
         symbol TEXT NOT NULL,
         quantity REAL NOT NULL,
         entry_price REAL NOT NULL,
@@ -192,48 +201,34 @@ export async function ensureDualPositionSupport(client: Client): Promise<void> {
         risk_usd REAL,
         peak_pnl_percent REAL DEFAULT 0,
         partial_close_percentage REAL DEFAULT 0,
-        UNIQUE(symbol, side)
+        UNIQUE(account_id, symbol, side)
       )
     `);
-		logger.info("已创建新 positions 表（支持双向持仓）");
 
-		// 4. 恢复数据
-		if (existingPositions.rows.length > 0) {
-			for (const row of existingPositions.rows) {
-				await client.execute({
-					sql: `INSERT INTO positions 
-                (symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
-                 leverage, side, profit_target, stop_loss, tp_order_id, sl_order_id, entry_order_id, 
-                 opened_at, confidence, risk_usd, peak_pnl_percent, partial_close_percentage)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-					args: [
-						row.symbol,
-						row.quantity,
-						row.entry_price,
-						row.current_price,
-						row.liquidation_price,
-						row.unrealized_pnl,
-						row.leverage,
-						row.side,
-						row.profit_target,
-						row.stop_loss,
-						row.tp_order_id,
-						row.sl_order_id,
-						row.entry_order_id,
-						row.opened_at,
-						row.confidence,
-						row.risk_usd,
-						row.peak_pnl_percent || 0,
-						row.partial_close_percentage || 0,
-					],
-				});
-			}
-			logger.info(`已恢复 ${existingPositions.rows.length} 条持仓记录`);
-		}
+		const accountIdSelector = hasAccountIdColumn
+			? "COALESCE(account_id, 0)"
+			: "0";
+		await client.execute({
+			sql: `INSERT INTO positions 
+            (account_id, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl, 
+             leverage, side, profit_target, stop_loss, tp_order_id, sl_order_id, entry_order_id, opened_at, 
+             confidence, risk_usd, peak_pnl_percent, partial_close_percentage)
+            SELECT ${accountIdSelector}, symbol, quantity, entry_price, current_price, liquidation_price, unrealized_pnl,
+                   leverage, side, profit_target, stop_loss, tp_order_id, sl_order_id, entry_order_id, opened_at,
+                   confidence, risk_usd, COALESCE(peak_pnl_percent, 0), COALESCE(partial_close_percentage, 0)
+            FROM positions_backup`,
+		});
 
-		logger.info("✅ 双向持仓迁移完成");
+		await client.execute("DROP TABLE positions_backup");
+		await client.execute("COMMIT");
+		logger.info("✅ positions 表已完成按账户分区的双向持仓迁移");
 	} catch (error) {
-		logger.error("双向持仓迁移失败:", error);
+		try {
+			await client.execute("ROLLBACK");
+		} catch (rollbackError) {
+			logger.warn("回滚 positions 迁移事务失败:", rollbackError as any);
+		}
+		logger.error("双向持仓迁移失败:", error as any);
 	}
 }
 

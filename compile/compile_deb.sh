@@ -80,23 +80,100 @@ RUN rsync -a --exclude node_modules --exclude compile --exclude .git dist/ \${DE
 WORKDIR \${DEB_DIR}\${APP_ROOT}
 RUN npm install --omit=dev
 
-# 混淆 JavaScript
+# ===== 三重保护：Source Map 删除 + 文件名混淆 + 代码混淆 =====
+
+# 第一步：删除 source map 文件（防止源码泄露）
+WORKDIR \${DEB_DIR}\${APP_ROOT}
+RUN find dist -type f -name "*.map" -delete && \
+    find public -type f -name "*.map" -delete && \
+    echo "已删除所有 .map 文件"
+
+# 第二步：混淆文件名（隐藏模块用途）
 WORKDIR \${DEB_DIR}\${APP_ROOT}/dist
+RUN python3 <<'PYEOF'
+import os
+import re
+import hashlib
+import random
+
+dist_dir = "."
+file_mapping = {}
+
+print("=" * 60)
+print("开始文件名混淆...")
+print("=" * 60)
+
+for filename in os.listdir(dist_dir):
+    filepath = os.path.join(dist_dir, filename)
+    if os.path.isdir(filepath) or filename == "index.js":
+        continue
+    if filename.endswith(".js"):
+        random_hash = hashlib.md5(f"{filename}{random.random()}".encode()).hexdigest()[:12]
+        new_filename = f"_{random_hash}.js"
+        file_mapping[filename] = new_filename
+
+print(f"找到 {len(file_mapping)} 个需要混淆的文件")
+
+if file_mapping:
+    print("\\n更新文件引用...")
+    updated_files = 0
+    for root, dirs, files in os.walk(dist_dir):
+        for file in files:
+            if file.endswith(".js"):
+                filepath = os.path.join(root, file)
+                try:
+                    with open(filepath, "r", encoding="utf-8") as f:
+                        content = f.read()
+                except:
+                    continue
+                original_content = content
+                for old_name, new_name in file_mapping.items():
+                    escaped_old = re.escape(old_name)
+                    patterns = [
+                        (rf'(import\\s+["\\'])(\\.\\/)({escaped_old})(["\\'])', rf'\\1\\2{new_name}\\4'),
+                        (rf'(from\\s+["\\'])(\\.\\/)({escaped_old})(["\\'])', rf'\\1\\2{new_name}\\4'),
+                        (rf'(require\\(["\\'])(\\.\\/)({escaped_old})(["\\'])', rf'\\1\\2{new_name}\\4'),
+                    ]
+                    for pattern, replacement in patterns:
+                        content = re.sub(pattern, replacement, content)
+                if content != original_content:
+                    with open(filepath, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    updated_files += 1
+    print(f"更新了 {updated_files} 个文件的引用")
+    
+    print("\\n重命名文件...")
+    renamed_count = 0
+    for old_name, new_name in file_mapping.items():
+        old_path = os.path.join(dist_dir, old_name)
+        new_path = os.path.join(dist_dir, new_name)
+        if os.path.exists(old_path):
+            os.rename(old_path, new_path)
+            renamed_count += 1
+    print(f"成功重命名 {renamed_count} 个文件")
+
+print("=" * 60)
+print("文件名混淆完成！")
+print("=" * 60)
+PYEOF
+
+# 第三步：代码深度混淆
 RUN find . -type f -name "*.js" | while read -r js_file; do \
       tmp_dir="\${js_file}_obf"; \
       rm -rf "\$tmp_dir"; \
       javascript-obfuscator "\$js_file" --output "\$tmp_dir" \
         --compact true \
+        --control-flow-flattening true \
+        --control-flow-flattening-threshold 0.75 \
+        --dead-code-injection true \
+        --dead-code-injection-threshold 0.4 \
         --identifier-names-generator hexadecimal \
-        --string-array-rotate true \
-        --simplify true \
-        --split-strings true \
         --string-array true \
         --string-array-encoding rc4 \
         --string-array-threshold 1 \
-        --target node \
         --transform-object-keys true \
-        --unicode-escape-sequence true; \
+        --unicode-escape-sequence true \
+        --target node; \
       mv "\$tmp_dir/\$(basename "\$js_file")" "\$js_file"; \
       rm -rf "\$tmp_dir"; \
     done

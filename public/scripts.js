@@ -103,6 +103,7 @@ const SETTINGS_CONFIG_KEYS = [
   "HTTP_PROXY_URL",
   "COMMUNITY_REPORT_ENABLED",
   "COMMUNITY_SHARE_PROMPTS",
+  "EMERGENCY_NOTICE_URL",
 ];
 
 let STRATEGY_LABELS = { ...DEFAULT_STRATEGY_LABELS };
@@ -8561,7 +8562,7 @@ class TradingMonitor {
 
     // 多任务模式下不再需要激活状态和激活按钮
     const deleteLabel = this.translate("accounts.actions.delete", "Delete");
-    const deleteBtn = `<button class="account-action-btn btn-delete" data-account-id="${account.id}" data-action="delete">${this.escapeHtml(deleteLabel)}</button>`;
+    const deleteBtn = `<button type="button" class="account-action-btn btn-delete" data-account-id="${account.id}" data-action="delete">${this.escapeHtml(deleteLabel)}</button>`;
 
     const apiKeyLabel = this.translate("accounts.cards.apiKeyLabel", "API Key");
     const updatedLabel = this.translate("accounts.cards.updatedLabel", "Updated");
@@ -8582,8 +8583,8 @@ class TradingMonitor {
           </div>
         </div>
         <div class="account-card-actions">
-          <button class="account-action-btn" data-account-id="${account.id}" data-action="test">${this.escapeHtml(testLabel)}</button>
-          <button class="account-action-btn" data-account-id="${account.id}" data-action="edit">${this.escapeHtml(editLabel)}</button>
+          <button type="button" class="account-action-btn" data-account-id="${account.id}" data-action="test">${this.escapeHtml(testLabel)}</button>
+          <button type="button" class="account-action-btn" data-account-id="${account.id}" data-action="edit">${this.escapeHtml(editLabel)}</button>
           ${deleteBtn}
         </div>
       </div>
@@ -10523,6 +10524,10 @@ class TradingMonitor {
         body: JSON.stringify({ api_key, base_url, model_name }),
       });
       
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       if (resultDiv) {
@@ -10559,6 +10564,10 @@ class TradingMonitor {
           "X-CSRF-Token": csrfToken,
         },
       });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
       
       const data = await response.json();
       let statusType = "error";

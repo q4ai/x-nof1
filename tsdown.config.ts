@@ -20,6 +20,6 @@ import { defineConfig } from "tsdown";
 
 export default defineConfig({
   entry: ["./src/index.ts"],
-  sourcemap: true,
+  sourcemap: false,  // 禁用 source map 以提高生产环境安全性
   outDir: "dist",
 });

@@ -21,6 +21,7 @@ import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl, getPublicFilePath, getLanguageFilePath } from "../utils/pathUtils";
 /**
  * API 路由
  */
@@ -63,16 +64,12 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 type DbRow = Record<string, unknown>;
 
 const AVAILABLE_LANGUAGE_CODES = new Set(["en", "zh", "ja"]);
-const LANGUAGE_DIR_CANDIDATES = [
-	new URL("../language/", import.meta.url),
-	new URL("../../src/language/", import.meta.url),
-];
 
 const CSRF_HEADER = "x-csrf-token";
 
@@ -714,24 +711,20 @@ async function loadLanguageResource(
 	lang: string,
 ): Promise<Record<string, unknown>> {
 	const fileName = `${lang}.json`;
+	const filePath = getLanguageFilePath(fileName);
 
-	for (const directory of LANGUAGE_DIR_CANDIDATES) {
-		try {
-			const fileUrl = new URL(fileName, directory);
-			const fileContent = await readFile(fileUrl, "utf-8");
-			return JSON.parse(fileContent) as Record<string, unknown>;
-		} catch (error) {
-			const err = error as NodeJS.ErrnoException;
-			if (err?.code === "ENOENT") {
-				continue;
-			}
-			throw err;
+	try {
+		const fileContent = await readFile(filePath, "utf-8");
+		return JSON.parse(fileContent) as Record<string, unknown>;
+	} catch (error) {
+		const err = error as NodeJS.ErrnoException;
+		if (err?.code === "ENOENT") {
+			const notFoundError = new Error(`Language file not found for code: ${lang}`);
+			(notFoundError as NodeJS.ErrnoException).code = "ENOENT";
+			throw notFoundError;
 		}
+		throw err;
 	}
-
-	const notFoundError = new Error(`Language file not found for code: ${lang}`);
-	(notFoundError as NodeJS.ErrnoException).code = "ENOENT";
-	throw notFoundError;
 }
 
 export function createApiRoutes(adminAuth: AdminAuthConfig) {
@@ -810,21 +803,18 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 	// Session 内存缓存（提升性能，避免每次请求都查数据库）
 	const sessionCache = new Map<string, SessionRecord>();
 	const SESSION_COOKIE = "q4ai_session";
-	const SESSION_TTL_MS = 1000 * 60 * 60 * 12; // 12小时会话
+	const SESSION_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7天会话
 
-	const loginTemplatePath = new URL("../../public/login.html", import.meta.url);
+	// 使用 pathUtils 获取跨平台兼容的文件路径
 	let cachedLoginTemplate: string | null = null;
-	const installTemplatePath = new URL(
-		"../../public/install.html",
-		import.meta.url,
-	);
 	let cachedInstallTemplate: string | null = null;
 
 	const loadLoginTemplate = async () => {
 		if (cachedLoginTemplate) {
 			return cachedLoginTemplate;
 		}
-		cachedLoginTemplate = await readFile(loginTemplatePath, "utf-8");
+		const loginPath = getPublicFilePath("login.html");
+		cachedLoginTemplate = await readFile(loginPath, "utf-8");
 		return cachedLoginTemplate;
 	};
 
@@ -832,7 +822,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 		if (cachedInstallTemplate) {
 			return cachedInstallTemplate;
 		}
-		cachedInstallTemplate = await readFile(installTemplatePath, "utf-8");
+		const installPath = getPublicFilePath("install.html");
+		cachedInstallTemplate = await readFile(installPath, "utf-8");
 		return cachedInstallTemplate;
 	};
 

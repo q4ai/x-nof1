@@ -17,6 +17,7 @@
  */
 
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 /**
  * Account Recorder - Record account assets every 10 minutes
  * 账户资产记录器 - 每10分钟记录一次账户资产（包含未实现盈亏）
@@ -34,7 +35,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 /**

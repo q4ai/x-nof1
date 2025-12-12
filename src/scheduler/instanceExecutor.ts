@@ -30,6 +30,7 @@ import type { TradingInstanceWithDetails } from "../services/tradingInstanceServ
 import { websocketService } from "../services/websocketService";
 import { getQuantoMultiplier } from "../utils/contractUtils";
 import { createLogger } from "../utils/loggerUtils";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import { getChinaTimeISO } from "../utils/timeUtils";
 
 const logger = createLogger({
@@ -38,7 +39,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 /**

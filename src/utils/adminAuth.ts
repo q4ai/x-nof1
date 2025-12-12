@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import { createClient } from "@libsql/client";
+import { getCredentialsPath, getDatabaseUrl } from "./pathUtils";
 
 export interface AdminAuthConfig {
 	adminPath: string;
@@ -9,7 +10,7 @@ export interface AdminAuthConfig {
 	password: string;
 }
 
-const CREDENTIALS_FILE = path.resolve(process.cwd(), ".q4ai");
+const CREDENTIALS_FILE = getCredentialsPath();
 const DEFAULT_USERNAME = "admin";
 const FILE_PERMISSIONS = 0o600;
 
@@ -21,7 +22,7 @@ let cachedConfig: AdminAuthConfig | null = null;
 async function readConfigFromDatabase(): Promise<AdminAuthConfig | null> {
 	try {
 		const dbClient = createClient({
-			url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+			url: getDatabaseUrl(),
 		});
 
 		const result = await dbClient.execute({

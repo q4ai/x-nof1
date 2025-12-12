@@ -22,6 +22,7 @@
  */
 
 import { createClient } from "@libsql/client";
+import { getDatabaseUrl } from "../utils/pathUtils";
 import type { ContractMultiplier } from "../database/schema";
 import { createOkxClient } from "../services/okxClient";
 import { createLogger } from "../utils/loggerUtils";
@@ -32,7 +33,7 @@ const logger = createLogger({
 });
 
 const dbClient = createClient({
-	url: process.env.DATABASE_URL || "file:./data/database/sqlite.db",
+	url: getDatabaseUrl(),
 });
 
 /**

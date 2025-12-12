@@ -16,6 +16,8 @@
  * along with this program. If not, see <https://www.gnu.org/licenses/>.
  */
 
+import { execSync } from "node:child_process";
+
 /**
  * 编码工具函数 - 解决Windows环境下中文乱码问题
  *
@@ -30,6 +32,8 @@
 export function isWindows(): boolean {
 	return process.platform === "win32";
 }
+
+let encodingInitialized = false;
 
 /**
  * 检测当前终端是否支持UTF-8编码
@@ -66,18 +70,6 @@ export function isUtf8Supported(): boolean {
  * @returns 处理后的文本
  */
 export function ensureTerminalDisplay(text: string): string {
-	if (isWindows() && !isUtf8Supported()) {
-		// 在Windows且不支持UTF-8的环境中，尝试使用Buffer转换
-		try {
-			// 将UTF-8文本转换为GBK（Windows中文默认编码）
-			return Buffer.from(text, "utf8").toString("binary");
-		} catch (error) {
-			// 转换失败，返回原始文本
-			return text;
-		}
-	}
-
-	// 在其他环境下直接返回文本
 	return text;
 }
 
@@ -86,18 +78,33 @@ export function ensureTerminalDisplay(text: string): string {
  * 尝试设置终端编码为UTF-8
  */
 export function initializeTerminalEncoding(): void {
-	if (isWindows()) {
-		try {
-			// 在Windows下尝试设置控制台输出编码为UTF-8
-			if (process.stdout.isTTY) {
-				process.stdout.write("\x1B%G"); // 尝试设置UTF-8模式
-			}
+	if (!isWindows() || encodingInitialized) {
+		return;
+	}
 
-			// 设置环境变量（主要影响子进程）
-			process.env.CHCP = "65001"; // UTF-8代码页
-		} catch (error) {
-			// 忽略设置失败的错误
+	encodingInitialized = true;
+
+	try {
+		// 通过 chcp 指令切换控制台代码页，确保 Node 进程输出 UTF-8
+		execSync("chcp 65001 > nul", { stdio: "ignore" });
+	} catch (error) {
+		// chcp 执行失败不应阻止系统启动
+	}
+
+	try {
+		if (process.stdout.isTTY) {
+			process.stdout.write("\x1B%G");
 		}
+
+		process.env.CHCP = "65001";
+		if (!process.env.LANG) {
+			process.env.LANG = "zh_CN.UTF-8";
+		}
+		if (!process.env.LC_ALL) {
+			process.env.LC_ALL = "zh_CN.UTF-8";
+		}
+	} catch (error) {
+		// 忽略设置失败的错误
 	}
 }
 
