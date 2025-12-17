@@ -19,9 +19,11 @@
 import { randomBytes } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { isIP } from "node:net";
+import { createOpenAI } from "@ai-sdk/openai";
+import { generateText } from "ai";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { createClient } from "@libsql/client";
-import { getDatabaseUrl, getPublicFilePath, getLanguageFilePath } from "../utils/pathUtils";
+import { getDatabaseUrl, getPublicFilePath, getLanguageFilePath, getPublicDir } from "../utils/pathUtils";
 /**
  * API 路由
  */
@@ -1152,7 +1154,7 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 	});
 
 	// 静态文件服务 - 需要使用绝对路径
-	app.use("/*", serveStatic({ root: "./public" }));
+	app.use("/*", serveStatic({ root: getPublicDir() }));
 
 	/**
 	 * ========================================
@@ -1864,8 +1866,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 				.replace(/\/$/, "");
 
 			// 使用 AI SDK 测试连接
-			const { createOpenAI } = await import("@ai-sdk/openai");
-			const { generateText } = await import("ai");
+			// const { createOpenAI } = await import("@ai-sdk/openai");
+			// const { generateText } = await import("ai");
 
 			const openai = createOpenAI({
 				apiKey: String(api_key),

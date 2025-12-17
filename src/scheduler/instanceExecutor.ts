@@ -10,6 +10,9 @@
  */
 
 import { Client, createClient } from "@libsql/client";
+import { createOpenAI } from "@ai-sdk/openai";
+import { Agent } from "@voltagent/core";
+import * as tradingTools from "../tools/trading";
 import { RISK_PARAMS, getConfigStringValue } from "../config/riskParams.new";
 import {
 	DEFAULT_STRATEGY_LANGUAGE,
@@ -469,9 +472,9 @@ async function createAgentForInstance(
 	instructions: string;
 	modelName: string;
 }> {
-	const { createOpenAI } = await import("@ai-sdk/openai");
-	const { Agent } = await import("@voltagent/core");
-	const tradingTools = await import("../tools/trading");
+	// const { createOpenAI } = await import("@ai-sdk/openai");
+	// const { Agent } = await import("@voltagent/core");
+	// const tradingTools = await import("../tools/trading");
 
 	const { aiModelConfig, strategyName, accountConfig } = config;
 

@@ -118,23 +118,31 @@ export function getInstallLockPath(): string {
 }
 
 /**
+ * 获取 public 目录路径（支持打包模式）
+ * 
+ * @returns public 目录绝对路径
+ */
+export function getPublicDir(): string {
+	// @ts-ignore - pkg 打包时会设置 process.pkg
+	const isPackaged = typeof process.pkg !== "undefined";
+
+	if (isPackaged) {
+		// 打包模式: 使用程序安装目录下的 public 目录
+		return path.join(path.dirname(process.execPath), "public");
+	}
+
+	// 开发模式: 使用项目根目录下的 public
+	return path.join(process.cwd(), "public");
+}
+
+/**
  * 获取 public 文件路径（支持打包模式）
  * 
  * @param fileName - public 目录下的文件名（例如: login.html）
  * @returns public 文件绝对路径
  */
 export function getPublicFilePath(fileName: string): string {
-	// @ts-ignore - pkg 打包时会设置 process.pkg
-	const isPackaged = typeof process.pkg !== "undefined";
-
-	if (isPackaged) {
-		// 打包模式: public 文件在快照文件系统中，使用相对路径
-		// pkg 会将 public 目录打包进去，通过 path.join 访问
-		return path.join(path.dirname(process.execPath), "public", fileName);
-	}
-
-	// 开发模式: 使用项目根目录
-	return path.join(process.cwd(), "public", fileName);
+	return path.join(getPublicDir(), fileName);
 }
 
 /**

@@ -391,7 +391,8 @@ RUN if [ -f /build/compile/app-icon.ico ]; then \
       echo "原始 EXE 文件大小:"; \
       ls -lh output/@@APP_NAME@@.exe; \
       echo "正在将自定义图标嵌入 EXE..."; \
-      node -e "const { ResEdit } = require('resedit'); \
+      node -e "(async () => { \
+        const { ResEdit } = await import('resedit'); \
         const fs = require('fs'); \
         console.log('1. 读取 EXE 文件...'); \
         const exe = ResEdit.NtExecutable.from(fs.readFileSync('output/@@APP_NAME@@.exe')); \
@@ -412,7 +413,8 @@ RUN if [ -f /build/compile/app-icon.ico ]; then \
         console.log('6. 生成新的 EXE 文件...'); \
         const newExeData = exe.generate(); \
         fs.writeFileSync('output/@@APP_NAME@@.exe', Buffer.from(newExeData)); \
-        console.log('7. 完成！新 EXE 大小:', newExeData.byteLength, 'bytes');"; \
+        console.log('7. 完成！新 EXE 大小:', newExeData.byteLength, 'bytes'); \
+      })();"; \
       echo "修改后 EXE 文件大小:"; \
       ls -lh output/@@APP_NAME@@.exe; \
       echo "=== 图标嵌入成功 ==="; \

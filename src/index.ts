@@ -24,7 +24,7 @@ import { Hono } from "hono";
 import { installSystem, isSystemInstalled } from "./services/installService";
 import { initializeTerminalEncoding } from "./utils/encodingUtils";
 import { createLogger } from "./utils/loggerUtils";
-import { getPublicFilePath } from "./utils/pathUtils";
+import { getPublicFilePath, getPublicDir } from "./utils/pathUtils";
 
 // 设置时区为中国时间（Asia/Shanghai，UTC+8）
 process.env.TZ = "Asia/Shanghai";
@@ -239,7 +239,7 @@ async function runInstallServer() {
 		});
 
 		// 最后处理静态文件
-		app.use("/*", serveStatic({ root: "./public" }));
+		app.use("/*", serveStatic({ root: getPublicDir() }));
 
 		logger.info(`安装服务运行在 http://localhost:${port}`);
 
