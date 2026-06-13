@@ -94,6 +94,36 @@ The system follows a **minimal human intervention** design philosophy, abandonin
 - **Transparent and Traceable**: Records every decision process for backtesting analysis and strategy optimization
 - **Continuous Learning**: System automatically accumulates trading experience and continuously optimizes decision models
 
+## UI Preview
+
+> 📷 Screenshots below were captured from the running dev server (port 3888). See `docs/screenshots/` for the source images.
+
+### 1. Live Trading Dashboard
+
+![Dashboard](./docs/screenshots/01-trading-dashboard.png)
+
+*Real-time ticker tape (left) · Candlestick chart with trade markers (center) · Account stats + AI decision stream (right)*
+
+### 2. Decision Logs
+
+![Decision Logs](./docs/screenshots/02-decision-logs.png)
+
+*Every LLM call in reverse-chronological order. Click any row to inspect the full prompt / response / approval.*
+
+### 3. Single Decision Detail
+
+![Decision Detail](./docs/screenshots/03-decision-detail.png)
+
+*Full audit trail: system instructions → user prompt → AI output → approval summary. Every "AI thought" is recorded.*
+
+### 4. Strategy Editor
+
+![Strategy Editor](./docs/screenshots/04-strategy-editor.png)
+
+*Write entry/exit logic in natural language. The platform auto-injects live parameters (leverage, stop-loss, drawdown thresholds…).*
+
+---
+
 ## Key Features
 
 ### AI-Powered Decision Making

@@ -1,274 +1,325 @@
-# open-nof1.ai
+# Q4AI · 加密货币 AI 智能交易平台
 
 <div align="center">
 
 [![VoltAgent](https://img.shields.io/badge/Framework-VoltAgent-purple.svg)](https://voltagent.dev)
 [![OpenAI Compatible](https://img.shields.io/badge/AI-OpenAI_Compatible-orange.svg)](https://openrouter.ai)
-[![OKX](https://img.shields.io/badge/Exchange-OKX-000000.svg?logo=okx&logoColor=white)](https://www.okx.com/)
-[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Node.js](https://img.shields.io/badge/Runtime-Node.js%2020+-339933.svg?logo=node.js&logoColor=white)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/Language-TypeScript-3178C6.svg)](https://www.typescriptlang.org)
+[![Node.js](https://img.shields.io/badge/Node.js-20%2B-339933.svg)](https://nodejs.org)
 [![License](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](./LICENSE)
 
-| [English](./README_EN.md) | [简体中文](./README_ZH.md) | [日本語](./README_JA.md) |
-|:---:|:---:|:---:|
+**[English](./README_EN.md) · [简体中文](./README_ZH.md) · [日本語](./README_JA.md)**
 
 </div>
 
-## 系统概述
+## ✨ 这是什么
 
-open-nof1.ai 是一个 AI 驱动的加密货币自动交易系统，将大语言模型智能与量化交易实践深度融合。系统基于 Agent 框架构建，通过赋予 AI 完全的市场分析和交易决策自主权，实现真正的智能化交易。
+**Q4AI** 是一个新一代加密货币 **AI 智能交易平台**。它把多个交易所账户的真实行情（K 线、订单簿、资金费率、新闻）、当前持仓与可用工具，统一打包成结构化上下文发送给大语言模型，让 AI **自主决策开仓 / 平仓 / 持仓**，再由程序化执行层把关后调用真实下单接口。
 
-本系统采用**最小人工干预**的设计理念，摒弃传统的硬编码交易规则，让 AI 模型基于原始市场数据进行自主学习和决策，已完整对接 OKX 永续合约。
+平台还附带一个**实时 Web 监控界面**，可以查看账户状态、交易日志、AI 决策详情与盈亏曲线，并支持手动下单、必要时人工干预。
 
-![open-nof1.ai](./public/image.png)
+> 🎯 核心理念：**让 AI 真正成为交易员**，而不是写死的指标触发器。
 
-## 系统架构
+---
+
+## 🖥️ 界面预览
+
+### 1. 实时交易 Dashboard（多交易对 + AI 决策流）
+
+![Dashboard](./docs/screenshots/01-trading-dashboard.png)
+
+*左侧实时报价滚动 · 中间 K 线 + 标记交易 · 右侧账户统计 + AI 决策流*
+
+### 2. 决策日志列表（每次 AI 调用的输入 / 输出 / 耗时）
+
+![Decision Logs](./docs/screenshots/02-decision-logs.png)
+
+*按时间倒序展示每次 AI 请求，可点击查看完整上下文*
+
+### 3. 单次决策详情（系统指令 / 提示词 / AI 输出 / 审批结果）
+
+![Decision Detail](./docs/screenshots/03-decision-detail.png)
+
+*每一次「AI 思考」都被完整留痕，可审计、可复盘*
+
+### 4. 策略编辑器（开仓逻辑 / 出场逻辑 / 风险参数）
+
+![Strategy Editor](./docs/screenshots/04-strategy-editor.png)
+
+*用自然语言写策略，平台自动注入参数（杠杆、止损、回撤阈值…）*
+
+---
+
+## 🚀 核心能力
+
+### 🤖 AI 自主决策
+- **多模型支持**：DeepSeek V3.2 / GLM-4.6 / Claude 4.5 / GPT-5 / Gemini Pro 2.5 / Kimi
+- **OpenAI 兼容 API**：可接入 OpenRouter、OpenAI、自部署推理服务
+- **多账户并行**：每个账户独立 Agent、独立策略、独立 Prompt
+- **多周期聚合**：1m / 5m / 15m / 1H / 4H / 1D 技术指标统一进 Prompt
+
+### 🛡️ 多层风控
+- **数据质量守卫**：快照新鲜度 + 价格偏差 + 指标完整性自动检测
+- **结构化决策输出**：AI 必须输出 JSON（confidence / actions / hold reason）
+- **程序化审批**：置信度阈值、方向冲突检测、最大持仓数
+- **执行层硬护栏**：极端止损 / 账户止损 / 止盈 / 回撤分档（预警 / 暂停 / 强平）
+
+### 📈 真实交易所对接
+- **多交易所统一接口**：OKX、Binance、Bitget、Gate.io（永续合约）
+- **同一份代码即可跑模拟盘或实盘**，自动切换
+- **手动交易面板**：Market / Limit 订单，USDT 面值 / Coin 数量两种模式
+
+### 🌐 实时监控 + 干预
+- **Web Dashboard**（默认端口 `3888`）：实时账户 / 持仓 / AI 决策流
+- **WebSocket 推送**：状态、日志、价格秒级刷新
+- **多语言 UI**：中文 / English / 日本語
+- **访客 / 已登录双模式**：未登录只展示 Dashboard，已登录解锁策略编辑 + 手动交易
+
+### 📦 生产级部署
+- **PM2 进程管理**、**Docker / docker-compose** 一键启动
+- **多平台打包**：macOS DMG、Linux DEB、Windows EXE（bytenode 编译）
+- **数据库自动迁移**：LibSQL (SQLite) 持久化所有交易 + AI 决策日志
+
+---
+
+## 🏗️ 架构一览
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                   Trading Agent (AI)                    │
-│              (DeepSeek V3.2 / Gork4 / Claude)           │
-└─────────────────┬───────────────────────────────────────┘
-                  │
-DATABASE_URL=file:./db/sqlite.db
-                  ├─── Position Management
-                  └─── Trade Execution Decisions
-                  
-┌─────────────────┴───────────────────────────────────────┐
-│                    VoltAgent Core                       │
-│              (Agent Orchestration & Tool Routing)       │
-└─────────┬───────────────────────────────────┬───────────┘
-          │                                   │
-┌─────────┴──────────┐            ┌───────────┴───────────┐
-│    Trading Tools   │            │   OKX API Client      │
-│                    │            │                       │
-│ - Market Data      │◄───────────┤ - Order Management    │
-│ - Account Info     │            │ - Position Query      │
-│ - Trade Execution  │            │ - Market Data Stream  │
-└─────────┬──────────┘            └───────────────────────┘
-          │
-┌─────────┴──────────┐
-│   LibSQL Database  │
-│                    │
-│ - Account History  │
-│ - Trade Signals    │
-│ - Agent Decisions  │
-└────────────────────┘
+┌────────────────────────────────────────────────────────────────────┐
+│                  Browser  (Trading Dashboard)                      │
+│       Chart.js / Lightweight Charts · WebSocket · i18n            │
+└──────────────────────────┬─────────────────────────────────────────┘
+                           │  HTTP / WS
+┌──────────────────────────┴─────────────────────────────────────────┐
+│                    Hono API Server (port 3888)                     │
+│   REST:  /api/logs · /api/decision-requests · /api/trading/manual │
+│   WS:    /api/ws  → 状态/日志/价格实时推送                          │
+└──┬──────────────────────────────────┬──────────────────────────────┘
+   │                                  │
+┌──┴──────────────┐         ┌────────┴─────────────────────────────┐
+│ Trading Loop    │         │  VoltAgent (Per-Instance Agent)       │
+│  (node-cron)    │ ──────► │  ├─ 只读工具：行情 / 账户 / 持仓      │
+│  - 调度         │  Prompt │  ├─ 结构化 JSON 输出                  │
+│  - 全局锁       │         │  └─ 由 Scheduler 程序化执行           │
+└─────────────────┘         └────────┬─────────────────────────────┘
+                                     │  Programmatic Approval
+                              ┌──────┴──────────────────────────────┐
+                              │  Execution Layer (Guard Rails)       │
+                              │  ├─ 快照新鲜度校验                   │
+                              │  ├─ 价格偏差拦截                     │
+                              │  ├─ 风控阈值校验                     │
+                              │  └─ 调用交易所 SDK                   │
+                              └──────┬──────────────────────────────┘
+                                     │
+              ┌──────────────────────┼─────────────────────┐
+              ▼                      ▼                     ▼
+       ┌─────────────┐         ┌────────────┐         ┌────────────┐
+       │   OKX       │         │  Binance   │         │  Gate.io   │
+       │  (实盘/模拟)│         │  Bitget    │         │            │
+       └─────────────┘         └────────────┘         └────────────┘
+
+              ┌─────────────────────────────────────────────────┐
+              │   LibSQL (SQLite) · trades · positions          │
+              │   agent_request_logs · account_history          │
+              └─────────────────────────────────────────────────┘
 ```
 
 ### 技术栈
 
-| 组件 | 技术 | 用途 |
-|------|------|------|
-| 框架 | [VoltAgent](https://voltagent.dev) | AI Agent 编排与管理 |
-| AI 提供商 | OpenAI 兼容 API | 支持 OpenRouter、OpenAI、DeepSeek 等兼容供应商 |
-| 交易所 | [OKX](https://www.okx.com/) | 加密货币交易(模拟盘 & 正式盘) |
-| 数据库 | LibSQL (SQLite) | 本地数据持久化 |
-| Web 服务器 | Hono | 高性能 HTTP 框架 |
-| 开发语言 | TypeScript | 类型安全开发 |
-| 运行时 | Node.js 20+ | JavaScript 运行环境 |
+| 层 | 技术 |
+| --- | --- |
+| AI Agent 编排 | [VoltAgent](https://voltagent.dev) + AI SDK |
+| 大模型接入 | OpenAI 兼容 API（DeepSeek / GLM / Claude / GPT / Gemini / Kimi） |
+| HTTP / WS | Hono |
+| 数据库 | LibSQL (SQLite) |
+| 行情 / 交易 | OKX V5 SDK · Binance · Bitget · Gate.io |
+| 前端 | 原生 HTML / CSS / JS（无构建）· Chart.js · Lightweight Charts · Marked |
+| 多语言 | 自研 i18n 框架（zh / en / ja） |
+| 部署 | PM2 · Docker · bytenode EXE · DMG / DEB 打包 |
 
-## 快速开始
+---
 
-### 第一步：准备 OKX 账户与 API 密钥
+## ⚡ 快速开始
 
-本项目依赖 OKX 永续合约 API。请根据以下步骤完成基础配置：
+### 1. 环境要求
+- Node.js **>= 20.19.0**
+- npm / pnpm 任选
+- Git
 
-1. 注册并完成 OKX 实名验证：https://www.okx.com/
-2. 在「模拟盘」开启虚拟交易环境，先行验证策略逻辑。
-3. 访问「API 密钥管理」，为交易机器人创建专用 API：
-  - 权限建议勾选「读取」与「交易」
-  - 配置独立的 Passphrase 并妥善保存
-  - 若在正式盘运行，请将服务器 IP 加入白名单
-
-> **建议**：先使用 `OKX_USE_PAPER=true` 测试整个流程，确认无误后再切换到正式盘。
-
-### 第二步：环境准备
-
-- Node.js >= 20.19.0
-- npm 或 pnpm 包管理器
-- Git 版本控制工具
-
-### 第三步：安装项目
+### 2. 克隆与安装
 
 ```bash
-# 克隆仓库
-git clone <repository-url>
-cd open-nof1.ai
-
-# 安装依赖
+git clone https://github.com/q4ai/x-nof1.git
+cd x-nof1
 npm install
 ```
 
-### 第四步：配置
+### 3. 配置环境变量
 
-在项目根目录创建 `.env` 文件:
+复制 `.env.example` 为 `.env`，填写：
 
 ```env
-# 服务器配置
-PORT=3100
+# 服务端口（默认 3888）
+PORT=3888
 
-# 交易参数
-TRADING_INTERVAL_MINUTES=5      # 交易循环间隔
-MAX_LEVERAGE=10                 # 最大杠杆倍数
-MAX_POSITIONS=5                 # 最大持仓数量
-MAX_HOLDING_HOURS=36            # 最大持有时长(小时)
-INITIAL_BALANCE=2000            # 初始资金(USDT)
+# OKX / Binance / Bitget / Gate.io 任选其一，先用模拟盘
+OKX_API_KEY=...
+OKX_SECRET=...
+OKX_PASSPHRASE=...
+OKX_SIMULATED=1   # 1=模拟盘 0=实盘
 
-# 数据库
-DATABASE_URL=file:./db/sqlite.db
-
-# OKX API 凭证(建议先使用模拟盘!)
-OKX_API_KEY=your_okx_api_key
-OKX_API_SECRET=your_okx_api_secret
-OKX_API_PASSPHRASE=your_okx_passphrase
-OKX_USE_PAPER=true
-
-# AI 模型提供商（OpenAI 兼容 API）
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://openrouter.ai/api/v1  # 可选
-AI_MODEL_NAME=deepseek/deepseek-v3.2-exp      # 模型名称
-
-# 账户回撤风控配置
-# 当账户资产相比峰值回撤达到以下百分比时的风控措施：
-ACCOUNT_DRAWDOWN_WARNING_PERCENT=20          # 警告阈值：发出风险警告提醒
-ACCOUNT_DRAWDOWN_NO_NEW_POSITION_PERCENT=30  # 禁止开仓阈值：停止开新仓位，只允许平仓
-ACCOUNT_DRAWDOWN_FORCE_CLOSE_PERCENT=50      # 强制平仓阈值：自动平掉所有仓位，保护剩余资金
+# AI 模型（OpenAI 兼容）
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openrouter.ai/v1
+OPENAI_MODEL=deepseek-chat
 ```
 
-**API 密钥获取**:
-- OpenRouter: https://openrouter.ai/keys
-- OpenAI: https://platform.openai.com/api-keys
-- DeepSeek: https://platform.deepseek.com/api_keys
-- OKX API: https://www.okx.com/account/api
-
-> **提示**：`OKX_USE_PAPER=true` 时系统会自动向 OKX 模拟盘发送指令；切换到正式盘前请重新确认 API 权限。
-
-### 第五步：数据库初始化
+### 4. 初始化数据库 & 启动
 
 ```bash
 npm run db:init
+npm run dev      # 开发模式（ts-node 热更新）
+# 或
+npm run build && npm run start   # 生产模式
 ```
 
-### 第六步：启动交易系统
+打开 [http://localhost:3888/](http://localhost:3888/) 即可看到 Dashboard。
 
+---
+
+## 📂 项目结构
+
+```
+src/
+├── index.ts                    # 入口（initConfig → loadRiskParams → initTradingSystem）
+├── agents/tradingAgent.ts      # VoltAgent 实例：构建上下文 + 解析 LLM 输出
+├── api/routes.ts               # Hono 路由：/api/logs · /api/decision-requests …
+├── config/
+│   ├── riskParams.new.ts       # 动态配置（DB 优先，.env 回退）
+│   ├── exchange.ts             # 交易所配置
+│   └── promptDefaults.ts
+├── database/                   # LibSQL 持久化 + 迁移脚本
+├── scheduler/
+│   ├── tradingLoop.ts          # node-cron 主循环
+│   └── instanceExecutor.ts     # 单实例：收集行情 → AI 决策 → 审批 → 执行
+├── services/
+│   ├── okxClient.ts            # OKX V5 单例（自动切换模拟 / 实盘）
+│   ├── multiTimeframeAnalysis.ts
+│   └── websocketService.ts     # 前端广播（状态/日志/价格）
+├── strategies/                 # 策略 JSON 加载
+├── tools/trading/
+│   ├── marketData.ts           # K 线 / 订单簿 / 资金费率（运行时交易对校验）
+│   ├── accountManagement.ts    # 余额 / 持仓查询
+│   └── tradeExecution.ts       # 开仓 / 平仓（含快照新鲜度 + 价格偏差拦截）
+├── prompts/                    # 多语言提示词模板（zh / en / ja）
+├── language/                   # UI 多语言字典
+└── utils/loggerUtils.ts        # 日志（关键路径必打点）
+
+public/                         # 前端（无构建）
+├── index.html                  # 主监控页
+├── login.html / install.html   # 鉴权 + 安装向导
+├── scripts.js / app.js / csrf.js
+├── styles.css / style.css
+└── static/icons/
+
+data/strategies/                # 用户策略 JSON（不入 git）
+├── AI自主策略.json
+├── 波段趨勢.json
+├── 超短线DCA.json
+├── 稳健策略.json
+└── gate激进策略.json
+
+docs/                           # 文档 + 截图
+db/                             # LibSQL 数据库（不入 git）
+```
+
+---
+
+## 🔄 AI 决策流程
+
+```mermaid
+flowchart TD
+    A[定时器触发<br/>每个 TRADING_INTERVAL_MINUTES] --> B[收集行情<br/>K线+订单簿+资金费率]
+    B --> C{数据质量守卫<br/>快照新鲜度 & 价格偏差}
+    C -- 不通过 --> Z1[标记 HOLD<br/>日志留痕]
+    C -- 通过 --> D[构建结构化 Prompt<br/>系统指令+策略+实时数据+持仓]
+    D --> E[调用 LLM<br/>返回 JSON 计划]
+    E --> F{程序化审批<br/>confidence & 冲突 & 最大持仓}
+    F -- 不通过 --> Z2[自动改写 HOLD<br/>记录 rejectedReasons]
+    F -- 通过 --> G[执行层硬护栏]
+    G --> H[调用交易所 SDK]
+    H --> I[记录 trades + agent_request_logs]
+    I --> J[WebSocket 广播到前端]
+```
+
+每次 LLM 调用都生成 3 段摘要：
+- **`responseSummary`**：AI 原始输出（带 JSON + 自由文本）
+- **`decisionSummary`**：计划动作（plan summary / risk / plannedActions）
+- **`approvalSummary`**：审批结果（approved / executed / rejectedReasons / holdReasons）
+
+前端可在「决策详情」弹窗里**逐字审阅** AI 当时的输入、思考和执行结果。
+
+---
+
+## 🧰 命令速查
+
+| 命令 | 用途 |
+| --- | --- |
+| `npm run dev` | 开发模式（前端 + 后端，热更新） |
+| `npm run build` | 编译 TypeScript |
+| `npm run start` | 生产模式 |
+| `npm run trading:start` | 只跑交易循环（不开前端） |
+| `npm run db:init` | 初始化数据库 |
+| `npm run db:reset` | **重置数据库**（清空所有交易） |
+| `npm run lint` / `lint:fix` | Biome 代码检查 / 自动修复 |
+| `npm run typecheck` | TypeScript 类型检查 |
+| `npm run close-and-reset.sh` | 平仓 + 重置 + 重启（一键回滚） |
+
+打包发布：
 ```bash
-# 开发模式(热重载)
-npm run dev
+# macOS DMG
+./compile/compile_dmg.sh
 
-# 生产模式
-npm run trading:start
+# Linux DEB
+./compile/compile_deb.sh
+
+# Windows EXE（bytenode 加密）
+./compile/compile_exe_bytenode.sh
 ```
 
-### 首次运行：安装向导
+---
 
-- **首次启动或 `data/database/sqlite.db` 不存在时**，系统会自动监听 `http://localhost:3100/install`（或你在 `.env` 中指定的端口）。
-- 打开浏览器即可看到 3 步安装流程：
-  1. **基础设置**：填写初始资金、调度间隔、交易币种以及可选的代理与隐私选项；
-  2. **账户配置**：接入至少 1 个交易所账户（OKX/Binance/Bitget），可同步配置止盈止损；
-  3. **AI 模型配置**：录入兼容 OpenAI 的模型名称、API Key 与可选 Base URL。
-- 点击“开始安装”后系统会初始化数据库、写入第一套账户/模型配置，并在成功后自动切换到主程序。
-- 若安装失败，错误信息会直接呈现，可修正参数后再次提交。
+## 🔐 安全与隐私
 
-### 第七步：访问 Web 仪表板
+- **API 密钥**：仅保存在 `.env`（已加入 `.gitignore`），数据库里不会落盘明文
+- **后台入口**：首次启动随机生成 `adminPath`（写入 `/.q4ai`，不入 git）
+- **CSRF**：所有写操作需要 CSRF Token
+- **多账户隔离**：每个账户走独立 Agent + 独立上下文，互不干扰
+- **策略隔离**：策略 JSON 入 git 时**不含真实账户绑定**
 
-在浏览器中访问 `http://localhost:3100`
+⚠️ **实盘风险提示**：AI 决策不等于稳定盈利。强烈建议先在模拟盘跑 1–2 周后再考虑实盘，并自行设置合理的极端止损和账户止损。
 
-## 完整文档
+---
 
-完整文档请参考：
+## 🤝 贡献
 
-- **[英文完整文档](./README_EN.md)** - 完整功能列表、API 参考、故障排查指南
-- **[中文完整文档](./README_ZH.md)** - 完整功能列表、API 参考、故障排查指南
-- **[日文完整文档](./README_JA.md)** - 完全な機能リスト、APIリファレンス、トラブルシューティング
+欢迎 PR！请遵循：
+- 提交前跑 `npm run typecheck` 和 `npm run lint:fix`
+- 注释、提交信息、Issue 均使用**中文**
+- 数据库 schema 变更必须同步更新 `src/database/schema.ts` 和迁移脚本
 
-### 完整文档包含内容:
+---
 
-- ✅ 详细功能说明
-- ✅ 完整配置指南  
-- ✅ 所有命令参考
-- ✅ 生产部署指南
-- ✅ 故障排查和常见问题
-- ✅ API 文档
-- ✅ 最佳实践
-- ✅ 贡献指南
+## 📜 License
 
-## 核心特性
-
-### AI 驱动决策
-
-- **模型支持**: DeepSeek V3.2, Grok4, Claude 4.5, Gemini Pro 2.5
-- **自主分析**: 无预配置交易信号
-- **多时间框架**: 跨多个时间窗口聚合数据
-- **风险管理**: AI 控制的仓位规模和杠杆管理
-
-### 完整交易功能
-
-- **支持资产**: BTC, ETH, SOL, BNB, XRP, DOGE, GT, TRUMP, ADA, WLFI
-- **合约类型**: USDT 结算永续合约
-- **杠杆范围**: 1倍至10倍(可配置)
-- **订单类型**: 市价单、止损、止盈
-
-### 实时监控
-
-- **Web 仪表板**: 实时账户指标和持仓概览
-- **AI 决策日志**: 透明展示模型推理过程
-- **交易历史**: 完整的交易记录与时间戳
-
-## 风险声明
-
-⚠️ **本系统仅供教育和研究目的。加密货币交易具有重大风险,可能导致资金损失。**
-
-- 务必先在测试网测试策略
-- 仅投资您能承受损失的资金
-- 用户对所有交易活动承担全部责任
-- 系统性能不提供任何保证或担保
-
-## 开源协议
-
-本项目采用 **GNU Affero General Public License v3.0 (AGPL-3.0)** 协议。
-
-### 主要条款
-
-- **免费使用**: 您可以出于任何目的使用本软件
-- **开源要求**: 任何修改必须在 AGPL-3.0 下发布
-- **网络使用**: 如果作为服务提供必须公开源代码
-- **无担保**: 软件按"原样"提供
-
-完整条款请参见 [LICENSE](./LICENSE) 文件。
-
-## 资源
-
-### 准备 OKX 账户与模拟盘
-
-- 注册 OKX：https://www.okx.com/
-- API 文档：https://www.okx.com/docs-v5/zh/
-- 模拟盘指引：https://www.okx.com/docs-v5/zh/#overview-simulated-trading
-
-> **建议**：使用 OKX 模拟盘完成策略验证后，再切换到正式盘执行真实资金交易。
-
-### 交流社区
-
-- **Telegram 交流群**: [加入 AI Agent 学习交流群](https://t.me/+E7av1nVEk5E1ZjY9)
-  - 讨论 AI 量化交易策略
-  - 分享项目使用经验
-  - 获取技术支持和建议
-
-### 外部链接
-
-- [VoltAgent 文档](https://voltagent.dev/docs/)
-- [OpenRouter 模型目录](https://openrouter.ai/models)
-- [OKX API 参考](https://www.okx.com/docs-v5/zh/)
-- [OKX 模拟盘入口](https://www.okx.com/docs-v5/zh/#overview-simulated-trading)
-
-## 参与贡献
-
-欢迎贡献！请参考[完整文档](./README_ZH.md#参与贡献)了解贡献指南。
+[AGPL-3.0](./LICENSE) — 你可以自由使用 / 修改 / 分发，但**衍生作品必须同样开源**。
 
 ---
 
 <div align="center">
 
-[![Star History Chart](https://api.star-history.com/svg?repos=195440/open-nof1.ai&type=Date)](https://star-history.com/#195440/open-nof1.ai&Date)
+如果这个项目对你有帮助，欢迎点 ⭐ Star！
+
+**[GitHub 仓库](https://github.com/q4ai/x-nof1) · [反馈 Issue](https://github.com/q4ai/x-nof1/issues)**
 
 </div>

@@ -94,6 +94,36 @@ open-nof1.ai 是一个 AI 驱动的加密货币自动交易系统，将大语言
 - **透明可追溯**: 完整记录每一次决策过程，便于回测分析和策略优化
 - **持续学习**: 系统自动积累交易经验，不断优化决策模型
 
+## 界面预览
+
+> 📷 以下截图均来自运行中的开发服务（端口 3888）。源文件见 `docs/screenshots/`。
+
+### 1. 实时交易 Dashboard
+
+![Dashboard](./docs/screenshots/01-trading-dashboard.png)
+
+*左侧实时报价滚动 · 中间 K 线 + 标记交易 · 右侧账户统计 + AI 决策流*
+
+### 2. 决策日志列表
+
+![Decision Logs](./docs/screenshots/02-decision-logs.png)
+
+*按时间倒序展示每次 AI 请求，可点击查看完整上下文*
+
+### 3. 单次决策详情
+
+![Decision Detail](./docs/screenshots/03-decision-detail.png)
+
+*完整审计链路：系统指令 → 提示词 → AI 输出 → 审批结果*
+
+### 4. 策略编辑器
+
+![Strategy Editor](./docs/screenshots/04-strategy-editor.png)
+
+*用自然语言写开仓/出场逻辑，平台自动注入参数（杠杆、止损、回撤阈值…）*
+
+---
+
 ## 核心特性
 
 ### AI 驱动决策
