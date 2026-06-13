@@ -89,13 +89,20 @@ find "$APP_PAYLOAD_DIR/public" -type f -name "*.map" -delete
 printf "已删除所有 .map 文件\n"
 
 print_step "第二步：混淆文件名（隐藏模块用途）"
+# 将关键路径作为环境变量显式传递给 Python 子进程（避免 zsh 局部变量未 export 导致找不到目录）
+export APP_PAYLOAD_DIR
+export APP_NAME
 python3 <<'PYEOF'
 import os
 import re
 import hashlib
 import random
 
-dist_dir = os.environ.get("APP_PAYLOAD_DIR", "build/q4-ai-trading-platform.app/Contents/Resources/app") + "/dist"
+# 优先使用环境变量，否则用脚本里 hardcoded 的 fallback（与 shell 端保持一致）
+default_dir = "build/q4-ai-trading-platform.app/Contents/Resources/app"
+dist_dir = os.environ.get("APP_PAYLOAD_DIR", default_dir) + "/dist"
+if not os.path.isdir(dist_dir):
+    raise SystemExit(f"[obfuscate] 目录不存在: {dist_dir} (APP_PAYLOAD_DIR={os.environ.get('APP_PAYLOAD_DIR')!r})")
 file_mapping = {}
 
 print("=" * 60)
