@@ -22,8 +22,6 @@ open-nof1.ai is an AI-powered cryptocurrency automated trading system that deepl
 
 The system follows a **minimal human intervention** design philosophy, abandoning traditional hardcoded trading rules and allowing AI models to autonomously learn and make decisions based on raw market data. It integrates with the OKX exchange (supporting both paper trading and live trading), provides complete perpetual contract trading capabilities, covers mainstream cryptocurrencies such as BTC, ETH, SOL, and supports full automation from data collection, intelligent analysis, risk management to trade execution.
 
-![open-nof1.ai](./public/image.png)
-
 ## Table of Contents
 
 - [Overview](#overview)
