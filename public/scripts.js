@@ -4004,6 +4004,11 @@ class TradingMonitor {
   }
 
   getDecisionRequestSummaryText(request) {
+    const approvalSummaryText = this.formatDecisionRequestApprovalSummary(request, { compact: true });
+    if (approvalSummaryText) {
+      return approvalSummaryText;
+    }
+
     const baseCandidates = [
       typeof request?.responseSummary === "string" ? request.responseSummary : null,
       typeof request?.response === "string" ? request.response : null,
@@ -4021,6 +4026,102 @@ class TradingMonitor {
       return normalized;
     }
     return `${normalized.slice(0, 177)}…`;
+  }
+
+  formatDecisionRequestApprovalSummary(request, options = {}) {
+    const { compact = false } = options;
+    const summary = request?.decisionSummary;
+    const approval = request?.approvalSummary;
+    if (!summary && !approval) {
+      return "";
+    }
+
+    const parts = [];
+    if (summary?.summary) {
+      parts.push(String(summary.summary).trim());
+    }
+
+    const stats = [];
+    if (summary && Number.isFinite(Number(summary.plannedActions))) {
+      stats.push(t("decisionRequest.approval.plannedActions", { value: Number(summary.plannedActions) }));
+    }
+    if (approval && Number.isFinite(Number(approval.approvedActions))) {
+      stats.push(t("decisionRequest.approval.approvedActions", { value: Number(approval.approvedActions) }));
+    }
+    if (approval && Number.isFinite(Number(approval.executedActions))) {
+      stats.push(t("decisionRequest.approval.executedActions", { value: Number(approval.executedActions) }));
+    }
+    if (approval?.rejectedReasons?.length) {
+      stats.push(t("decisionRequest.approval.rejectedReasons", { value: approval.rejectedReasons.length }));
+    }
+    if (approval?.holdReasons?.length) {
+      stats.push(t("decisionRequest.approval.holdReasons", { value: approval.holdReasons.length }));
+    }
+
+    if (stats.length > 0) {
+      parts.push(stats.join(compact ? " / " : " · "));
+    }
+
+    if (!compact && summary?.riskSummary) {
+      parts.push(`${t("decisionRequest.approval.riskSummary")}：${String(summary.riskSummary).trim()}`);
+    }
+
+    const text = parts.filter(Boolean).join(compact ? " | " : "\n");
+    return compact && text.length > 180 ? `${text.slice(0, 177)}…` : text;
+  }
+
+  buildDecisionRequestApprovalSection(request) {
+    const summary = request?.decisionSummary;
+    const approval = request?.approvalSummary;
+    if (!summary && !approval) {
+      return "";
+    }
+
+    const summaryLines = [];
+    if (summary?.summary) {
+      summaryLines.push(`${t("decisionRequest.approval.aiSummary")}：${String(summary.summary).trim()}`);
+    }
+    if (summary?.riskSummary) {
+      summaryLines.push(`${t("decisionRequest.approval.riskSummary")}：${String(summary.riskSummary).trim()}`);
+    }
+
+    const metricLines = [];
+    if (summary && Number.isFinite(Number(summary.plannedActions))) {
+      metricLines.push(t("decisionRequest.approval.plannedActions", { value: Number(summary.plannedActions) }));
+    }
+    if (approval && Number.isFinite(Number(approval.approvedActions))) {
+      metricLines.push(t("decisionRequest.approval.approvedActions", { value: Number(approval.approvedActions) }));
+    }
+    if (approval && Number.isFinite(Number(approval.executedActions))) {
+      metricLines.push(t("decisionRequest.approval.executedActions", { value: Number(approval.executedActions) }));
+    }
+
+    const rejectedReasons = Array.isArray(approval?.rejectedReasons)
+      ? approval.rejectedReasons.filter((item) => typeof item === "string" && item.trim() !== "")
+      : [];
+    const holdReasons = Array.isArray(approval?.holdReasons)
+      ? approval.holdReasons.filter((item) => typeof item === "string" && item.trim() !== "")
+      : [];
+
+    const reasonSections = [];
+    reasonSections.push(
+      rejectedReasons.length > 0
+        ? `${t("decisionRequest.approval.rejectedListTitle")}：\n- ${rejectedReasons.join("\n- ")}`
+        : `${t("decisionRequest.approval.rejectedListTitle")}：${t("decisionRequest.approval.none")}`,
+    );
+    reasonSections.push(
+      holdReasons.length > 0
+        ? `${t("decisionRequest.approval.holdListTitle")}：\n- ${holdReasons.join("\n- ")}`
+        : `${t("decisionRequest.approval.holdListTitle")}：${t("decisionRequest.approval.none")}`,
+    );
+
+    const content = [
+      ...summaryLines,
+      metricLines.length > 0 ? metricLines.join("\n") : "",
+      ...reasonSections,
+    ].filter(Boolean).join("\n\n");
+
+    return this.renderDecisionRequestSection(t("decisionRequest.detail.approval"), content);
   }
 
   async loadDecisionRequests() {
@@ -4694,6 +4795,16 @@ class TradingMonitor {
     const positions = typeof log.positionsCount === "number" ? `${log.positionsCount}` : "--";
     const accountValue = typeof log.accountValue === "number" ? this.formatCurrency(log.accountValue) : "--";
     const actionsData = this.parseActionsData(log);
+    const approvalSummaryText = this.formatDecisionRequestApprovalSummary(log, { compact: false });
+
+    const approvalSection = approvalSummaryText
+      ? `
+        <div class="decision-actions" style="margin-bottom: 16px;">
+          <div class="log-detail-title" style="margin-bottom: 4px;">${this.escapeHtml(t("decisionRequest.detail.approval"))}</div>
+          <pre class="log-detail-text">${this.escapeHtml(approvalSummaryText)}</pre>
+        </div>
+      `
+      : "";
 
     let actionsSection = "";
     if (actionsData.length > 0) {
@@ -4790,6 +4901,7 @@ class TradingMonitor {
           <span>账户权益：${accountValue}</span>
         </div>
       </div>
+      ${approvalSection}
       ${actionsSection}
       <div class="markdown">${htmlContent}</div>
     `;
@@ -4914,6 +5026,7 @@ class TradingMonitor {
       : "";
 
     const sections = [
+      this.buildDecisionRequestApprovalSection(request),
       this.renderDecisionRequestSection(t("decisionRequest.detail.instructions"), request?.instructions || ""),
       this.renderDecisionRequestSection(t("decisionRequest.detail.prompt"), request?.prompt || ""),
       this.renderDecisionRequestSection(t("decisionRequest.detail.response"), request?.response || "", {

@@ -19,6 +19,23 @@ const logger = createLogger({
 	level: "info",
 });
 
+export interface SymbolMarketDataHealth {
+	/** 数据状态：ok=完整，partial=部分缺失，invalid=不可用 */
+	dataStatus: "ok" | "partial" | "invalid";
+	/** 是否允许基于本轮快照开新仓 */
+	allowOpen: boolean;
+	/** 数据完整性评分（0-100） */
+	qualityScore: number;
+	/** 缺失的时间框架 */
+	missingTimeframes: string[];
+	/** 核心时间框架是否齐全 */
+	coreTimeframesReady: boolean;
+	/** 本轮快照采集时间 */
+	collectedAt: string;
+	/** 快照生成时的价格，用于开仓前偏差校验 */
+	snapshotPrice: number;
+}
+
 /**
  * 实例执行上下文
  */
@@ -39,6 +56,8 @@ export interface InstanceContext {
 	stopLossUsdt?: number;
 	/** 账户级止盈（USDT） */
 	takeProfitUsdt?: number;
+	/** 当前执行轮次的市场数据健康状态 */
+	marketDataHealth?: Record<string, SymbolMarketDataHealth>;
 }
 
 // 使用 AsyncLocalStorage 存储实例上下文

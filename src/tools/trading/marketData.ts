@@ -22,9 +22,10 @@
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
 import { RISK_PARAMS } from "../../config/riskParams.new";
-import { getInstanceExchangeClient } from "../../services/instanceContext";
+import { getCurrentInstanceContext, getInstanceExchangeClient } from "../../services/instanceContext";
 import { createExchangeClientFromActiveAccount } from "../../services/okxClient";
 import { createTradingClient } from "../../services/okxTradingClient";
+import { StrategyFileManager } from "../../services/strategyFileManager";
 
 /**
  * 获取交易所客户端
@@ -40,6 +41,59 @@ async function getExchangeClient(): Promise<any> {
 
 	// 回退到全局
 	return await createExchangeClientFromActiveAccount();
+}
+
+function normalizeSymbolInput(symbol: string): string {
+	return symbol.trim().toUpperCase();
+}
+
+function normalizeSymbolList(value: unknown): string[] {
+	if (Array.isArray(value)) {
+		return value
+			.map((item) => (typeof item === "string" ? item : ""))
+			.map((item) => normalizeSymbolInput(item))
+			.filter((item) => item.length > 0);
+	}
+
+	if (typeof value === "string") {
+		return value
+			.split(",")
+			.map((item) => normalizeSymbolInput(item))
+			.filter((item) => item.length > 0);
+	}
+
+	return [];
+}
+
+async function resolveAllowedSymbols(): Promise<Set<string>> {
+	const context = getCurrentInstanceContext();
+	if (context?.strategyName) {
+		try {
+			const strategy = await StrategyFileManager.loadStrategy(context.strategyName);
+			const symbols = normalizeSymbolList(strategy?.params?.tradingSymbols);
+			if (symbols.length > 0) {
+				return new Set(symbols);
+			}
+		} catch {
+			// 回退到全局配置
+		}
+	}
+
+	return new Set((RISK_PARAMS.TRADING_SYMBOLS || []).map((item) => item.toUpperCase()));
+}
+
+async function validateSymbol(symbol: string): Promise<string> {
+	const normalizedSymbol = normalizeSymbolInput(symbol);
+	if (!normalizedSymbol) {
+		throw new Error("币种代码不能为空");
+	}
+
+	const allowedSymbols = await resolveAllowedSymbols();
+	if (!allowedSymbols.has(normalizedSymbol)) {
+		throw new Error(`币种 ${normalizedSymbol} 不在当前策略允许的交易列表中`);
+	}
+
+	return normalizedSymbol;
 }
 
 /**
@@ -267,17 +321,18 @@ export const getMarketPriceTool = createTool({
 	name: "getMarketPrice",
 	description: "获取指定币种的实时市场价格",
 	parameters: z.object({
-		symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
+		symbol: z.string().describe("币种代码"),
 	}),
 	execute: async ({ symbol }) => {
+		const normalizedSymbol = await validateSymbol(symbol);
 		// 获取交易所客户端（优先实例上下文，回退全局）
 		const client = await getExchangeClient();
-		const contract = `${symbol}_USDT`;
+		const contract = `${normalizedSymbol}_USDT`;
 
 		const ticker = await client.getFuturesTicker(contract);
 
 		return {
-			symbol,
+			symbol: normalizedSymbol,
 			contract,
 			lastPrice: Number.parseFloat(ticker.last || "0"),
 			markPrice: Number.parseFloat(ticker.markPrice || "0"),
@@ -297,7 +352,7 @@ export const getTechnicalIndicatorsTool = createTool({
 	name: "getTechnicalIndicators",
 	description: "获取指定币种的技术指标（EMA、MACD、RSI等）",
 	parameters: z.object({
-		symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
+		symbol: z.string().describe("币种代码"),
 		interval: z
 			.enum(["1m", "3m", "5m", "15m", "30m", "1h", "4h"])
 			.default("5m")
@@ -305,15 +360,16 @@ export const getTechnicalIndicatorsTool = createTool({
 		limit: z.number().default(100).describe("K线数量"),
 	}),
 	execute: async ({ symbol, interval, limit }) => {
+		const normalizedSymbol = await validateSymbol(symbol);
 		// 获取交易所客户端（优先实例上下文，回退全局）
 		const client = await getExchangeClient();
-		const contract = `${symbol}_USDT`;
+		const contract = `${normalizedSymbol}_USDT`;
 
 		const candles = await client.getFuturesCandles(contract, interval, limit);
 		const indicators = calculateIndicators(candles);
 
 		return {
-			symbol,
+			symbol: normalizedSymbol,
 			interval,
 			...indicators,
 			timestamp: new Date().toISOString(),
@@ -328,17 +384,18 @@ export const getFundingRateTool = createTool({
 	name: "getFundingRate",
 	description: "获取指定币种的资金费率",
 	parameters: z.object({
-		symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
+		symbol: z.string().describe("币种代码"),
 	}),
 	execute: async ({ symbol }) => {
+		const normalizedSymbol = await validateSymbol(symbol);
 		// 获取交易所客户端（优先实例上下文，回退全局）
 		const client = await getExchangeClient();
-		const contract = `${symbol}_USDT`;
+		const contract = `${normalizedSymbol}_USDT`;
 
 		const fundingRate = await client.getFundingRate(contract);
 
 		return {
-			symbol,
+			symbol: normalizedSymbol,
 			fundingRate: Number.parseFloat(fundingRate.r || "0"),
 			fundingTime: fundingRate.t,
 			timestamp: new Date().toISOString(),
@@ -353,13 +410,14 @@ export const getOrderBookTool = createTool({
 	name: "getOrderBook",
 	description: "获取指定币种的订单簿深度数据",
 	parameters: z.object({
-		symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
+		symbol: z.string().describe("币种代码"),
 		limit: z.number().default(10).describe("深度档位数量"),
 	}),
 	execute: async ({ symbol, limit }) => {
+		const normalizedSymbol = await validateSymbol(symbol);
 		// 获取交易所客户端（优先实例上下文，回退全局）
 		const client = await getExchangeClient();
-		const contract = `${symbol}_USDT`;
+		const contract = `${normalizedSymbol}_USDT`;
 
 		const orderBook = await client.getOrderBook(contract, limit);
 
@@ -376,7 +434,7 @@ export const getOrderBookTool = createTool({
 			})) || [];
 
 		return {
-			symbol,
+			symbol: normalizedSymbol,
 			bids,
 			asks,
 			spread: asks[0]?.price - bids[0]?.price || 0,
@@ -392,13 +450,14 @@ export const getOpenInterestTool = createTool({
 	name: "getOpenInterest",
 	description: "获取指定币种的合约持仓量",
 	parameters: z.object({
-		symbol: z.enum(RISK_PARAMS.TRADING_SYMBOLS).describe("币种代码"),
+		symbol: z.string().describe("币种代码"),
 	}),
 	execute: async ({ symbol }) => {
+		const normalizedSymbol = await validateSymbol(symbol);
 		// OKX 暂未在现有客户端中实现该数据端点
 		// 暂时返回 0，后续可以通过其他端点获取
 		return {
-			symbol,
+			symbol: normalizedSymbol,
 			openInterest: 0,
 			timestamp: new Date().toISOString(),
 		};

@@ -54,6 +54,11 @@ const logger = createLogger({
 	level: "info",
 });
 
+const SNAPSHOT_MAX_AGE_MS = 10_000;
+const SNAPSHOT_WARN_AGE_MS = 3_000;
+const SNAPSHOT_PRICE_DEVIATION_WARN = 0.003;
+const SNAPSHOT_PRICE_DEVIATION_REJECT = 0.01;
+
 const dbClient = createClient({
 	url: getDatabaseUrl(),
 });
@@ -118,6 +123,14 @@ async function getCurrentProvider(): Promise<ExchangeProvider> {
 
 	// 3. 回退到全局配置
 	return await getExchangeProvider();
+}
+
+function parseTimestampMillis(value: string | null | undefined): number | null {
+	if (!value) {
+		return null;
+	}
+	const parsed = Date.parse(value);
+	return Number.isFinite(parsed) ? parsed : null;
 }
 
 const CONTRACT_UNIT_PROVIDERS = new Set<ExchangeProvider>(["okx", "gate"]);
@@ -498,6 +511,8 @@ export async function executeOpenPosition({
 	const unitLabel = useContractUnits ? "张" : "个";
 	const normalizedSymbol = symbol.toUpperCase();
 	const contract = `${normalizedSymbol}_USDT`;
+	const instanceContext = getCurrentInstanceContext();
+	const marketHealth = instanceContext?.marketDataHealth?.[normalizedSymbol];
 	const toolInput = {
 		symbol: normalizedSymbol,
 		side,
@@ -545,6 +560,16 @@ export async function executeOpenPosition({
 		finalize({ success: false, message, ...extra });
 
 	try {
+		if (marketHealth && !marketHealth.allowOpen) {
+			const missingText =
+				marketHealth.missingTimeframes.length > 0
+					? marketHealth.missingTimeframes.join(", ")
+					: "unknown";
+			return fail(
+				`该币种 ${normalizedSymbol} 当前市场数据状态为 ${marketHealth.dataStatus}，缺失周期: ${missingText}。为避免基于不完整快照开新仓，系统已禁止本轮开仓。`,
+			);
+		}
+
 		// 0. 检查白名单（优先使用策略级配置）
 		if (!skipWhitelistCheck) {
 			const allowedSymbols = await resolveAllowedTradingSymbols();
@@ -571,6 +596,21 @@ export async function executeOpenPosition({
 		// 获取当前价格和合约信息 (提前获取以便计算)
 		const ticker = await client.getFuturesTicker(contract);
 		const currentPrice = Number.parseFloat(ticker.last || "0");
+		const snapshotCollectedAt = parseTimestampMillis(marketHealth?.collectedAt);
+		if (snapshotCollectedAt !== null) {
+			const snapshotAgeMs = Date.now() - snapshotCollectedAt;
+			if (snapshotAgeMs > SNAPSHOT_MAX_AGE_MS) {
+				return fail(
+					`该币种 ${normalizedSymbol} 的市场快照已过期 ${(snapshotAgeMs / 1000).toFixed(1)} 秒，超过允许阈值 ${(SNAPSHOT_MAX_AGE_MS / 1000).toFixed(0)} 秒。请先刷新最新行情后再开仓。`,
+				);
+			}
+
+			if (snapshotAgeMs > SNAPSHOT_WARN_AGE_MS) {
+				logger.warn(
+					`${normalizedSymbol} 市场快照年龄 ${(snapshotAgeMs / 1000).toFixed(1)} 秒，已接近过期阈值，正在执行开仓前复核`,
+				);
+			}
+		}
 		const contractInfo = await client.getContractInfo(contract);
 		const infoMultiplier = Number.parseFloat(
 			String(contractInfo?.quantoMultiplier ?? ""),
@@ -582,6 +622,27 @@ export async function executeOpenPosition({
 
 		if (!currentPrice || currentPrice <= 0) {
 			return fail(`无法获取当前价格: ${contract}`);
+		}
+
+		if (
+			marketHealth &&
+			Number.isFinite(marketHealth.snapshotPrice) &&
+			marketHealth.snapshotPrice > 0
+		) {
+			const priceDeviation =
+				Math.abs(currentPrice - marketHealth.snapshotPrice) /
+				marketHealth.snapshotPrice;
+			if (priceDeviation > SNAPSHOT_PRICE_DEVIATION_REJECT) {
+				return fail(
+					`${normalizedSymbol} 最新价格 ${currentPrice.toFixed(4)} 与快照价格 ${marketHealth.snapshotPrice.toFixed(4)} 偏离 ${(priceDeviation * 100).toFixed(2)}%，超过 ${(SNAPSHOT_PRICE_DEVIATION_REJECT * 100).toFixed(2)}% 的开仓阈值，系统已拒绝本次开仓。`,
+				);
+			}
+
+			if (priceDeviation > SNAPSHOT_PRICE_DEVIATION_WARN) {
+				logger.warn(
+					`${normalizedSymbol} 最新价格 ${currentPrice.toFixed(4)} 与快照价格 ${marketHealth.snapshotPrice.toFixed(4)} 偏离 ${(priceDeviation * 100).toFixed(2)}%，已触发开仓前预警。`,
+				);
+			}
 		}
 
 		// Determine execution price

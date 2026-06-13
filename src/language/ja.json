@@ -89,6 +89,18 @@
 		"title": "意思決定リクエスト",
 		"empty": "意思決定リクエストはまだありません",
 		"summaryLabel": "応答サマリー",
+		"approval": {
+			"aiSummary": "AI 要約",
+			"riskSummary": "リスク要約",
+			"plannedActions": "計画アクション: {{value}}",
+			"approvedActions": "承認済み: {{value}}",
+			"executedActions": "実行済み: {{value}}",
+			"rejectedReasons": "拒否理由: {{value}}",
+			"holdReasons": "様子見理由: {{value}}",
+			"rejectedListTitle": "拒否の詳細",
+			"holdListTitle": "様子見の詳細",
+			"none": "なし"
+		},
 		"status": {
 			"success": "成功",
 			"error": "失敗",
@@ -99,6 +111,7 @@
 			"iteration": "イテレーション",
 			"model": "モデル",
 			"status": "ステータス",
+			"approval": "承認サマリー",
 			"instructions": "システム指示",
 			"prompt": "トレーディングプロンプト",
 			"response": "AI 出力",

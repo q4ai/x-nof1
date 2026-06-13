@@ -89,6 +89,18 @@
 		"title": "决策请求",
 		"empty": "暂无决策请求数据",
 		"summaryLabel": "响应摘要",
+		"approval": {
+			"aiSummary": "AI 摘要",
+			"riskSummary": "风险摘要",
+			"plannedActions": "计划动作：{{value}}",
+			"approvedActions": "审批通过：{{value}}",
+			"executedActions": "实际执行：{{value}}",
+			"rejectedReasons": "拒绝原因：{{value}}",
+			"holdReasons": "观望原因：{{value}}",
+			"rejectedListTitle": "拒绝明细",
+			"holdListTitle": "观望明细",
+			"none": "无"
+		},
 		"status": {
 			"success": "成功",
 			"error": "失败",
@@ -99,6 +111,7 @@
 			"iteration": "迭代",
 			"model": "模型",
 			"status": "状态",
+			"approval": "审批摘要",
 			"instructions": "系统指令",
 			"prompt": "交易提示词",
 			"response": "AI 输出",

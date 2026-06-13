@@ -12,6 +12,7 @@
 import { Client, createClient } from "@libsql/client";
 import { createOpenAI } from "@ai-sdk/openai";
 import { Agent } from "@voltagent/core";
+import { z } from "zod";
 import * as tradingTools from "../tools/trading";
 import { RISK_PARAMS, getConfigStringValue } from "../config/riskParams.new";
 import {
@@ -23,6 +24,7 @@ import { insertAgentRequestLog } from "../database/agent-request-logs";
 import { getLocalizedPromptTemplate } from "../prompts/templateLoader";
 import {
 	type InstanceContext,
+	type SymbolMarketDataHealth,
 	runWithInstanceContext,
 } from "../services/instanceContext";
 import {
@@ -44,6 +46,8 @@ const logger = createLogger({
 const dbClient = createClient({
 	url: getDatabaseUrl(),
 });
+
+const REQUIRED_OPEN_TIMEFRAMES = ["5m", "15m", "1h"] as const;
 
 /**
  * 交易动作记录类型
@@ -68,6 +72,96 @@ interface RecentDecisionRecord {
 	positionsCount: number | null;
 }
 
+interface MarketDataSnapshot {
+	price: number;
+	change24h: number;
+	volume24h: number;
+	ema20: number | null;
+	ema50: number | null;
+	macd: number | null;
+	rsi7: number | null;
+	rsi14: number | null;
+	fundingRate: number;
+	timeframes: Record<string, TimeframeSummary>;
+	intradaySeries: IntradaySeriesSnapshot | null;
+	dataHealth: SymbolMarketDataHealth;
+}
+
+const decisionActionSchema = z.discriminatedUnion("action", [
+	z.object({
+		action: z.literal("hold"),
+		reason: z.string().min(1),
+		symbol: z.string().optional(),
+		confidence: z.number().min(0).max(1).optional(),
+	}),
+	z.object({
+		action: z.literal("open"),
+		symbol: z.string().min(1),
+		side: z.enum(["long", "short"]),
+		leverage: z.number().min(1).max(RISK_PARAMS.MAX_LEVERAGE),
+		amountUsdt: z.number().positive(),
+		isNotional: z.boolean().optional().default(false),
+		reason: z.string().min(1),
+		confidence: z.number().min(0).max(1).optional(),
+	}),
+	z.object({
+		action: z.literal("close"),
+		symbol: z.string().min(1),
+		percentage: z.number().min(1).max(100).default(100),
+		reason: z.string().min(1),
+		confidence: z.number().min(0).max(1).optional(),
+	}),
+]);
+
+const decisionPlanSchema = z.object({
+	summary: z.string().default(""),
+	riskSummary: z.string().optional(),
+	actions: z.array(decisionActionSchema).max(5).default([]),
+});
+
+type DecisionPlan = z.infer<typeof decisionPlanSchema>;
+type DecisionAction = DecisionPlan["actions"][number];
+type ApprovedDecisionAction =
+	| Extract<DecisionAction, { action: "open" }>
+	| Extract<DecisionAction, { action: "close" }>;
+
+interface DecisionApprovalResult {
+	approvedActions: ApprovedDecisionAction[];
+	rejectedReasons: string[];
+	holdReasons: string[];
+}
+
+interface ExecutionSummary {
+	approvedActions: number;
+	executedActions: number;
+	rejectedReasons: string[];
+	holdReasons: string[];
+}
+
+interface DecisionConsistencyCheckResult {
+	plan: DecisionPlan;
+	corrections: string[];
+}
+
+interface ApprovalConstraints {
+	maxPositions: number;
+	activePositionsCount: number;
+	currentPositionSymbols: Set<string>;
+	strategyLeverageLimit: number;
+}
+
+interface ActionExecutionResult {
+	success: boolean;
+	message: string;
+	orderId?: string;
+	size?: number;
+	closedSize?: number;
+}
+
+const MIN_OPEN_CONFIDENCE = 0.65;
+const MIN_CLOSE_CONFIDENCE = 0.55;
+const MAX_OPEN_ACTIONS_PER_CYCLE = 1;
+
 /**
  * 安全转换为字符串
  */
@@ -85,6 +179,405 @@ function toSafeNumber(value: unknown): number | null {
 	if (typeof value === "bigint") return Number(value);
 	const parsed = Number.parseFloat(String(value));
 	return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getStructuredDecisionInstruction(language: StrategyLanguage): string {
+	if (language === "zh") {
+		return [
+			"【结构化决策输出要求】",
+			"- 你只能使用只读工具进行补充分析，不能直接执行开仓、平仓或撤单。",
+			"- 必须以当前提示词中的最新市场快照为最高优先级；历史决策记录只用于连续性参考，若与当前快照冲突，必须忽略历史记录。",
+			"- 如果数据质量摘要显示某个币种为“完整 / 允许开新仓”，则禁止声称该币种“技术指标为空”“只有价格没有指标”或“市场数据缺失”。",
+			"- 如果策略需要盘口深度确认，而当前快照未直接给出盘口深度，你必须先调用 getOrderBook 工具核实，不能把“尚未查询”表述成“数据缺失”。",
+			"- 在 summary 和 riskSummary 中，只能描述你已在当前快照或只读工具结果中实际看到的数据，不得编造“数据为空”“指标缺失”等与当前输入矛盾的结论。",
+			"- 最终必须输出单个 JSON 对象，不要输出额外解释文本。",
+			"- JSON 结构如下：",
+			'{"summary":"本轮简要结论","riskSummary":"风险概览","actions":[{"action":"hold","reason":"说明"},{"action":"open","symbol":"BTC","side":"long","leverage":5,"amountUsdt":100,"isNotional":false,"reason":"说明","confidence":0.72},{"action":"close","symbol":"ETH","percentage":100,"reason":"说明","confidence":0.81}]}',
+			"- 如果当前没有合适交易，只输出 hold 动作。",
+			"- amountUsdt 使用正数，confidence 范围为 0 到 1。",
+		].join("\n");
+	}
+
+	if (language === "ja") {
+		return [
+			"[構造化された意思決定出力ルール]",
+			"- 読み取り専用ツールのみ利用し、建玉・決済・取消を直接実行してはいけません。",
+			"- 現在のプロンプトに含まれる最新マーケットスナップショットを最優先とし、履歴判断は参考のみにしてください。現在のスナップショットと矛盾する履歴は無視してください。",
+			"- データ品質サマリーが『完全 / 新規建て可』を示している銘柄について、『指標が空』『価格しかない』『データ欠落』と記述してはいけません。",
+			"- 板情報が必要で現在のスナップショットに直接含まれていない場合は、getOrderBook を呼んで確認してから判断してください。未照会をデータ欠落と表現してはいけません。",
+			"- summary と riskSummary では、現在のスナップショットまたは読み取り専用ツールで実際に確認した内容のみを記述してください。",
+			"- 最終出力は単一の JSON オブジェクトのみとし、追加説明は出力しないでください。",
+			"- JSON 形式:",
+			'{"summary":"結論","riskSummary":"リスク概要","actions":[{"action":"hold","reason":"理由"},{"action":"open","symbol":"BTC","side":"long","leverage":5,"amountUsdt":100,"isNotional":false,"reason":"理由","confidence":0.72},{"action":"close","symbol":"ETH","percentage":100,"reason":"理由","confidence":0.81}]}',
+			"- 適切な取引がない場合は hold のみを返してください。",
+			"- amountUsdt は正数、confidence は 0 から 1 の範囲です。",
+		].join("\n");
+	}
+
+	return [
+		"[Structured Decision Output Requirements]",
+		"- Use read-only tools only. Do not directly open, close, or cancel orders.",
+		"- Treat the latest market snapshot in this prompt as the highest-priority source of truth. Historical decisions are reference only and must be ignored when they conflict with current data.",
+		"- If the data quality summary marks a symbol as complete / allowed for new positions, you must not claim its indicators are missing, empty, or unavailable.",
+		"- If the strategy needs order book confirmation and the snapshot does not directly include it, call getOrderBook first. Do not describe an unchecked field as missing data.",
+		"- In summary and riskSummary, only describe facts actually present in the current snapshot or returned by read-only tools.",
+		"- Your final answer must be a single JSON object with no extra text.",
+		"- JSON schema:",
+		'{"summary":"brief conclusion","riskSummary":"risk overview","actions":[{"action":"hold","reason":"why"},{"action":"open","symbol":"BTC","side":"long","leverage":5,"amountUsdt":100,"isNotional":false,"reason":"why","confidence":0.72},{"action":"close","symbol":"ETH","percentage":100,"reason":"why","confidence":0.81}]}',
+		"- If there is no suitable trade, return only a hold action.",
+		"- amountUsdt must be positive, confidence must be between 0 and 1.",
+	].join("\n");
+}
+
+function extractDecisionTextFromResponse(response: unknown): string {
+	if (typeof response === "string") {
+		return response;
+	}
+
+	if (response && typeof response === "object") {
+		const steps = (response as { steps?: Array<{ content?: Array<{ type?: string; text?: string }>; text?: string }> }).steps || [];
+		const allTexts: string[] = [];
+		for (const step of steps) {
+			if (step.content && Array.isArray(step.content)) {
+				for (const item of step.content) {
+					if (item.type === "text" && item.text) {
+						allTexts.push(item.text.trim());
+					}
+				}
+			} else if (step.text) {
+				allTexts.push(step.text.trim());
+			}
+		}
+		return allTexts.join("\n\n");
+	}
+
+	return "";
+}
+
+function extractJsonCandidates(text: string): string[] {
+	const candidates: string[] = [];
+	const trimmed = text.trim();
+	if (!trimmed) {
+		return candidates;
+	}
+
+	const fencedPattern = /```json\s*([\s\S]*?)```/gi;
+	for (const match of trimmed.matchAll(fencedPattern)) {
+		const candidate = match[1]?.trim();
+		if (candidate) {
+			candidates.push(candidate);
+		}
+	}
+
+	candidates.push(trimmed);
+	const firstBrace = trimmed.indexOf("{");
+	const lastBrace = trimmed.lastIndexOf("}");
+	if (firstBrace >= 0 && lastBrace > firstBrace) {
+		candidates.push(trimmed.slice(firstBrace, lastBrace + 1));
+	}
+
+	return Array.from(new Set(candidates));
+}
+
+function parseDecisionPlan(decisionText: string): DecisionPlan {
+	for (const candidate of extractJsonCandidates(decisionText)) {
+		try {
+			const parsed = JSON.parse(candidate) as unknown;
+			const validated = decisionPlanSchema.safeParse(parsed);
+			if (validated.success) {
+				return validated.data;
+			}
+		} catch {
+			// 尝试下一个候选
+		}
+	}
+
+	throw new Error("AI 未返回符合要求的结构化 JSON 决策");
+}
+
+function containsSevereDataFailureClaim(text: string): boolean {
+	const normalized = text.trim();
+	if (!normalized) {
+		return false;
+	}
+
+	return /API返回异常|API异常|数据质量异常|数据不完整|数据不满足开仓条件|技术指标和盘口深度数据无效|技术指标为空|技术指标数据缺失|指标为空|只有价格|市场数据缺失|无法获取有效技术指标|无法获取有效的技术指标和盘口深度数据|market data.*exception|indicator.*missing|only price|incomplete data/i.test(
+		normalized,
+	);
+}
+
+function hasSufficientIndicatorsInSnapshot(
+	marketData: Record<string, any> | undefined,
+): boolean {
+	if (!marketData) {
+		return false;
+	}
+
+	const snapshots = Object.values(marketData) as Array<Record<string, unknown>>;
+	if (snapshots.length === 0) {
+		return false;
+	}
+
+	const indicatorReadyCount = snapshots.filter((snapshot) => {
+		const macd = snapshot.macd;
+		const rsi7 = snapshot.rsi7;
+		const rsi14 = snapshot.rsi14;
+		const volume24h = snapshot.volume24h;
+		const hasMacd = typeof macd === "number" && Number.isFinite(macd);
+		const hasRsi7 = typeof rsi7 === "number" && Number.isFinite(rsi7);
+		const hasRsi14 = typeof rsi14 === "number" && Number.isFinite(rsi14);
+		const hasVolume = typeof volume24h === "number" && Number.isFinite(volume24h) && volume24h > 0;
+		return hasMacd && hasRsi7 && hasRsi14 && hasVolume;
+	}).length;
+
+	// 超过半数币种具备核心指标，即认为“全局数据缺失”说法不成立。
+	return indicatorReadyCount >= Math.max(1, Math.ceil(snapshots.length / 2));
+}
+
+function buildConsistentHoldReason(language: StrategyLanguage): string {
+	if (language === "ja") {
+		return "現在のマーケットスナップショットは利用可能ですが、戦略条件を同時に満たす高確度シグナルが不足しているため、今サイクルは様子見します。";
+	}
+	if (language === "en") {
+		return "Current market snapshot is available, but there is no high-conviction setup that satisfies the strategy conditions simultaneously in this cycle, so hold.";
+	}
+	return "当前市场快照与技术指标可用，但本轮尚未出现同时满足策略条件的高把握度入场信号，维持观望。";
+}
+
+function enforceDecisionConsistency(
+	plan: DecisionPlan,
+	marketData: Record<string, any> | undefined,
+	marketDataHealth: Record<string, SymbolMarketDataHealth> | undefined,
+	language: StrategyLanguage,
+): DecisionConsistencyCheckResult {
+	if (!marketDataHealth) {
+		return { plan, corrections: [] };
+	}
+
+	const healthList = Object.values(marketDataHealth);
+	if (healthList.length === 0) {
+		return { plan, corrections: [] };
+	}
+
+	const allSymbolsReady = healthList.every(
+		(item) => item.dataStatus === "ok" && item.allowOpen,
+	);
+	const indicatorsReady = hasSufficientIndicatorsInSnapshot(marketData);
+
+	if (!allSymbolsReady && !indicatorsReady) {
+		return { plan, corrections: [] };
+	}
+
+	const hasContradictionInSummary =
+		containsSevereDataFailureClaim(plan.summary) ||
+		containsSevereDataFailureClaim(plan.riskSummary ?? "");
+	const hasContradictionInHolds = plan.actions.some(
+		(action) =>
+			action.action === "hold" && containsSevereDataFailureClaim(action.reason),
+	);
+
+	if (!hasContradictionInSummary && !hasContradictionInHolds) {
+		return { plan, corrections: [] };
+	}
+
+	const correctedHoldReason = buildConsistentHoldReason(language);
+	const correctedActions = plan.actions.map((action) => {
+		if (action.action !== "hold") {
+			return action;
+		}
+		return {
+			...action,
+			reason: correctedHoldReason,
+		};
+	});
+
+	const correctedPlan: DecisionPlan = {
+		...plan,
+		summary: correctedHoldReason,
+		riskSummary:
+			language === "ja"
+				? "アカウント残高とポジション状況は安定しています。本サイクルはデータ欠損ではなく、戦略一致度と確度が不十分なため見送りです。"
+				: language === "en"
+					? "Account balance and position status are stable. This cycle is a hold due to insufficient strategy alignment and conviction, not because of missing market data."
+					: "账户余额与持仓状态稳定。本轮观望的原因是策略一致性与把握度不足，而不是市场数据缺失。",
+		actions: correctedActions,
+	};
+
+	return {
+		plan: correctedPlan,
+		corrections: [
+			language === "ja"
+				? "一貫性ガード: データが完全な状態で『データ欠損』と矛盾する記述を自動修正しました。"
+				: language === "en"
+					? "Consistency guard: Auto-corrected contradictory 'data missing/API exception' claims while data health is complete."
+					: "一致性守卫：在数据质量为完整时，自动修正了“数据缺失/API异常”这类矛盾描述。",
+		],
+	};
+}
+
+function approveDecisionPlan(
+	plan: DecisionPlan,
+	allowedSymbols: Set<string>,
+	marketDataHealth: Record<string, SymbolMarketDataHealth> | undefined,
+	constraints: ApprovalConstraints,
+): DecisionApprovalResult {
+	const approvedActions: ApprovedDecisionAction[] = [];
+	const rejectedReasons: string[] = [];
+	const holdReasons: string[] = [];
+	const plannedSymbols = new Set<string>();
+	const openTargets = new Set<string>();
+	let approvedOpenCount = 0;
+
+	for (const action of plan.actions) {
+		if (action.action === "hold") {
+			holdReasons.push(action.reason);
+			continue;
+		}
+
+		const normalizedSymbol = action.symbol.trim().toUpperCase();
+		if (!normalizedSymbol) {
+			rejectedReasons.push("存在空白 symbol 的决策动作，已拒绝执行");
+			continue;
+		}
+
+		if (plannedSymbols.has(`${action.action}:${normalizedSymbol}`)) {
+			rejectedReasons.push(`拒绝重复动作 ${action.action} ${normalizedSymbol}：同一轮不允许重复提交相同指令`);
+			continue;
+		}
+		plannedSymbols.add(`${action.action}:${normalizedSymbol}`);
+
+		if (
+			action.action === "close" &&
+			openTargets.has(normalizedSymbol)
+		) {
+			rejectedReasons.push(`拒绝平仓 ${normalizedSymbol}：同一轮已存在该币种的开仓动作，避免自相矛盾`);
+			continue;
+		}
+
+		if (action.action === "open") {
+			if (!allowedSymbols.has(normalizedSymbol)) {
+				rejectedReasons.push(`拒绝开仓 ${normalizedSymbol}：不在当前策略允许的交易列表中`);
+				continue;
+			}
+
+			if ((action.confidence ?? 0) < MIN_OPEN_CONFIDENCE) {
+				rejectedReasons.push(
+					`拒绝开仓 ${normalizedSymbol}：置信度 ${(action.confidence ?? 0).toFixed(2)} 低于阈值 ${MIN_OPEN_CONFIDENCE.toFixed(2)}`,
+				);
+				continue;
+			}
+
+			if (action.leverage > constraints.strategyLeverageLimit) {
+				rejectedReasons.push(
+					`拒绝开仓 ${normalizedSymbol}：请求杠杆 ${action.leverage}x 超过策略上限 ${constraints.strategyLeverageLimit}x`,
+				);
+				continue;
+			}
+
+			if (openTargets.has(normalizedSymbol)) {
+				rejectedReasons.push(`拒绝开仓 ${normalizedSymbol}：同一轮已存在该币种开仓动作`);
+				continue;
+			}
+
+			if (approvedOpenCount >= MAX_OPEN_ACTIONS_PER_CYCLE) {
+				rejectedReasons.push(
+					`拒绝开仓 ${normalizedSymbol}：单轮最多只允许 ${MAX_OPEN_ACTIONS_PER_CYCLE} 个新开仓动作`,
+				);
+				continue;
+			}
+
+			if (
+				constraints.activePositionsCount + approvedOpenCount >=
+				constraints.maxPositions
+			) {
+				rejectedReasons.push(
+					`拒绝开仓 ${normalizedSymbol}：执行后持仓数将超过策略上限 ${constraints.maxPositions}`,
+				);
+				continue;
+			}
+
+			const dataHealth = marketDataHealth?.[normalizedSymbol];
+			if (!dataHealth || !dataHealth.allowOpen) {
+				rejectedReasons.push(
+					`拒绝开仓 ${normalizedSymbol}：当前市场数据状态为 ${dataHealth?.dataStatus ?? "missing"}`,
+				);
+				continue;
+			}
+
+			approvedActions.push({
+				...action,
+				symbol: normalizedSymbol,
+			});
+			openTargets.add(normalizedSymbol);
+			approvedOpenCount += 1;
+			continue;
+		}
+
+		if ((action.confidence ?? 0) < MIN_CLOSE_CONFIDENCE) {
+			rejectedReasons.push(
+				`拒绝平仓 ${normalizedSymbol}：置信度 ${(action.confidence ?? 0).toFixed(2)} 低于阈值 ${MIN_CLOSE_CONFIDENCE.toFixed(2)}`,
+			);
+			continue;
+		}
+
+		if (!constraints.currentPositionSymbols.has(normalizedSymbol)) {
+			rejectedReasons.push(`拒绝平仓 ${normalizedSymbol}：当前没有该币种持仓`);
+			continue;
+		}
+
+		approvedActions.push({
+			...action,
+			symbol: normalizedSymbol,
+		});
+	}
+
+	return {
+		approvedActions,
+		rejectedReasons,
+		holdReasons,
+	};
+}
+
+async function executeApprovedDecisionPlan(
+	approval: DecisionApprovalResult,
+): Promise<ExecutionSummary> {
+	let executedActions = 0;
+
+	for (const action of approval.approvedActions) {
+		let result: ActionExecutionResult;
+		if (action.action === "open") {
+			result = (await tradingTools.executeOpenPosition({
+				symbol: action.symbol,
+				side: action.side,
+				leverage: action.leverage,
+				amountUsdt: action.amountUsdt,
+				isNotional: action.isNotional,
+			})) as ActionExecutionResult;
+		} else {
+			result = (await tradingTools.executeClosePosition({
+				symbol: action.symbol,
+				percentage: action.percentage,
+				skipGuards: false,
+				enforceWhitelist: false,
+			})) as ActionExecutionResult;
+		}
+
+		if (!result.success) {
+			approval.rejectedReasons.push(
+				`执行 ${action.action} ${action.symbol} 失败: ${result.message}`,
+			);
+			continue;
+		}
+
+		executedActions += 1;
+	}
+
+	return {
+		approvedActions: approval.approvedActions.length,
+		executedActions,
+		rejectedReasons: approval.rejectedReasons,
+		holdReasons: approval.holdReasons,
+	};
 }
 
 /**
@@ -517,6 +1010,7 @@ async function createAgentForInstance(
 	try {
 		const template = await getLocalizedPromptTemplate("instructions", language);
 		instructions = applyTemplateVariables(template, templateVariables);
+		instructions = `${instructions}\n\n${getStructuredDecisionInstruction(language)}`;
 		logger.debug(
 			`[实例 ${config.instanceName}] 使用 instructions_${language}.txt 模板`,
 		);
@@ -544,16 +1038,11 @@ async function createAgentForInstance(
 			tradingTools.getTechnicalIndicatorsTool,
 			tradingTools.getFundingRateTool,
 			tradingTools.getOrderBookTool,
-			tradingTools.openPositionTool,
-			tradingTools.closePositionTool,
-			tradingTools.cancelOrderTool,
 			tradingTools.getAccountBalanceTool,
 			tradingTools.getPositionsTool,
 			tradingTools.getOpenOrdersTool,
 			tradingTools.checkOrderStatusTool,
 			tradingTools.calculateRiskTool,
-			tradingTools.syncPositionsTool,
-			tradingTools.sendEmergencyNoticeTool,
 		],
 	});
 
@@ -572,7 +1061,7 @@ async function collectMarketDataForInstance(
 	symbols: string[],
 	accountId: number,
 ): Promise<Record<string, any>> {
-	const marketData: Record<string, any> = {};
+	const marketData: Record<string, MarketDataSnapshot> = {};
 	const timeframeConfigs = [
 		{ key: "1m", interval: "1m", limit: 120 },
 		{ key: "3m", interval: "3m", limit: 120 },
@@ -585,6 +1074,7 @@ async function collectMarketDataForInstance(
 	for (const symbol of symbols) {
 		try {
 			const contract = `${symbol}_USDT`;
+			const collectedAt = new Date().toISOString();
 			const [ticker, fundingRate] = await Promise.all([
 				exchangeClient.getFuturesTicker(contract),
 				exchangeClient.getFundingRate(contract).catch((error: unknown) => {
@@ -628,6 +1118,37 @@ async function collectMarketDataForInstance(
 
 			// 诊断日志：检查 K 线数据获取情况
 			const availableTimeframes = Object.keys(candleResults);
+			const missingTimeframes = timeframeConfigs
+				.map((cfg) => cfg.key)
+				.filter((key) => !availableTimeframes.includes(key));
+			const coreTimeframesReady = REQUIRED_OPEN_TIMEFRAMES.every((timeframe) =>
+				availableTimeframes.includes(timeframe),
+			);
+			const dataStatus: SymbolMarketDataHealth["dataStatus"] =
+				availableTimeframes.length === 0
+					? "invalid"
+					: coreTimeframesReady
+						? "ok"
+						: "partial";
+			const qualityScore = Math.max(
+				0,
+				Math.min(
+					100,
+					Math.round(
+						(availableTimeframes.length / timeframeConfigs.length) * 70 +
+							(coreTimeframesReady ? 30 : 0),
+					),
+				),
+			);
+			const dataHealth: SymbolMarketDataHealth = {
+				dataStatus,
+				allowOpen: dataStatus === "ok",
+				qualityScore,
+				missingTimeframes,
+				coreTimeframesReady,
+				collectedAt,
+				snapshotPrice: price,
+			};
 			if (availableTimeframes.length === 0) {
 				logger.error(
 					`${symbol} 所有时间框架的 K 线数据都获取失败！这会导致所有指标为默认值。`,
@@ -713,11 +1234,11 @@ async function collectMarketDataForInstance(
 				return 0;
 			})();
 
-			const ema20 = baseTimeframe?.ema20 ?? 0;
-			const ema50 = baseTimeframe?.ema50 ?? 0;
-			const macd = baseTimeframe?.macd ?? 0;
-			const rsi7 = baseTimeframe?.rsi7 ?? 50;
-			const rsi14 = baseTimeframe?.rsi14 ?? 50;
+			const ema20 = baseTimeframe?.ema20 ?? null;
+			const ema50 = baseTimeframe?.ema50 ?? null;
+			const macd = baseTimeframe?.macd ?? null;
+			const rsi7 = baseTimeframe?.rsi7 ?? null;
+			const rsi14 = baseTimeframe?.rsi14 ?? null;
 
 			// 解析 24h 成交量（支持多种字段名）
 			const volume24hRaw =
@@ -747,6 +1268,7 @@ async function collectMarketDataForInstance(
 				fundingRate: fundingRateValue,
 				timeframes,
 				intradaySeries,
+				dataHealth,
 			};
 		} catch (error) {
 			logger.error(`收集 ${symbol} 市场数据失败:`, error);
@@ -1088,6 +1610,7 @@ export async function executeInstanceTradingDecision(
 		await runWithInstanceContext(instanceContext, async () => {
 			await executeWithContext(
 				config,
+				instanceContext,
 				exchangeClient,
 				instance.interval_minutes,
 				statusContext,
@@ -1114,6 +1637,7 @@ export async function executeInstanceTradingDecision(
  */
 async function executeWithContext(
 	config: InstanceExecutionConfig,
+	instanceContext: InstanceContext,
 	exchangeClient: any,
 	intervalMinutes: number,
 	statusContext: TradingStatusContext,
@@ -1123,6 +1647,7 @@ async function executeWithContext(
 	// 1. 获取交易对列表
 	const symbols = await getStrategySymbols(strategyName);
 	logger.info(`[实例 ${instanceName}] 交易对: ${symbols.join(", ")}`);
+	const strategy = await StrategyFileManager.loadStrategy(strategyName);
 
 	// 广播收集数据状态
 	websocketService.pushTradingStatus(
@@ -1137,6 +1662,12 @@ async function executeWithContext(
 		exchangeClient,
 		symbols,
 		accountId,
+	);
+	instanceContext.marketDataHealth = Object.fromEntries(
+		Object.entries(marketData).map(([symbol, snapshot]) => [
+			symbol,
+			snapshot.dataHealth,
+		]),
 	);
 	const validSymbols = Object.keys(marketData).filter(
 		(s) => marketData[s].price > 0,
@@ -1250,35 +1781,64 @@ async function executeWithContext(
 		throw aiCallError;
 	}
 
-	// 正常处理 AI 响应
-	if (typeof response === "string") {
-		decisionText = response;
-	} else if (response && typeof response === "object") {
-		const steps = (response as any).steps || [];
-		const allTexts: string[] = [];
-		for (const step of steps) {
-			if (step.content && Array.isArray(step.content)) {
-				for (const item of step.content) {
-					if (item.type === "text" && item.text) {
-						allTexts.push(item.text.trim());
-					}
-				}
-			} else if (step.text) {
-				allTexts.push(step.text.trim());
-			}
-		}
-		decisionText = allTexts.join("\n\n");
-	}
+	decisionText = extractDecisionTextFromResponse(response);
 
 	logger.info(`[实例 ${instanceName}] AI 决策完成`);
 	logger.debug(
 		`[实例 ${instanceName}] 决策内容: ${decisionText.substring(0, 500)}...`,
 	);
 
+	const decisionPlan = parseDecisionPlan(decisionText);
+	const promptLanguage = await getPromptLanguage();
+	const consistencyResult = enforceDecisionConsistency(
+		decisionPlan,
+		marketData,
+		instanceContext.marketDataHealth,
+		promptLanguage,
+	);
+	const finalDecisionPlan = consistencyResult.plan;
+	const approval = approveDecisionPlan(
+		finalDecisionPlan,
+		new Set(symbols.map((symbol) => symbol.toUpperCase())),
+		instanceContext.marketDataHealth,
+		{
+			maxPositions:
+				strategy?.params?.maxPositions ?? RISK_PARAMS.MAX_POSITIONS,
+			activePositionsCount: activePositions.length,
+			currentPositionSymbols: new Set(
+				activePositions.map((position: any) =>
+					String(position.contract || "").replace("_USDT", "").toUpperCase(),
+				),
+			),
+			strategyLeverageLimit:
+				strategy?.params?.leverage ?? RISK_PARAMS.MAX_LEVERAGE,
+		},
+	);
+
+	if (consistencyResult.corrections.length > 0) {
+		approval.rejectedReasons.push(...consistencyResult.corrections);
+		logger.warn(
+			`[实例 ${instanceName}] 已触发决策一致性纠偏: ${consistencyResult.corrections.join(" | ")}`,
+		);
+	}
+
+	if (approval.approvedActions.length > 0) {
+		websocketService.pushTradingStatus(
+			"executing_trades",
+			`审批通过 ${approval.approvedActions.length} 个交易动作，准备执行`,
+			"scheduled",
+			statusContext,
+		);
+	}
+
+	const executionSummary = await executeApprovedDecisionPlan(approval);
+	const actionCaptureFinishedAt = getChinaTimeISO();
+	const decisionRecordText = `${JSON.stringify(finalDecisionPlan, null, 2)}\n\n[Approval]\n${JSON.stringify(executionSummary, null, 2)}`;
+
 	// 9. 获取执行期间的交易动作
 	const actionsTakenRecords = await getTradeActionsBetween(
 		executionStartedAt,
-		decisionTimestamp,
+		actionCaptureFinishedAt,
 		accountId,
 	);
 	if (actionsTakenRecords.length > 0) {
@@ -1300,7 +1860,7 @@ async function executeWithContext(
 		modelName,
 		instructions,
 		prompt,
-		response: decisionText,
+		response: decisionRecordText,
 		status: "success",
 		errorMessage: null,
 		createdAt: decisionTimestamp,
@@ -1320,7 +1880,7 @@ async function executeWithContext(
 			executionStartedAt,
 			0, // iteration 对于实例执行不太重要
 			JSON.stringify(marketData),
-			decisionText,
+			decisionRecordText,
 			JSON.stringify(actionsTakenRecords),
 			totalBalance,
 			activePositions.length,
@@ -1428,8 +1988,15 @@ async function generateInstancePrompt(params: {
 		recentDecisions,
 		language,
 	);
+	const structuredReminder = getStructuredDecisionInstruction(language);
 
-	return [promptHeader, marketSection, accountSection, recentDecisionSection]
+	return [
+		promptHeader,
+		structuredReminder,
+		marketSection,
+		accountSection,
+		recentDecisionSection,
+	]
 		.filter(Boolean)
 		.join("\n\n");
 }
@@ -1442,6 +2009,31 @@ function formatNumberSeries(series: number[], decimals = 2): string {
 		return "[]";
 	}
 	return `[${series.map((value) => value.toFixed(decimals)).join(", ")}]`;
+}
+
+function formatOptionalMetric(
+	value: number | null | undefined,
+	decimals: number,
+	language: StrategyLanguage,
+): string {
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		return language === "zh" ? "不可用" : "Unavailable";
+	}
+	return value.toFixed(decimals);
+}
+
+function describeDataStatus(
+	status: SymbolMarketDataHealth["dataStatus"],
+	language: StrategyLanguage,
+): string {
+	if (language === "zh") {
+		if (status === "ok") return "完整";
+		if (status === "partial") return "部分缺失";
+		return "不可用";
+	}
+	if (status === "ok") return "Complete";
+	if (status === "partial") return "Partial";
+	return "Invalid";
 }
 
 function formatMarketDataForPrompt(
@@ -1457,6 +2049,43 @@ function formatMarketDataForPrompt(
 	const lines: string[] = [separator];
 	const header = language === "zh" ? "【市场行情快照】" : "[Market Snapshot]";
 	lines.push(header);
+	lines.push("");
+	const openableSymbols: string[] = [];
+	const restrictedSymbols: string[] = [];
+	const invalidSymbols: string[] = [];
+	for (const symbol of symbols) {
+		const dataHealth = marketData[symbol]?.dataHealth as
+			| SymbolMarketDataHealth
+			| undefined;
+		if (!dataHealth) {
+			restrictedSymbols.push(symbol);
+			continue;
+		}
+		if (dataHealth.dataStatus === "ok") {
+			openableSymbols.push(symbol);
+		} else if (dataHealth.dataStatus === "partial") {
+			restrictedSymbols.push(symbol);
+		} else {
+			invalidSymbols.push(symbol);
+		}
+	}
+	lines.push(language === "zh" ? "数据质量摘要" : "Data quality summary");
+	lines.push("");
+	lines.push(
+		language === "zh"
+			? `可正常分析并允许开新仓: ${openableSymbols.length > 0 ? openableSymbols.join(", ") : "无"}`
+			: `Eligible for full analysis and new positions: ${openableSymbols.length > 0 ? openableSymbols.join(", ") : "None"}`,
+	);
+	lines.push(
+		language === "zh"
+			? `仅允许减仓或观望: ${restrictedSymbols.length > 0 ? restrictedSymbols.join(", ") : "无"}`
+			: `Reduce-only or observe-only: ${restrictedSymbols.length > 0 ? restrictedSymbols.join(", ") : "None"}`,
+	);
+	lines.push(
+		language === "zh"
+			? `数据不可用: ${invalidSymbols.length > 0 ? invalidSymbols.join(", ") : "无"}`
+			: `Invalid market data: ${invalidSymbols.length > 0 ? invalidSymbols.join(", ") : "None"}`,
+	);
 	lines.push("");
 	lines.push(language === "zh" ? "所有币种的当前市场状态" : "All symbols current market status");
 	lines.push("");
@@ -1482,20 +2111,42 @@ function formatMarketDataForPrompt(
 		const ema20 = Number(data.ema20 || 0);
 		const ema50 = Number(data.ema50 || 0);
 		const macd = Number(data.macd || 0);
-		const rsi7 = Number(data.rsi7 || 0);
-		const rsi14 = Number(data.rsi14 || 0);
+		const rsi7 =
+			typeof data.rsi7 === "number" && Number.isFinite(data.rsi7)
+				? Number(data.rsi7)
+				: null;
+		const rsi14 =
+			typeof data.rsi14 === "number" && Number.isFinite(data.rsi14)
+				? Number(data.rsi14)
+				: null;
+		const resolvedEma20 =
+			typeof data.ema20 === "number" && Number.isFinite(data.ema20)
+				? Number(data.ema20)
+				: null;
+		const resolvedMacd =
+			typeof data.macd === "number" && Number.isFinite(data.macd)
+				? Number(data.macd)
+				: null;
 		const fundingRate = Number(data.fundingRate || 0);
 		const volume24h = Number(data.volume24h || 0);
 		const timeframes: Record<string, TimeframeSummary> = data.timeframes || {};
 		const intradaySeries: IntradaySeriesSnapshot | null = data.intradaySeries || null;
+		const dataHealth: SymbolMarketDataHealth | undefined = data.dataHealth;
 
 		const sectionTitle =
 			language === "zh" ? `所有 ${symbol} 数据` : `All ${symbol} data`;
 		lines.push(sectionTitle);
+		if (dataHealth) {
+			lines.push(
+				language === "zh"
+					? `数据状态 = ${describeDataStatus(dataHealth.dataStatus, language)} | 开新仓 = ${dataHealth.allowOpen ? "允许" : "禁止"} | 完整性评分 = ${dataHealth.qualityScore}/100 | 缺失周期 = ${dataHealth.missingTimeframes.length > 0 ? dataHealth.missingTimeframes.join(", ") : "无"} | 采集时间 = ${dataHealth.collectedAt}`
+					: `Data status = ${describeDataStatus(dataHealth.dataStatus, language)} | New positions = ${dataHealth.allowOpen ? "allowed" : "blocked"} | Quality score = ${dataHealth.qualityScore}/100 | Missing timeframes = ${dataHealth.missingTimeframes.length > 0 ? dataHealth.missingTimeframes.join(", ") : "none"} | Collected at = ${dataHealth.collectedAt}`,
+			);
+		}
 		lines.push(
 			language === "zh"
-				? `当前价格 = ${price.toFixed(2)}, 当前EMA20 = ${ema20.toFixed(3)}, 当前MACD = ${macd.toFixed(3)}, 当前RSI（7周期） = ${rsi7.toFixed(3)}`
-				: `Current price = ${price.toFixed(2)}, Current EMA20 = ${ema20.toFixed(3)}, Current MACD = ${macd.toFixed(3)}, Current RSI(7-period) = ${rsi7.toFixed(3)}`,
+				? `当前价格 = ${price.toFixed(2)}, 当前EMA20 = ${formatOptionalMetric(resolvedEma20, 3, language)}, 当前MACD = ${formatOptionalMetric(resolvedMacd, 3, language)}, 当前RSI（7周期） = ${formatOptionalMetric(rsi7, 3, language)}`
+				: `Current price = ${price.toFixed(2)}, Current EMA20 = ${formatOptionalMetric(resolvedEma20, 3, language)}, Current MACD = ${formatOptionalMetric(resolvedMacd, 3, language)}, Current RSI(7-period) = ${formatOptionalMetric(rsi7, 3, language)}`,
 		);
 		lines.push("");
 
@@ -1610,8 +2261,8 @@ function formatMarketDataForPrompt(
 			const label = language === "zh" ? tf.zh : tf.en;
 			const baseLine =
 				language === "zh"
-					? `${label}: 价格=${tfData.currentPrice.toFixed(2)}, EMA20=${tfData.ema20.toFixed(2)}, EMA50=${tfData.ema50.toFixed(2)}, MACD=${tfData.macd.toFixed(3)}, RSI7=${tfData.rsi7.toFixed(1)}, RSI14=${tfData.rsi14.toFixed(1)}, 成交量=${tfData.volume.toFixed(2)}`
-					: `${label}: Price=${tfData.currentPrice.toFixed(2)}, EMA20=${tfData.ema20.toFixed(2)}, EMA50=${tfData.ema50.toFixed(2)}, MACD=${tfData.macd.toFixed(3)}, RSI7=${tfData.rsi7.toFixed(1)}, RSI14=${tfData.rsi14.toFixed(1)}, Volume=${tfData.volume.toFixed(2)}`;
+					? `${label}: 价格=${tfData.currentPrice.toFixed(2)}, EMA20=${formatOptionalMetric(tfData.ema20, 2, language)}, EMA50=${formatOptionalMetric(tfData.ema50, 2, language)}, MACD=${formatOptionalMetric(tfData.macd, 3, language)}, RSI7=${formatOptionalMetric(tfData.rsi7, 1, language)}, RSI14=${formatOptionalMetric(tfData.rsi14, 1, language)}, 成交量=${tfData.volume.toFixed(2)}`
+					: `${label}: Price=${tfData.currentPrice.toFixed(2)}, EMA20=${formatOptionalMetric(tfData.ema20, 2, language)}, EMA50=${formatOptionalMetric(tfData.ema50, 2, language)}, MACD=${formatOptionalMetric(tfData.macd, 3, language)}, RSI7=${formatOptionalMetric(tfData.rsi7, 1, language)}, RSI14=${formatOptionalMetric(tfData.rsi14, 1, language)}, Volume=${tfData.volume.toFixed(2)}`;
 			lines.push(baseLine);
 		}
 
@@ -1751,11 +2402,12 @@ function formatRecentDecisionsForPrompt(
 		const normalizedDecision = record.decision
 			.replace(/\s+/g, " ")
 			.trim();
-		const maxLength = 500;
-		const decisionSummary =
-			normalizedDecision.length > maxLength
-				? `${normalizedDecision.slice(0, maxLength)}...`
-				: normalizedDecision;
+		const holdCount = (normalizedDecision.match(/"action"\s*:\s*"hold"/g) || []).length;
+		const openCount = (normalizedDecision.match(/"action"\s*:\s*"open"/g) || []).length;
+		const closeCount = (normalizedDecision.match(/"action"\s*:\s*"close"/g) || []).length;
+		const historicalOutcome = language === "zh"
+			? `动作摘要: hold=${holdCount}, open=${openCount}, close=${closeCount}`
+			: `Action summary: hold=${holdCount}, open=${openCount}, close=${closeCount}`;
 
 		if (language === "zh") {
 			lines.push(
@@ -1763,14 +2415,14 @@ function formatRecentDecisionsForPrompt(
 			);
 			lines.push(`  当时账户价值: ${navLabel} USDT`);
 			lines.push(`  当时持仓数量: ${positionLabel}`);
-			lines.push(`  当时决策内容: ${decisionSummary || "(空)"}`);
+			lines.push(`  ${historicalOutcome}`);
 		} else {
 			lines.push(
 				`[Historical] Decision #${index} (${timeLabel}${timeAgo ? `, ${timeAgo} minutes ago` : ""}):`,
 			);
 			lines.push(`  Account value then: ${navLabel} USDT`);
 			lines.push(`  Position count then: ${positionLabel}`);
-			lines.push(`  Decision content then: ${decisionSummary || "(empty)"}`);
+			lines.push(`  ${historicalOutcome}`);
 		}
 		lines.push("");
 	});

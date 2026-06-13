@@ -33,10 +33,12 @@ This prompt already includes all required information:
 • Current position state (PnL, holding time, leverage)
 • Historical trades (last 10 entries)
 
+Important: The snapshot above is for initial analysis only and may be stale by the time an order is placed. Before opening any new position, you must re-check the latest price, account balance, current positions, and key indicators. If the live state diverges materially from the snapshot, cancel or reassess the trade.
+
 [Your Tasks]
-Act directly on the data above, no need to re-fetch:
+Use the data above for initial judgment, then perform the required live checks before opening new positions:
 1. Manage existing positions → call closePosition / calculateRisk as needed
-2. Identify new trade opportunities → call openPosition to execute
+2. Identify new trade opportunities → confirm the latest state, then call openPosition to execute
 3. Evaluate risk and sizing → call getAccountBalance / getPositions to confirm
 4. Send emergency notification if repeated trading failures → call sendEmergencyNotice
 

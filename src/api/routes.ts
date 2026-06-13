@@ -35,7 +35,10 @@ import { getStrategyPromptDefaultSections } from "../agents/tradingAgent";
 import { getExchangeProxy } from "../config/exchange";
 import { RISK_PARAMS, reloadRiskParams } from "../config/riskParams.new";
 import type { TradingStrategy } from "../config/strategyTypes";
-import { summarizeAgentResponseText } from "../database/agent-request-logs";
+import {
+	parseDecisionResponseSummary,
+	summarizeAgentResponseText,
+} from "../database/agent-request-logs";
 import { resetLiveDataToDefaults } from "../database/reset-live-data";
 import { initTradingSystem } from "../scheduler/tradingSystemInit";
 import {
@@ -4666,15 +4669,22 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 				}),
 			]);
 
-			const logs = asDbRows(result.rows).map((row) => ({
-				id: toStringSafe(row.id),
-				timestamp: toStringSafe(row.timestamp),
-				iteration: toNumber(row.iteration),
-				decision: toStringSafe(row.decision),
-				actionsTaken: toStringSafe(row.actions_taken),
-				accountValue: toNumber(row.account_value),
-				positionsCount: toNumber(row.positions_count),
-			}));
+			const logs = asDbRows(result.rows).map((row) => {
+				const decisionText = toStringSafe(row.decision);
+				const parsedSummary = parseDecisionResponseSummary(decisionText);
+
+				return {
+					id: toStringSafe(row.id),
+					timestamp: toStringSafe(row.timestamp),
+					iteration: toNumber(row.iteration),
+					decision: decisionText,
+					actionsTaken: toStringSafe(row.actions_taken),
+					accountValue: toNumber(row.account_value),
+					positionsCount: toNumber(row.positions_count),
+					decisionSummary: parsedSummary.decisionPlan,
+					approvalSummary: parsedSummary.executionSummary,
+				};
+			});
 
 			const totalRows = asDbRows(countResult.rows);
 			const total =
@@ -4747,13 +4757,16 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 						? "success"
 						: "unknown";
 				const normalizedStatus = rawStatus || defaultStatus;
+				const responseText = toStringSafe(row.response);
+				const parsedSummary = parseDecisionResponseSummary(responseText);
 
 				return {
 					id: toStringSafe(row.id),
 					createdAt: toStringSafe(row.created_at),
 					instructions: toStringSafe(row.instructions),
 					prompt: toStringSafe(row.prompt),
-					response: toStringSafe(row.response),
+					response: responseText,
+					responseSummary: toStringSafe(row.response_summary),
 					modelName: toStringSafe(row.model_name), // 改为 modelName 以匹配前端
 					model: toStringSafe(row.model_name), // 保留 model 以兼容
 					durationMs: normalizedDuration,
@@ -4763,6 +4776,8 @@ export function createApiRoutes(adminAuth: AdminAuthConfig) {
 					tokensOutput: toNumber(row.tokens_output),
 					errorMessage: toStringSafe(row.error_message), // 改为 errorMessage 以匹配前端
 					error: toStringSafe(row.error_message), // 保留 error 以兼容
+					decisionSummary: parsedSummary.decisionPlan,
+					approvalSummary: parsedSummary.executionSummary,
 				};
 			});
 

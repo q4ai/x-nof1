@@ -24,9 +24,10 @@ import { getDatabaseUrl } from "../../utils/pathUtils";
 import { createTool } from "@voltagent/core";
 import { z } from "zod";
 import { RISK_PARAMS } from "../../config/riskParams.new";
-import { getInstanceExchangeClient } from "../../services/instanceContext";
+import { getCurrentInstanceContext, getInstanceExchangeClient } from "../../services/instanceContext";
 import { createExchangeClientFromActiveAccount } from "../../services/okxClient";
 import { createTradingClient } from "../../services/okxTradingClient";
+import { StrategyFileManager } from "../../services/strategyFileManager";
 import { getQuantoMultiplier } from "../../utils/contractUtils";
 
 const dbClient = createClient({
@@ -47,6 +48,41 @@ async function getExchangeClient(): Promise<any> {
 
 	// 回退到全局
 	return await createExchangeClientFromActiveAccount();
+}
+
+function normalizeSymbolInput(symbol: string): string {
+	return symbol.trim().toUpperCase();
+}
+
+async function validateOptionalSymbol(symbol?: string): Promise<string | undefined> {
+	if (!symbol) {
+		return undefined;
+	}
+
+	const normalizedSymbol = normalizeSymbolInput(symbol);
+	if (!normalizedSymbol) {
+		return undefined;
+	}
+
+	const context = getCurrentInstanceContext();
+	if (context?.strategyName) {
+		try {
+			const strategy = await StrategyFileManager.loadStrategy(context.strategyName);
+			const symbols = String(strategy?.params?.tradingSymbols || "")
+				.split(",")
+				.map((item) => normalizeSymbolInput(item))
+				.filter((item) => item.length > 0);
+			if (symbols.length > 0 && !symbols.includes(normalizedSymbol)) {
+				throw new Error(`币种 ${normalizedSymbol} 不在当前策略允许的交易列表中`);
+			}
+		} catch (error) {
+			if (error instanceof Error && error.message.includes("不在当前策略允许")) {
+				throw error;
+			}
+		}
+	}
+
+	return normalizedSymbol;
 }
 
 /**
@@ -133,15 +169,16 @@ export const getOpenOrdersTool = createTool({
 	description: "获取所有未成交的挂单",
 	parameters: z.object({
 		symbol: z
-			.enum(RISK_PARAMS.TRADING_SYMBOLS)
+			.string()
 			.optional()
 			.describe("可选：仅获取指定币种的订单"),
 	}),
 	execute: async ({ symbol }) => {
+		const normalizedSymbol = await validateOptionalSymbol(symbol);
 		const client = createTradingClient();
 
 		try {
-			const contract = symbol ? `${symbol}_USDT` : undefined;
+			const contract = normalizedSymbol ? `${normalizedSymbol}_USDT` : undefined;
 			const orders = await client.getOpenOrders(contract);
 
 			const formattedOrders = orders.map((o: any) => ({

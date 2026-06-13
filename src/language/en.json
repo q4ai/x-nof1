@@ -85,6 +85,18 @@
 		"title": "Decision Requests",
 		"empty": "No decision requests",
 		"summaryLabel": "Response Overview",
+		"approval": {
+			"aiSummary": "AI Summary",
+			"riskSummary": "Risk Summary",
+			"plannedActions": "Planned actions: {{value}}",
+			"approvedActions": "Approved: {{value}}",
+			"executedActions": "Executed: {{value}}",
+			"rejectedReasons": "Rejected reasons: {{value}}",
+			"holdReasons": "Hold reasons: {{value}}",
+			"rejectedListTitle": "Rejected Details",
+			"holdListTitle": "Hold Details",
+			"none": "None"
+		},
 		"status": {
 			"success": "Success",
 			"error": "Error",
@@ -95,6 +107,7 @@
 			"iteration": "Iteration",
 			"model": "Model",
 			"status": "Status",
+			"approval": "Approval Summary",
 			"instructions": "Instructions",
 			"prompt": "Prompt",
 			"response": "AI Output",
